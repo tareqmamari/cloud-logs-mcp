@@ -1,0 +1,166 @@
+package config
+
+import (
+	"os"
+	"testing"
+	"time"
+)
+
+func TestLoadConfiguration(t *testing.T) {
+	tests := []struct {
+		name    string
+		envVars map[string]string
+		wantErr bool
+	}{
+		{
+			name: "valid configuration",
+			envVars: map[string]string{
+				"LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				"LOGS_API_KEY":     "test-api-key",
+				"LOGS_REGION":      "us-south",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing service URL",
+			envVars: map[string]string{
+				"LOGS_API_KEY": "test-api-key",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing API key",
+			envVars: map[string]string{
+				"LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear environment
+			os.Clearenv()
+
+			// Set test environment variables
+			for k, v := range tt.envVars {
+				os.Setenv(k, v)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() failed: %v", err)
+			}
+
+			err = cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfigDefaults(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("LOGS_SERVICE_URL", "https://your-instance-id.api.us-south.logs.cloud.ibm.com")
+	os.Setenv("LOGS_API_KEY", "test-key")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if cfg.Timeout != 30*time.Second {
+		t.Errorf("Expected default timeout 30s, got %v", cfg.Timeout)
+	}
+
+	if cfg.MaxRetries != 3 {
+		t.Errorf("Expected default max_retries 3, got %d", cfg.MaxRetries)
+	}
+
+	if cfg.RateLimit != 100 {
+		t.Errorf("Expected default rate_limit 100, got %d", cfg.RateLimit)
+	}
+
+	if !cfg.TLSVerify {
+		t.Error("Expected TLSVerify to be true by default")
+	}
+
+	if !cfg.EnableRateLimit {
+		t.Error("Expected EnableRateLimit to be true by default")
+	}
+}
+
+func TestConfigRedact(t *testing.T) {
+	cfg := &Config{
+		ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+		APIKey:     "secret-key-12345",
+	}
+
+	redacted := cfg.Redact()
+
+	if redacted.APIKey == cfg.APIKey {
+		t.Error("API key should be redacted")
+	}
+
+	if redacted.APIKey != "***REDACTED***" {
+		t.Errorf("Expected ***REDACTED***, got %s", redacted.APIKey)
+	}
+
+	if redacted.ServiceURL != cfg.ServiceURL {
+		t.Error("ServiceURL should not be changed")
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid config",
+			config: Config{
+				ServiceURL:      "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key",
+				Timeout:         30 * time.Second,
+				MaxRetries:      3,
+				RateLimit:       100,
+				EnableRateLimit: true,
+				LogLevel:        "info",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid timeout",
+			config: Config{
+				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				APIKey:     "test-key",
+				Timeout:    0,
+			},
+			wantErr: true,
+			errMsg:  "timeout must be positive",
+		},
+		{
+			name: "invalid log level",
+			config: Config{
+				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				APIKey:     "test-key",
+				Timeout:    30 * time.Second,
+				LogLevel:   "invalid",
+			},
+			wantErr: true,
+			errMsg:  "invalid log level",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "IBM Cloud Logs MCP Server Configuration Example",
+
+  "service_url": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+  "region": "us-south",
+
+  "timeout": "30s",
+  "max_retries": 3,
+  "retry_wait_min": "1s",
+  "retry_wait_max": "30s",
+  "max_idle_conns": 10,
+  "idle_conn_timeout": "90s",
+
+  "enable_rate_limit": true,
+  "rate_limit": 100,
+  "rate_limit_burst": 20,
+
+  "tls_verify": true,
+  "allowed_ip_ranges": [],
+
+  "log_level": "info",
+  "log_format": "json"
+}

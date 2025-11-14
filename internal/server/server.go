@@ -1,0 +1,168 @@
+package server
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/observability-c/logs-mcp-server/internal/client"
+	"github.com/observability-c/logs-mcp-server/internal/config"
+	"github.com/observability-c/logs-mcp-server/internal/tools"
+	"go.uber.org/zap"
+)
+
+// Server represents the MCP server
+type Server struct {
+	mcpServer *server.MCPServer
+	apiClient *client.Client
+	config    *config.Config
+	logger    *zap.Logger
+}
+
+// New creates a new MCP server
+func New(cfg *config.Config, logger *zap.Logger) (*Server, error) {
+	// Create API client with IBM Cloud authentication
+	apiClient, err := client.New(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API client: %w", err)
+	}
+
+	// Create MCP server
+	mcpServer := server.NewMCPServer(
+		"IBM Cloud Logs MCP Server",
+		"0.1.0",
+	)
+
+	s := &Server{
+		mcpServer: mcpServer,
+		apiClient: apiClient,
+		config:    cfg,
+		logger:    logger,
+	}
+
+	// Register all tools
+	if err := s.registerTools(); err != nil {
+		return nil, fmt.Errorf("failed to register tools: %w", err)
+	}
+
+	return s, nil
+}
+
+// registerTools registers all available MCP tools
+func (s *Server) registerTools() error {
+	// Alert tools
+	s.registerTool(tools.NewGetAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListAlertsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteAlertTool(s.apiClient, s.logger))
+
+	// Alert Definition tools
+	s.registerTool(tools.NewGetAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListAlertDefinitionsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteAlertDefinitionTool(s.apiClient, s.logger))
+
+	// Rule Group tools
+	s.registerTool(tools.NewGetRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListRuleGroupsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteRuleGroupTool(s.apiClient, s.logger))
+
+	// Outgoing Webhook tools
+	s.registerTool(tools.NewGetOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListOutgoingWebhooksTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteOutgoingWebhookTool(s.apiClient, s.logger))
+
+	// Policy tools
+	s.registerTool(tools.NewGetPolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListPoliciesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreatePolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdatePolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeletePolicyTool(s.apiClient, s.logger))
+
+	// Events to Metrics (E2M) tools
+	s.registerTool(tools.NewGetE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteE2MTool(s.apiClient, s.logger))
+
+	// Query tools
+	s.registerTool(tools.NewQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSubmitBackgroundQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetBackgroundQueryStatusTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCancelBackgroundQueryTool(s.apiClient, s.logger))
+
+	// Data Access Rule tools
+	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDataAccessRuleTool(s.apiClient, s.logger))
+
+	// Enrichment tools
+	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteEnrichmentTool(s.apiClient, s.logger))
+
+	// View tools
+	s.registerTool(tools.NewListViewsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteViewTool(s.apiClient, s.logger))
+
+	s.logger.Info("Registered all MCP tools")
+	return nil
+}
+
+// registerTool is a helper to register a tool with proper error handling
+func (s *Server) registerTool(toolInterface interface {
+	Name() string
+	Description() string
+	InputSchema() mcp.ToolInputSchema
+	Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error)
+}) {
+	// Create tool definition
+	tool := mcp.Tool{
+		Name:        toolInterface.Name(),
+		Description: toolInterface.Description(),
+		InputSchema: toolInterface.InputSchema(),
+	}
+
+	// Create handler that calls the tool's Execute method
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return toolInterface.Execute(ctx, request.Params.Arguments)
+	}
+
+	// Register tool with MCP server
+	s.mcpServer.AddTool(tool, handler)
+	s.logger.Debug("Registered tool", zap.String("tool", tool.Name))
+}
+
+// Start starts the MCP server
+func (s *Server) Start(ctx context.Context) error {
+	s.logger.Info("Starting MCP server")
+
+	defer func() {
+		if err := s.apiClient.Close(); err != nil {
+			s.logger.Error("Failed to close API client", zap.Error(err))
+		}
+	}()
+
+	// Start serving using stdio transport
+	if err := server.ServeStdio(s.mcpServer); err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
+
+	return nil
+}

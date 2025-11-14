@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Configuration files with secrets
+config.local.json
+config.*.json
+!config.example.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Documentation
+*.md
+!README.md
+
+# Release files
+release/
