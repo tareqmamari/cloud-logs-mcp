@@ -223,3 +223,110 @@ func TestGetBoolParam(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPaginationParams(t *testing.T) {
+	tests := []struct {
+		name       string
+		arguments  map[string]interface{}
+		wantLimit  int
+		wantCursor string
+		wantErr    bool
+	}{
+		{
+			name:       "default values",
+			arguments:  map[string]interface{}{},
+			wantLimit:  50,
+			wantCursor: "",
+			wantErr:    false,
+		},
+		{
+			name: "custom limit",
+			arguments: map[string]interface{}{
+				"limit": float64(25),
+			},
+			wantLimit:  25,
+			wantCursor: "",
+			wantErr:    false,
+		},
+		{
+			name: "with cursor",
+			arguments: map[string]interface{}{
+				"limit":  float64(25),
+				"cursor": "next-page-token",
+			},
+			wantLimit:  25,
+			wantCursor: "next-page-token",
+			wantErr:    false,
+		},
+		{
+			name: "limit exceeds max",
+			arguments: map[string]interface{}{
+				"limit": float64(200),
+			},
+			wantLimit:  100,
+			wantCursor: "",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetPaginationParams(tt.arguments)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetPaginationParams() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				if got.Limit != tt.wantLimit {
+					t.Errorf("Limit = %v, want %v", got.Limit, tt.wantLimit)
+				}
+				if got.Cursor != tt.wantCursor {
+					t.Errorf("Cursor = %v, want %v", got.Cursor, tt.wantCursor)
+				}
+			}
+		})
+	}
+}
+
+func TestAddPaginationToQuery(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      map[string]string
+		params     *PaginationParams
+		wantLimit  string
+		wantCursor string
+	}{
+		{
+			name:  "add both params",
+			query: map[string]string{},
+			params: &PaginationParams{
+				Limit:  25,
+				Cursor: "token-123",
+			},
+			wantLimit:  "25",
+			wantCursor: "token-123",
+		},
+		{
+			name:  "only limit",
+			query: map[string]string{},
+			params: &PaginationParams{
+				Limit: 50,
+			},
+			wantLimit:  "50",
+			wantCursor: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			AddPaginationToQuery(tt.query, tt.params)
+
+			if tt.wantLimit != "" && tt.query["limit"] != tt.wantLimit {
+				t.Errorf("limit = %v, want %v", tt.query["limit"], tt.wantLimit)
+			}
+			if tt.wantCursor != "" && tt.query["cursor"] != tt.wantCursor {
+				t.Errorf("cursor = %v, want %v", tt.query["cursor"], tt.wantCursor)
+			}
+		})
+	}
+}

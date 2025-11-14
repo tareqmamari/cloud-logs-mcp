@@ -80,15 +80,35 @@ func (t *ListAlertsTool) Description() string {
 
 func (t *ListAlertsTool) InputSchema() mcp.ToolInputSchema {
 	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
+		Type: "object",
+		Properties: map[string]interface{}{
+			"limit": map[string]interface{}{
+				"type":        "integer",
+				"description": "Maximum number of results (default: 50, max: 100)",
+			},
+			"cursor": map[string]interface{}{
+				"type":        "string",
+				"description": "Pagination cursor from previous response",
+			},
+		},
 	}
 }
 
 func (t *ListAlertsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	// Get pagination parameters
+	pagination, err := GetPaginationParams(arguments)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Build query with pagination
+	query := make(map[string]string)
+	AddPaginationToQuery(query, pagination)
+
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/alerts",
+		Query:  query,
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

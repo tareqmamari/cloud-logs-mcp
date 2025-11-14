@@ -62,11 +62,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 
 // Request represents an HTTP request
 type Request struct {
-	Method  string
-	Path    string
-	Query   map[string]string
-	Body    interface{}
-	Headers map[string]string
+	Method    string
+	Path      string
+	Query     map[string]string
+	Body      interface{}
+	Headers   map[string]string
+	RequestID string // Optional client-provided request ID for idempotency
 }
 
 // Response represents an HTTP response
@@ -164,6 +165,15 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("User-Agent", "logs-mcp-server/0.1.0")
+
+	// Add idempotency key if provided
+	if req.RequestID != "" {
+		httpReq.Header.Set("X-Request-ID", req.RequestID)
+		// Some APIs use Idempotency-Key header for POST/PUT operations
+		if req.Method == "POST" || req.Method == "PUT" {
+			httpReq.Header.Set("Idempotency-Key", req.RequestID)
+		}
+	}
 
 	// Add IBM Cloud authentication (bearer token)
 	if err := c.authenticator.Authenticate(httpReq); err != nil {

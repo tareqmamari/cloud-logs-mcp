@@ -136,3 +136,52 @@ func GetBoolParam(arguments map[string]interface{}, key string, required bool) (
 
 	return boolVal, nil
 }
+
+// PaginationParams holds pagination parameters
+type PaginationParams struct {
+	Limit  int
+	Cursor string
+}
+
+// GetPaginationParams extracts pagination parameters from arguments
+func GetPaginationParams(arguments map[string]interface{}) (*PaginationParams, error) {
+	limit, err := GetIntParam(arguments, "limit", false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Default limit
+	if limit == 0 {
+		limit = 50
+	}
+
+	// Max limit
+	if limit > 100 {
+		limit = 100
+	}
+
+	cursor, err := GetStringParam(arguments, "cursor", false)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PaginationParams{
+		Limit:  limit,
+		Cursor: cursor,
+	}, nil
+}
+
+// AddPaginationToQuery adds pagination parameters to request query
+func AddPaginationToQuery(query map[string]string, params *PaginationParams) {
+	if query == nil {
+		return
+	}
+
+	if params.Limit > 0 {
+		query["limit"] = fmt.Sprintf("%d", params.Limit)
+	}
+
+	if params.Cursor != "" {
+		query["cursor"] = params.Cursor
+	}
+}
