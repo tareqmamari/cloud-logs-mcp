@@ -16,6 +16,7 @@ type Config struct {
 	APIKey       string `json:"api_key,omitempty"` // Not stored in files, from env only
 	Region       string `json:"region"`
 	InstanceName string `json:"instance_name,omitempty"` // Optional friendly name for this instance
+	IAMURL       string `json:"iam_url,omitempty"`       // Optional IAM endpoint (default: production, or iam.test.cloud.ibm.com for staging)
 
 	// HTTP Client Configuration
 	Timeout         time.Duration `json:"timeout"`
@@ -91,6 +92,9 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOGS_INSTANCE_NAME"); v != "" {
 		cfg.InstanceName = v
+	}
+	if v := os.Getenv("LOGS_IAM_URL"); v != "" {
+		cfg.IAMURL = v
 	}
 	if v := os.Getenv("LOGS_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {

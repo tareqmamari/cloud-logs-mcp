@@ -15,7 +15,7 @@ type Authenticator struct {
 }
 
 // New creates a new authenticator using IBM SDK
-func New(apiKey string, logger *zap.Logger) (*Authenticator, error) {
+func New(apiKey string, iamURL string, logger *zap.Logger) (*Authenticator, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -23,6 +23,14 @@ func New(apiKey string, logger *zap.Logger) (*Authenticator, error) {
 	// Create IBM Cloud IAM authenticator
 	authenticator := &core.IamAuthenticator{
 		ApiKey: apiKey,
+	}
+
+	// Set custom IAM URL if provided (for staging/dev environments)
+	// Production uses default: https://iam.cloud.ibm.com
+	// Staging uses: https://iam.test.cloud.ibm.com
+	if iamURL != "" {
+		authenticator.URL = iamURL
+		logger.Info("Using custom IAM endpoint", zap.String("iam_url", iamURL))
 	}
 
 	// Validate the authenticator

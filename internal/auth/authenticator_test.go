@@ -13,23 +13,32 @@ func TestNewAuthenticator(t *testing.T) {
 	tests := []struct {
 		name    string
 		apiKey  string
+		iamURL  string
 		wantErr bool
 	}{
 		{
 			name:    "valid API key",
 			apiKey:  "test-api-key-12345",
+			iamURL:  "",
+			wantErr: false,
+		},
+		{
+			name:    "valid API key with custom IAM URL",
+			apiKey:  "test-api-key-12345",
+			iamURL:  "https://iam.test.cloud.ibm.com",
 			wantErr: false,
 		},
 		{
 			name:    "empty API key",
 			apiKey:  "",
+			iamURL:  "",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			auth, err := New(tt.apiKey, logger)
+			auth, err := New(tt.apiKey, tt.iamURL, logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -44,7 +53,7 @@ func TestAuthenticate(t *testing.T) {
 	t.Skip("Skipping test that requires valid IBM Cloud credentials")
 
 	logger, _ := zap.NewDevelopment()
-	auth, err := New("test-api-key", logger)
+	auth, err := New("test-api-key", "", logger)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}
@@ -67,7 +76,7 @@ func TestAuthenticate(t *testing.T) {
 
 func TestAuthenticateNilRequest(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
-	auth, err := New("test-api-key", logger)
+	auth, err := New("test-api-key", "", logger)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}

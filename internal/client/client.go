@@ -28,7 +28,7 @@ type Client struct {
 // New creates a new API client
 func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 	// Create IBM Cloud authenticator
-	authenticator, err := auth.New(cfg.APIKey, logger)
+	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}

@@ -214,6 +214,7 @@ cp .env.example .env
 |----------|---------|-------------|
 | `LOGS_REGION` | - | IBM Cloud region (`us-south`, `eu-de`, etc.) |
 | `LOGS_INSTANCE_NAME` | - | Friendly name for logs (e.g., "Production US") |
+| `LOGS_IAM_URL` | - | Custom IAM endpoint URL (optional) |
 
 #### Optional - Performance
 | Variable | Default | Description |
