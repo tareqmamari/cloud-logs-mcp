@@ -169,3 +169,16 @@ docs: ## Generate documentation
 	@echo "Starting godoc server on :6060"
 	@echo "Visit http://localhost:6060/pkg/github.com/observability-c/logs-mcp-server/"
 	godoc -http=:6060
+
+# API Update helpers
+compare-api: ## Compare old and new API definitions
+	@./scripts/compare-api-changes.sh
+
+backup-api: ## Backup current API definition
+	@echo "Backing up API definition..."
+	@cp logs-service-api.json logs-service-api.json.backup.$(shell date +%Y%m%d-%H%M%S)
+	@echo "Backup created"
+
+list-operations: ## List all operations in current API
+	@echo "Operations in current API:"
+	@grep -o '"operationId": "[^"]*"' logs-service-api.json | sed 's/"operationId": "\([^"]*\)"/\1/' | sort

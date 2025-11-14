@@ -21,6 +21,7 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 - [Performance](#performance)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
+  - [Updating API Definitions](#updating-api-definitions)
 - [Contributing](#contributing)
 
 ---
@@ -597,6 +598,11 @@ make check             # Run all quality checks
 make docker-build      # Build Docker image
 make clean             # Clean build artifacts
 make release           # Create release artifacts
+
+# API update helpers
+make backup-api        # Backup current API definition
+make compare-api       # Compare old and new API versions
+make list-operations   # List all API operations
 ```
 
 ### Running Tests
@@ -634,6 +640,140 @@ make docker-build
 # Run container
 docker run --env-file .env logs-mcp-server:latest
 ```
+
+### Updating API Definitions
+
+When the IBM Cloud Logs API (`logs-service-api.json`) is updated with new endpoints or changes:
+
+#### 1. Backup and Compare
+
+```bash
+# Backup current API definition
+make backup-api
+
+# Get new API definition
+cp /path/to/new-api.json logs-service-api.json
+
+# Compare changes
+make compare-api
+```
+
+The comparison script will show:
+- New operations (need to implement)
+- Removed operations (need to deprecate/remove)
+- Changed endpoints
+- API version changes
+
+#### 2. List Current Operations
+
+```bash
+# See all current operations
+make list-operations
+```
+
+#### 3. Implement Changes
+
+For **new operations**, add tools in `internal/tools/`:
+
+```go
+type NewFeatureTool struct {
+    BaseTool
+}
+
+func NewNewFeatureTool(client *client.Client, logger *zap.Logger) *NewFeatureTool {
+    return &NewFeatureTool{BaseTool: BaseTool{client: client, logger: logger}}
+}
+
+func (t *NewFeatureTool) Name() string { return "new_feature" }
+
+func (t *NewFeatureTool) Description() string {
+    return "Description from API spec"
+}
+
+func (t *NewFeatureTool) InputSchema() mcp.ToolInputSchema {
+    return mcp.ToolInputSchema{
+        Type: "object",
+        Properties: map[string]interface{}{
+            "param": map[string]interface{}{
+                "type": "string",
+                "description": "Parameter description",
+            },
+        },
+        Required: []string{"param"},
+    }
+}
+
+func (t *NewFeatureTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+    param, err := GetStringParam(arguments, "param", true)
+    if err != nil {
+        return mcp.NewToolResultError(err.Error()), nil
+    }
+
+    req := &client.Request{
+        Method: "POST",
+        Path:   "/v1/new-feature",
+        Body:   map[string]interface{}{"param": param},
+    }
+
+    result, err := t.ExecuteRequest(ctx, req)
+    if err != nil {
+        return mcp.NewToolResultError(err.Error()), nil
+    }
+
+    return t.FormatResponse(result)
+}
+```
+
+For **modified operations**, update the existing tool's InputSchema and Execute methods.
+
+#### 4. Register New Tools
+
+Add to `internal/server/server.go`:
+
+```go
+func (s *Server) RegisterTools() {
+    // ... existing tools ...
+    s.registerTool(tools.NewNewFeatureTool(s.apiClient, s.logger))
+}
+```
+
+#### 5. Add Tests
+
+Create or update `*_test.go` files:
+
+```go
+func TestNewFeatureTool(t *testing.T) {
+    logger, _ := zap.NewDevelopment()
+    tool := NewNewFeatureTool(nil, logger)
+
+    if tool.Name() != "new_feature" {
+        t.Errorf("Expected 'new_feature', got %s", tool.Name())
+    }
+
+    schema := tool.InputSchema()
+    if len(schema.Required) == 0 {
+        t.Error("Expected required parameters")
+    }
+}
+```
+
+#### 6. Update Documentation
+
+Add the new tool to this README's [Available Tools](#available-tools) section.
+
+#### 7. Test and Build
+
+```bash
+make test
+make build
+```
+
+#### Tool Organization
+
+- `internal/tools/alerts.go` - Alert management
+- `internal/tools/queries.go` - Query execution
+- `internal/tools/all_tools.go` - Policies, webhooks, E2M, enrichments, views, etc.
+- `internal/tools/base.go` - Base tool helpers
 
 ---
 
