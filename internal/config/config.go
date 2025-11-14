@@ -12,9 +12,10 @@ import (
 // Config holds all configuration for the MCP server
 type Config struct {
 	// IBM Cloud Logs Service Configuration
-	ServiceURL string `json:"service_url"`
-	APIKey     string `json:"api_key,omitempty"` // Not stored in files, from env only
-	Region     string `json:"region"`
+	ServiceURL   string `json:"service_url"`
+	APIKey       string `json:"api_key,omitempty"` // Not stored in files, from env only
+	Region       string `json:"region"`
+	InstanceName string `json:"instance_name,omitempty"` // Optional friendly name for this instance
 
 	// HTTP Client Configuration
 	Timeout         time.Duration `json:"timeout"`
@@ -87,6 +88,9 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOGS_REGION"); v != "" {
 		cfg.Region = v
+	}
+	if v := os.Getenv("LOGS_INSTANCE_NAME"); v != "" {
+		cfg.InstanceName = v
 	}
 	if v := os.Getenv("LOGS_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {

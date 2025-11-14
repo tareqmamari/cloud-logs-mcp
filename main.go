@@ -38,10 +38,14 @@ func main() {
 		logger.Fatal("Invalid configuration", zap.Error(err))
 	}
 
-	logger.Info("Starting IBM Cloud Logs MCP Server",
+	logFields := []zap.Field{
 		zap.String("version", version),
 		zap.String("endpoint", cfg.ServiceURL),
-	)
+	}
+	if cfg.InstanceName != "" {
+		logFields = append(logFields, zap.String("instance", cfg.InstanceName))
+	}
+	logger.Info("Starting IBM Cloud Logs MCP Server", logFields...)
 
 	// Create and start MCP server
 	mcpServer, err := server.New(cfg, logger)
