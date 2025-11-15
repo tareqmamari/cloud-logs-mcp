@@ -1,6 +1,9 @@
 # Changelog
 
-All notable changes to the IBM Cloud Logs MCP Server will be documented in this file.
+> **Note**: As of v0.2.0, changelogs are automatically generated and published with each [GitHub Release](https://github.com/tareqmamari/cloud-logs-mcp/releases).
+> This file contains historical changelog entries for reference only.
+
+All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

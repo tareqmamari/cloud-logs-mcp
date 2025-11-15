@@ -206,19 +206,12 @@ version-tag: ## Create and push next version tag (automated release)
 		echo "For bug fixes, use 'fix:' prefix"; \
 		exit 1; \
 	fi; \
-	echo "Updating changelog..."; \
-	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
-	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
-	git add CHANGELOG.md; \
-	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
 	echo "Creating tag $$NEXT_VERSION..."; \
 	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
-	echo "Pushing changes and tag to origin..."; \
-	git push origin main; \
+	echo "Pushing tag to origin..."; \
 	git push origin $$NEXT_VERSION; \
 	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
-	echo "GitHub Actions will now build and publish the release."
+	echo "GoReleaser will generate changelog in GitHub Release."
 
 release-patch: ## Create patch release (for dependency updates, security fixes)
 	@echo "Creating patch release..."
@@ -227,19 +220,12 @@ release-patch: ## Create patch release (for dependency updates, security fixes)
 	echo "Current version: $$CURRENT_VERSION"; \
 	echo "Next version: $$NEXT_VERSION"; \
 	echo ""; \
-	echo "Updating changelog..."; \
-	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
-	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
-	git add CHANGELOG.md; \
-	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
 	echo "Creating tag $$NEXT_VERSION..."; \
 	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
-	echo "Pushing changes and tag to origin..."; \
-	git push origin main; \
+	echo "Pushing tag to origin..."; \
 	git push origin $$NEXT_VERSION; \
 	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
-	echo "GitHub Actions will now build and publish the release."
+	echo "GoReleaser will generate changelog in GitHub Release."
 
 release-minor: ## Create minor release (for new features)
 	@echo "Creating minor release..."
@@ -248,19 +234,12 @@ release-minor: ## Create minor release (for new features)
 	echo "Current version: $$CURRENT_VERSION"; \
 	echo "Next version: $$NEXT_VERSION"; \
 	echo ""; \
-	echo "Updating changelog..."; \
-	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
-	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
-	git add CHANGELOG.md; \
-	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
 	echo "Creating tag $$NEXT_VERSION..."; \
 	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
-	echo "Pushing changes and tag to origin..."; \
-	git push origin main; \
+	echo "Pushing tag to origin..."; \
 	git push origin $$NEXT_VERSION; \
 	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
-	echo "GitHub Actions will now build and publish the release."
+	echo "GoReleaser will generate changelog in GitHub Release."
 
 release-major: ## Create major release (for breaking changes)
 	@echo "Creating major release..."
@@ -275,19 +254,12 @@ release-major: ## Create major release (for breaking changes)
 		echo "Aborted."; \
 		exit 1; \
 	fi; \
-	echo "Updating changelog..."; \
-	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
-	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
-	git add CHANGELOG.md; \
-	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
 	echo "Creating tag $$NEXT_VERSION..."; \
 	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
-	echo "Pushing changes and tag to origin..."; \
-	git push origin main; \
+	echo "Pushing tag to origin..."; \
 	git push origin $$NEXT_VERSION; \
 	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
-	echo "GitHub Actions will now build and publish the release."
+	echo "GoReleaser will generate changelog in GitHub Release."
 
 # Development helpers
 watch: ## Watch for changes and rebuild
