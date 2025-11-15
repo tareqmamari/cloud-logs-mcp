@@ -109,6 +109,7 @@ func (s *Server) registerTools() error {
 
 	// Enrichment tools
 	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetEnrichmentsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetEnrichmentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
@@ -120,6 +121,23 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewGetViewTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewReplaceViewTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteViewTool(s.apiClient, s.logger))
+
+	// View Folder tools
+	s.registerTool(tools.NewListViewFoldersTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteViewFolderTool(s.apiClient, s.logger))
+
+	// Data Usage tools
+	s.registerTool(tools.NewExportDataUsageTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDataUsageMetricsExportStatusTool(s.apiClient, s.logger))
+
+	// Event Stream Target tools
+	s.registerTool(tools.NewGetEventStreamTargetsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateEventStreamTargetTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateEventStreamTargetTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteEventStreamTargetTool(s.apiClient, s.logger))
 
 	s.logger.Info("Registered all MCP tools")
 	return nil

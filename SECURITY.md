@@ -136,7 +136,7 @@ LOGS_API_KEY="hardcoded-key" ./logs-mcp-server
 
 **Note**: Never include `api_key` in configuration files!
 
-### File Permissions
+#### File Permissions
 
 ```bash
 # Restrict permissions on config files
@@ -146,6 +146,57 @@ chmod 600 config.json
 # Verify no secrets in git
 git secrets --scan
 ```
+
+## Pre-Commit Hooks
+
+### Setup
+
+To prevent accidental commits of secrets and credentials, this project uses pre-commit hooks:
+
+```bash
+# Install pre-commit (if not already installed)
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# Run manually on all files
+pre-commit run --all-files
+```
+
+### What Gets Checked
+
+The pre-commit hooks automatically check for:
+
+1. **Secrets Detection** (detect-secrets)
+   - IBM Cloud API keys
+   - AWS keys
+   - GitHub tokens
+   - Private keys
+   - JWT tokens
+   - High-entropy strings
+
+2. **Code Quality** (Go-specific)
+   - Go formatting (gofmt)
+   - Go vet checks
+   - Go mod tidy
+
+3. **File Quality**
+   - Trailing whitespace
+   - End-of-file fixers
+   - YAML syntax
+   - Large files
+   - Merge conflicts
+   - Private keys
+
+### Bypassing Hooks (Emergency Only)
+
+```bash
+# Only use in emergencies - requires justification
+git commit --no-verify -m "Emergency fix"
+```
+
+**Warning**: Bypassing hooks may introduce security vulnerabilities. Always review changes carefully.
 
 ## Runtime Security
 

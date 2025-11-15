@@ -45,3 +45,10 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+credentials.json
+secrets.yaml

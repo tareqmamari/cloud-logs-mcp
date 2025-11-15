@@ -436,6 +436,19 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	return t.FormatResponse(res)
 }
 
+type GetEnrichmentsTool struct{ *BaseTool }
+func NewGetEnrichmentsTool(c *client.Client, l *zap.Logger) *GetEnrichmentsTool { return &GetEnrichmentsTool{NewBaseTool(c, l)} }
+func (t *GetEnrichmentsTool) Name() string { return "get_enrichments" }
+func (t *GetEnrichmentsTool) Description() string { return "Get all enrichments (alias for list_enrichments)" }
+func (t *GetEnrichmentsTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{}}
+}
+func (t *GetEnrichmentsTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/enrichments"})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
 // Views
 type ListViewsTool struct{ *BaseTool }
 func NewListViewsTool(c *client.Client, l *zap.Logger) *ListViewsTool { return &ListViewsTool{NewBaseTool(c, l)} }
@@ -503,6 +516,77 @@ func (t *DeleteViewTool) InputSchema() mcp.ToolInputSchema {
 func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/views/" + id})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
+// View Folders
+type ListViewFoldersTool struct{ *BaseTool }
+func NewListViewFoldersTool(c *client.Client, l *zap.Logger) *ListViewFoldersTool { return &ListViewFoldersTool{NewBaseTool(c, l)} }
+func (t *ListViewFoldersTool) Name() string { return "list_view_folders" }
+func (t *ListViewFoldersTool) Description() string { return "List all view folders" }
+func (t *ListViewFoldersTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{}}
+}
+func (t *ListViewFoldersTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders"})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
+type CreateViewFolderTool struct{ *BaseTool }
+func NewCreateViewFolderTool(c *client.Client, l *zap.Logger) *CreateViewFolderTool { return &CreateViewFolderTool{NewBaseTool(c, l)} }
+func (t *CreateViewFolderTool) Name() string { return "create_view_folder" }
+func (t *CreateViewFolderTool) Description() string { return "Create a new view folder" }
+func (t *CreateViewFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"folder": map[string]interface{}{"type": "object"}}, Required: []string{"folder"}}
+}
+func (t *CreateViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	folder, _ := GetObjectParam(args, "folder", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/view_folders", Body: folder})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
+type GetViewFolderTool struct{ *BaseTool }
+func NewGetViewFolderTool(c *client.Client, l *zap.Logger) *GetViewFolderTool { return &GetViewFolderTool{NewBaseTool(c, l)} }
+func (t *GetViewFolderTool) Name() string { return "get_view_folder" }
+func (t *GetViewFolderTool) Description() string { return "Get a view folder by ID" }
+func (t *GetViewFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, Required: []string{"id"}}
+}
+func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	id, _ := GetStringParam(args, "id", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders/" + id})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
+type ReplaceViewFolderTool struct{ *BaseTool }
+func NewReplaceViewFolderTool(c *client.Client, l *zap.Logger) *ReplaceViewFolderTool { return &ReplaceViewFolderTool{NewBaseTool(c, l)} }
+func (t *ReplaceViewFolderTool) Name() string { return "replace_view_folder" }
+func (t *ReplaceViewFolderTool) Description() string { return "Replace a view folder" }
+func (t *ReplaceViewFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"id": map[string]interface{}{"type": "string"}, "folder": map[string]interface{}{"type": "object"}}, Required: []string{"id", "folder"}}
+}
+func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	id, _ := GetStringParam(args, "id", true)
+	folder, _ := GetObjectParam(args, "folder", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/view_folders/" + id, Body: folder})
+	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
+	return t.FormatResponse(res)
+}
+
+type DeleteViewFolderTool struct{ *BaseTool }
+func NewDeleteViewFolderTool(c *client.Client, l *zap.Logger) *DeleteViewFolderTool { return &DeleteViewFolderTool{NewBaseTool(c, l)} }
+func (t *DeleteViewFolderTool) Name() string { return "delete_view_folder" }
+func (t *DeleteViewFolderTool) Description() string { return "Delete a view folder" }
+func (t *DeleteViewFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, Required: []string{"id"}}
+}
+func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	id, _ := GetStringParam(args, "id", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id})
 	if err != nil { return mcp.NewToolResultError(err.Error()), nil }
 	return t.FormatResponse(res)
 }

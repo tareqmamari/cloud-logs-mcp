@@ -127,6 +127,221 @@ You should see the MCP server tools being used in Claude's responses.
 
 ---
 
+## Using with Different AI Platforms
+
+The IBM Cloud Logs MCP Server works with any MCP-compatible AI assistant. Here's how to set it up for popular platforms:
+
+### Claude Desktop
+
+**Configuration file locations:**
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "ibm-cloud-logs": {
+      "command": "/absolute/path/to/logs-mcp-server/bin/logs-mcp-server",
+      "env": {
+        "LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+        "LOGS_API_KEY": "your-ibm-cloud-api-key",
+        "LOGS_REGION": "us-south"
+      }
+    }
+  }
+}
+```
+
+**After configuration:**
+1. Completely quit Claude Desktop (Cmd+Q on macOS)
+2. Restart the application
+3. Start a new conversation and ask: "List my IBM Cloud Logs alerts"
+
+### GitHub Copilot
+
+GitHub Copilot with MCP support (available in VS Code Insiders):
+
+**Prerequisites:**
+- VS Code Insiders
+- GitHub Copilot Chat extension
+
+**Setup:**
+
+1. Open VS Code Settings (JSON)
+2. Add MCP server configuration:
+
+```json
+{
+  "github.copilot.chat.mcp.servers": {
+    "ibm-cloud-logs": {
+      "command": "/absolute/path/to/logs-mcp-server/bin/logs-mcp-server",
+      "env": {
+        "LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+        "LOGS_API_KEY": "your-ibm-cloud-api-key",
+        "LOGS_REGION": "us-south"
+      }
+    }
+  }
+}
+```
+
+3. Restart VS Code
+4. Open Copilot Chat and ask: "Query my IBM Cloud Logs for errors in the last hour"
+
+### Cline (VS Code Extension)
+
+Cline is a VS Code extension that supports MCP servers:
+
+**Setup:**
+
+1. Install Cline extension from VS Code Marketplace
+2. Open Cline settings
+3. Add MCP server in the MCP Servers section:
+
+```json
+{
+  "ibm-cloud-logs": {
+    "command": "/absolute/path/to/logs-mcp-server/bin/logs-mcp-server",
+    "env": {
+      "LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+      "LOGS_API_KEY": "your-ibm-cloud-api-key",
+      "LOGS_REGION": "us-south"
+    }
+  }
+}
+```
+
+4. Restart Cline
+5. Start using IBM Cloud Logs tools in your conversations
+
+### Other MCP-Compatible Clients
+
+The server follows the official [Model Context Protocol specification](https://modelcontextprotocol.io/), so it works with any MCP-compatible client.
+
+**Generic setup pattern:**
+
+1. **Identify your client's MCP configuration file/location**
+2. **Add server configuration with:**
+   - Command: Full path to `logs-mcp-server` binary
+   - Environment variables: `LOGS_SERVICE_URL`, `LOGS_API_KEY`, `LOGS_REGION`
+3. **Restart your MCP client**
+4. **Verify** by asking the AI to list alerts or query logs
+
+**Common configuration structure:**
+
+```json
+{
+  "mcpServers": {
+    "ibm-cloud-logs": {
+      "command": "/path/to/logs-mcp-server",
+      "env": {
+        "LOGS_SERVICE_URL": "...",
+        "LOGS_API_KEY": "...",
+        "LOGS_REGION": "..."
+      }
+    }
+  }
+}
+```
+
+### Programmatic Usage (Python)
+
+You can also interact with the MCP server programmatically:
+
+```python
+#!/usr/bin/env python3
+import json
+import subprocess
+
+# Start MCP server
+env = {
+    "LOGS_SERVICE_URL": "https://instance-id.api.us-south.logs.cloud.ibm.com",
+    "LOGS_API_KEY": "your-api-key",
+    "LOGS_REGION": "us-south"
+}
+
+proc = subprocess.Popen(
+    ["/path/to/logs-mcp-server"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    env=env,
+    text=True
+)
+
+# Send MCP initialize request
+initialize = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "my-client", "version": "1.0.0"}
+    }
+}
+
+proc.stdin.write(json.dumps(initialize) + '\n')
+proc.stdin.flush()
+response = proc.stdout.readline()
+print(json.loads(response))
+
+# Call query_logs tool
+query_request = {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+        "name": "query_logs",
+        "arguments": {
+            "query": "source logs | limit 10",
+            "tier": "frequent_search",
+            "syntax": "dataprime"
+        }
+    }
+}
+
+proc.stdin.write(json.dumps(query_request) + '\n')
+proc.stdin.flush()
+response = proc.stdout.readline()
+print(json.loads(response))
+```
+
+### Security Notes for All Platforms
+
+**⚠️ Important:**
+- Never commit configuration files with API keys to version control
+- Use environment variables or secret managers for API keys
+- Regularly rotate your IBM Cloud API keys (recommended: every 90 days)
+- Use service IDs instead of personal API keys for production
+- See [SECURITY.md](SECURITY.md) for comprehensive security guidance
+
+### Setup Pre-Commit Hooks (Developers)
+
+To prevent accidentally committing secrets:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run on all files (first time)
+pre-commit run --all-files
+```
+
+This will automatically scan for:
+- IBM Cloud API keys
+- AWS keys, GitHub tokens, private keys
+- High-entropy strings that might be secrets
+- Code formatting issues
+
+---
+
 ## Configuration
 
 ### Multiple Instances Setup
