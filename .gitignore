@@ -52,4 +52,7 @@ temp/
 *.crt
 credentials.json
 secrets.yaml
+
+# Release artifacts
 dist/
+VERSION

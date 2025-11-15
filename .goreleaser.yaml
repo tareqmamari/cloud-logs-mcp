@@ -144,6 +144,33 @@ release:
 
     **Full Changelog**: https://github.com/tareqmamari/cloud-logs-mcp/compare/{{ .PreviousTag }}...{{ .Tag }}
 
+# Homebrew tap
+brews:
+  - name: logs-mcp-server
+    repository:
+      owner: tareqmamari
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/tareqmamari/logs-mcp-server
+    description: "IBM Cloud Logs MCP Server - Model Context Protocol server for IBM Cloud Logs"
+    license: "UNLICENSED"
+    test: |
+      system "#{bin}/logs-mcp-server", "--version"
+    install: |
+      bin.install "logs-mcp-server"
+    caveats: |
+      To use logs-mcp-server, you need to configure:
+        1. Get your IBM Cloud API key: https://cloud.ibm.com/iam/apikeys
+        2. Set environment variables:
+           export LOGS_API_KEY='your-api-key'
+           export LOGS_SERVICE_URL='https://instance-id.api.region.logs.cloud.ibm.com'
+           export LOGS_REGION='us-south'
+        3. Configure in Claude Desktop
+
+      For more information, see: https://github.com/tareqmamari/logs-mcp-server
+
 # Announce release (optional)
 # announce:
 #   skip: '{{gt .Patch 0}}'  # Skip patch releases

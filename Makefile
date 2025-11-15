@@ -154,6 +154,40 @@ release-check: ## Validate GoReleaser configuration
 	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
 	goreleaser check
 
+# Semantic versioning with svu
+version-current: ## Show current version
+	@echo "Current version:"
+	@git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"
+
+version-next: ## Calculate next version based on commits
+	@echo "Next version:"
+	@svu next
+
+version-major: ## Calculate next major version
+	@svu major
+
+version-minor: ## Calculate next minor version
+	@svu minor
+
+version-patch: ## Calculate next patch version
+	@svu patch
+
+version-tag: ## Create and push next version tag (automated release)
+	@echo "Calculating next version..."
+	@NEXT_VERSION=$$(svu next); \
+	CURRENT_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	if [ "$$NEXT_VERSION" = "$$CURRENT_VERSION" ]; then \
+		echo "No conventional commits found since $$CURRENT_VERSION"; \
+		echo "Use 'git commit' with prefixes: feat:, fix:, etc."; \
+		exit 1; \
+	fi; \
+	echo "Creating tag $$NEXT_VERSION..."; \
+	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+	echo "Pushing tag to origin..."; \
+	git push origin $$NEXT_VERSION; \
+	echo "Tag $$NEXT_VERSION created and pushed!"; \
+	echo "GitHub Actions will now build and publish the release."
+
 # Development helpers
 watch: ## Watch for changes and rebuild
 	@echo "Watching for changes..."

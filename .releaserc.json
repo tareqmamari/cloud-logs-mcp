@@ -51,7 +51,8 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "echo ${nextRelease.version} > VERSION"
+        "prepareCmd": "echo ${nextRelease.version} > VERSION",
+        "publishCmd": "echo 'RELEASE_VERSION=${nextRelease.version}' >> $GITHUB_ENV"
       }
     ],
     [
@@ -64,20 +65,9 @@
     [
       "@semantic-release/github",
       {
-        "assets": [
-          {
-            "path": "dist/*.tar.gz",
-            "label": "Distribution Archives"
-          },
-          {
-            "path": "dist/*.zip",
-            "label": "Distribution Archives"
-          },
-          {
-            "path": "dist/checksums.txt",
-            "label": "Checksums"
-          }
-        ]
+        "successComment": false,
+        "failComment": false,
+        "releasedLabels": false
       }
     ]
   ]
