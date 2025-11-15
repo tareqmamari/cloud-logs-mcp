@@ -147,7 +147,14 @@ release-dry-run: ## Test release without publishing
 release-publish: ## Create and publish a release (requires git tag)
 	@echo "Publishing release with GoReleaser..."
 	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
-	goreleaser release --clean
+	@which gh > /dev/null || (echo "Error: GitHub CLI (gh) not found. Please install it: brew install gh" && exit 1)
+	@if [ -z "$$GITHUB_TOKEN" ]; then \
+		echo "Exporting GitHub token..."; \
+		export GITHUB_TOKEN=$$(gh auth token) && goreleaser release --clean; \
+	else \
+		echo "Using existing GITHUB_TOKEN"; \
+		goreleaser release --clean; \
+	fi
 
 release-check: ## Validate GoReleaser configuration
 	@echo "Validating GoReleaser configuration..."
