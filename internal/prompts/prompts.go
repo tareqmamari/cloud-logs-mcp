@@ -271,3 +271,135 @@ Ready to start ingesting logs?`, applicationName, applicationName, applicationNa
 
 	return prompt, nil
 }
+
+// CreateDashboardWorkflowPrompt handles the "create_dashboard_workflow" prompt
+func (h *PromptHandler) CreateDashboardWorkflowPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+	dashboardName, _ := arguments["dashboard_name"].(string)
+	if dashboardName == "" {
+		dashboardName = "Custom Dashboard"
+	}
+
+	prompt := fmt.Sprintf(`I'll help you create a dashboard in IBM Cloud Logs. Here's the complete workflow:
+
+**Step 1: Design Dashboard Layout**
+A dashboard consists of:
+- **Sections**: Logical groupings of widgets
+- **Rows**: Horizontal containers within sections (each has a height)
+- **Widgets**: Visualizations like line charts, bar charts, data tables, etc.
+- **Queries**: DataPrime or Lucene queries that power each widget
+
+**Step 2: Choose Widget Types**
+Available widget types:
+- **line_chart**: Time-series line charts (great for trends)
+- **bar_chart**: Bar charts for categorical data
+- **pie_chart**: Pie charts for proportions
+- **data_table**: Tabular data views
+- **gauge**: Single metric gauges
+- **horizontal_bar_chart**: Horizontal bar charts
+- **markdown**: Text and documentation widgets
+
+**Step 3: Create the Dashboard**
+Use: create_dashboard
+- name: "%s"
+- description: "Description of dashboard purpose"
+- layout: {
+    "sections": [
+      {
+        "id": {"value": "uuid-section-1"},
+        "rows": [
+          {
+            "id": {"value": "uuid-row-1"},
+            "appearance": {"height": 19},
+            "widgets": [
+              {
+                "id": {"value": "uuid-widget-1"},
+                "title": "Widget Title",
+                "description": "Widget description",
+                "definition": {
+                  "line_chart": {
+                    "legend": {"is_visible": true, "group_by_query": true},
+                    "tooltip": {"show_labels": false, "type": "all"},
+                    "query_definitions": [
+                      {
+                        "id": "uuid-query-1",
+                        "color_scheme": "cold",
+                        "name": "Query Name",
+                        "is_visible": true,
+                        "scale_type": "linear",
+                        "resolution": {"buckets_presented": 96},
+                        "series_count_limit": 20,
+                        "query": {
+                          "logs": {
+                            "group_by": [],
+                            "aggregations": [{"count": {}}],
+                            "group_bys": [
+                              {"keypath": ["severity"], "scope": "metadata"}
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+
+**Step 4: Organize Dashboard**
+After creation, you can:
+- Pin it: use pin_dashboard
+- Move to folder: use move_dashboard_to_folder
+- Set as default: use set_default_dashboard
+
+**Step 5: Verify Dashboard**
+- Use: list_dashboards to confirm creation
+- Use: get_dashboard to view full details
+
+**Common Query Examples:**
+
+1. **Error Count by Severity:**
+{
+  "logs": {
+    "aggregations": [{"count": {}}],
+    "group_bys": [{"keypath": ["severity"], "scope": "metadata"}]
+  }
+}
+
+2. **Application Performance:**
+{
+  "logs": {
+    "aggregations": [{"average": {"observation_field": {"keypath": ["duration"]}}}],
+    "group_bys": [{"keypath": ["applicationName"], "scope": "metadata"}]
+  }
+}
+
+3. **Log Volume Over Time:**
+{
+  "logs": {
+    "aggregations": [{"count": {}}],
+    "group_bys": []
+  }
+}
+
+**Best Practices:**
+- Use meaningful widget titles and descriptions
+- Group related widgets in the same section
+- Set appropriate row heights (typical: 12-24)
+- Limit series count to improve performance
+- Use color schemes consistently (cold, warm, classic)
+- Add multiple query definitions for comparison
+
+**Dashboard Management:**
+- List folders: use list_dashboard_folders
+- Move between folders: use move_dashboard_to_folder
+- Update existing: use update_dashboard (replaces entire dashboard)
+- Delete: use delete_dashboard
+
+Ready to create your dashboard? Let me know what metrics you want to visualize!`, dashboardName)
+
+	return prompt, nil
+}

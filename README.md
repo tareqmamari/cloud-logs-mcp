@@ -29,7 +29,7 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 ## Features
 
 ### Production-Ready Capabilities
-- ✅ **Complete API Coverage** - 45+ tools for all IBM Cloud Logs operations
+- ✅ **Complete API Coverage** - 70+ tools for all IBM Cloud Logs operations
 - ✅ **IBM Cloud IAM** - Automatic bearer token generation and refresh
 - ✅ **Retry Logic** - Exponential backoff with configurable attempts
 - ✅ **Rate Limiting** - Configurable requests/second with burst support
@@ -42,7 +42,9 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 
 ### API Operations
 - **Queries**: Synchronous and asynchronous (background) log queries
+- **Log Ingestion**: Push, add, or ingest log entries in real-time
 - **Alerts**: Create, read, update, delete, and manage alert definitions
+- **Dashboards**: Create, manage, and organize dashboards with widgets and visualizations
 - **Policies**: Data retention and access policies
 - **Webhooks**: Outgoing webhook integrations
 - **Events-to-Metrics (E2M)**: Convert log events to metrics
@@ -465,7 +467,7 @@ cp .env.example .env
 
 ## Available Tools
 
-The MCP server provides **45+ tools** covering all IBM Cloud Logs operations:
+The MCP server provides **70+ tools** covering all IBM Cloud Logs operations:
 
 ### Query Operations (5 tools)
 - `query_logs` - Execute synchronous queries
@@ -474,9 +476,24 @@ The MCP server provides **45+ tools** covering all IBM Cloud Logs operations:
 - `get_background_query_data` - Retrieve query results
 - `cancel_background_query` - Cancel running query
 
+### Log Ingestion (1 tool)
+- `ingest_logs` - Ingest, push, or add log entries to IBM Cloud Logs for real-time log ingestion
+
 ### Alert Management (10 tools)
 - `get_alert`, `list_alerts`, `create_alert`, `update_alert`, `delete_alert`
 - `get_alert_definition`, `list_alert_definitions`, `create_alert_definition`, `update_alert_definition`, `delete_alert_definition`
+
+### Dashboard Management (10 tools)
+- `list_dashboards` - List all dashboards in the catalog
+- `get_dashboard` - Get a specific dashboard by ID
+- `create_dashboard` - Create a new dashboard with widgets and layout
+- `update_dashboard` - Update an existing dashboard (replaces entire dashboard)
+- `delete_dashboard` - Delete a dashboard
+- `list_dashboard_folders` - List all dashboard folders
+- `move_dashboard_to_folder` - Move a dashboard to a specific folder
+- `pin_dashboard` - Pin a dashboard for quick access
+- `unpin_dashboard` - Unpin a dashboard
+- `set_default_dashboard` - Set a dashboard as the default
 
 ### Rule Groups (5 tools)
 - `get_rule_group`, `list_rule_groups`, `create_rule_group`, `update_rule_group`, `delete_rule_group`
@@ -521,6 +538,23 @@ Once configured, you can ask your AI assistant:
 "Delete alert abc-123"
 ```
 
+### Working with Dashboards
+```
+"List all my dashboards"
+"Create a dashboard showing error rates by severity"
+"Show me the dashboard with ID abc-123"
+"Pin the production overview dashboard"
+"Move this dashboard to the monitoring folder"
+"Set dashboard xyz as the default"
+```
+
+### Ingesting Logs
+```
+"Ingest a test log message for my-app"
+"Push these error logs to IBM Cloud Logs"
+"Add application logs with severity level 5"
+```
+
 ### Working with Policies
 ```
 "List all retention policies"
@@ -559,6 +593,20 @@ The server includes pre-built workflow prompts for common scenarios:
 "Help me set up monitoring for my-service"
 → Uses setup_monitoring prompt
 → Walks through: create alert definition, webhook, alert, and policy
+```
+
+**Test Log Ingestion:**
+```
+"Help me test log ingestion for my-app"
+→ Uses test_log_ingestion prompt
+→ Guides through: ingest test logs, verify ingestion, check details
+```
+
+**Create Dashboard:**
+```
+"Help me create a dashboard for monitoring errors"
+→ Uses create_dashboard_workflow prompt
+→ Walks through: design layout, add widgets, configure queries
 ```
 
 **Compare Environments:**
@@ -1076,4 +1124,4 @@ Built with production-grade best practices for:
 - Observability and debugging
 - Developer experience and documentation
 
-**Stats**: ~3,000 lines of Go code | 45+ MCP tools | 8.8MB binary | Production ready ✅
+**Stats**: ~3,500 lines of Go code | 70+ MCP tools | 9.2MB binary | Production ready ✅
