@@ -151,8 +151,6 @@ brews:
       owner: tareqmamari
       name: homebrew-tap
       branch: main
-      token: "{{ .Env.GITHUB_TOKEN }}"
-    folder: Formula
     homepage: https://github.com/tareqmamari/logs-mcp-server
     description: "IBM Cloud Logs MCP Server - Model Context Protocol server for IBM Cloud Logs"
     license: "UNLICENSED"
