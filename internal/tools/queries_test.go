@@ -6,8 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestQueryTool_InputSchema verifies the schema includes tier and syntax with proper defaults
-// This test validates the fix for missing required API parameters
+// TestQueryTool_InputSchema verifies the schema matches API spec
 func TestQueryTool_InputSchema(t *testing.T) {
 	tool := &QueryTool{}
 	schema := tool.InputSchema()
@@ -21,17 +20,17 @@ func TestQueryTool_InputSchema(t *testing.T) {
 	assert.True(t, ok, "query property should exist")
 	assert.Equal(t, "string", queryProp["type"])
 
-	// Verify tier property with enum and default
+	// Verify tier property with correct API enum and default
 	tierProp, ok := schema.Properties["tier"].(map[string]interface{})
 	assert.True(t, ok, "tier property should exist")
 	assert.Equal(t, "string", tierProp["type"])
-	assert.Equal(t, "frequent", tierProp["default"], "tier should default to 'frequent'")
+	assert.Equal(t, "frequent_search", tierProp["default"], "tier should default to 'frequent_search'")
 
 	enum, ok := tierProp["enum"].([]string)
 	assert.True(t, ok, "tier enum should be []string")
-	assert.Contains(t, enum, "frequent")
-	assert.Contains(t, enum, "monitoring")
+	assert.Contains(t, enum, "frequent_search")
 	assert.Contains(t, enum, "archive")
+	assert.Contains(t, enum, "unspecified")
 
 	// Verify syntax property with enum and default
 	syntaxProp, ok := schema.Properties["syntax"].(map[string]interface{})
@@ -43,12 +42,20 @@ func TestQueryTool_InputSchema(t *testing.T) {
 	assert.True(t, ok, "syntax enum should be []string")
 	assert.Contains(t, syntaxEnum, "dataprime")
 	assert.Contains(t, syntaxEnum, "lucene")
+	assert.Contains(t, syntaxEnum, "unspecified")
 
 	// Verify limit property has description about default
 	limitProp, ok := schema.Properties["limit"].(map[string]interface{})
 	assert.True(t, ok, "limit property should exist")
 	assert.Equal(t, "number", limitProp["type"])
-	assert.Contains(t, limitProp["description"], "default: 50")
+	assert.Contains(t, limitProp["description"], "default: 2000")
+
+	// Verify date fields exist
+	_, ok = schema.Properties["start_date"].(map[string]interface{})
+	assert.True(t, ok, "start_date property should exist")
+
+	_, ok = schema.Properties["end_date"].(map[string]interface{})
+	assert.True(t, ok, "end_date property should exist")
 }
 
 // TestQueryTool_DefaultParameterHandling verifies default values are applied correctly
@@ -65,9 +72,9 @@ func TestQueryTool_DefaultParameterHandling(t *testing.T) {
 			args: map[string]interface{}{
 				"query": "source logs",
 			},
-			wantTier:   "frequent",
+			wantTier:   "frequent_search",
 			wantSyntax: "dataprime",
-			wantLimit:  50,
+			wantLimit:  2000,
 		},
 		{
 			name: "custom tier and syntax",
@@ -78,7 +85,7 @@ func TestQueryTool_DefaultParameterHandling(t *testing.T) {
 			},
 			wantTier:   "archive",
 			wantSyntax: "lucene",
-			wantLimit:  50,
+			wantLimit:  2000,
 		},
 		{
 			name: "custom limit",
@@ -86,7 +93,7 @@ func TestQueryTool_DefaultParameterHandling(t *testing.T) {
 				"query": "source logs",
 				"limit": float64(100), // JSON numbers are float64
 			},
-			wantTier:   "frequent",
+			wantTier:   "frequent_search",
 			wantSyntax: "dataprime",
 			wantLimit:  100,
 		},
@@ -97,7 +104,7 @@ func TestQueryTool_DefaultParameterHandling(t *testing.T) {
 			// Extract tier with default (simulating Execute logic)
 			tier, _ := GetStringParam(tt.args, "tier", false)
 			if tier == "" {
-				tier = "frequent"
+				tier = "frequent_search"
 			}
 			assert.Equal(t, tt.wantTier, tier)
 
@@ -111,7 +118,7 @@ func TestQueryTool_DefaultParameterHandling(t *testing.T) {
 			// Extract limit with default (simulating Execute logic)
 			limit, _ := GetIntParam(tt.args, "limit", false)
 			if limit == 0 {
-				limit = 50
+				limit = 2000
 			}
 			assert.Equal(t, tt.wantLimit, limit)
 		})

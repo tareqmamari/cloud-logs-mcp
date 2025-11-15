@@ -37,27 +37,27 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
-				"description": "Log tier to query: frequent (default), monitoring, or archive",
-				"enum":        []string{"frequent", "monitoring", "archive"},
-				"default":     "frequent",
+				"description": "Log tier to query: frequent_search (default), archive, or unspecified",
+				"enum":        []string{"unspecified", "archive", "frequent_search"},
+				"default":     "frequent_search",
 			},
 			"syntax": map[string]interface{}{
 				"type":        "string",
-				"description": "Query syntax: dataprime (default) or lucene",
-				"enum":        []string{"dataprime", "lucene"},
+				"description": "Query syntax: dataprime (default), lucene, or unspecified",
+				"enum":        []string{"unspecified", "lucene", "dataprime"},
 				"default":     "dataprime",
 			},
-			"start_time": map[string]interface{}{
+			"start_date": map[string]interface{}{
 				"type":        "string",
-				"description": "Start time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"description": "Start date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
-			"end_time": map[string]interface{}{
+			"end_date": map[string]interface{}{
 				"type":        "string",
-				"description": "End time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"description": "End date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"limit": map[string]interface{}{
 				"type":        "number",
-				"description": "Maximum number of results to return (default: 50)",
+				"description": "Maximum number of results to return (default: 2000, max: 50000)",
 			},
 		},
 		Required: []string{"query"},
@@ -70,33 +70,42 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	// Build metadata object with all optional parameters
+	metadata := make(map[string]interface{})
+
 	// Apply defaults for tier and syntax
 	tier, _ := GetStringParam(arguments, "tier", false)
 	if tier == "" {
-		tier = "frequent"
+		tier = "frequent_search"
 	}
+	metadata["tier"] = tier
 
 	syntax, _ := GetStringParam(arguments, "syntax", false)
 	if syntax == "" {
 		syntax = "dataprime"
 	}
+	metadata["syntax"] = syntax
 
-	body := map[string]interface{}{
-		"query":  query,
-		"tier":   tier,
-		"syntax": syntax,
+	// Add date range if provided
+	if startDate, _ := GetStringParam(arguments, "start_date", false); startDate != "" {
+		metadata["start_date"] = startDate
+	}
+	if endDate, _ := GetStringParam(arguments, "end_date", false); endDate != "" {
+		metadata["end_date"] = endDate
 	}
 
-	if startTime, _ := GetStringParam(arguments, "start_time", false); startTime != "" {
-		body["start_time"] = startTime
-	}
-	if endTime, _ := GetStringParam(arguments, "end_time", false); endTime != "" {
-		body["end_time"] = endTime
-	}
-	if limit, _ := GetIntParam(arguments, "limit", false); limit > 0 {
-		body["limit"] = limit
+	// Add limit with proper default
+	limit, _ := GetIntParam(arguments, "limit", false)
+	if limit > 0 {
+		metadata["limit"] = limit
 	} else {
-		body["limit"] = 50 // Default limit
+		metadata["limit"] = 2000 // Default limit per API spec
+	}
+
+	// Build request body with query at top level and metadata nested
+	body := map[string]interface{}{
+		"query":    query,
+		"metadata": metadata,
 	}
 
 	req := &client.Request{
@@ -138,18 +147,24 @@ func (t *SubmitBackgroundQueryTool) InputSchema() mcp.ToolInputSchema {
 		Properties: map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
-				"description": "The query string to execute",
+				"description": "The query string to execute (1-4096 characters)",
 			},
-			"start_time": map[string]interface{}{
+			"syntax": map[string]interface{}{
 				"type":        "string",
-				"description": "Start time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"description": "Query syntax: dataprime (default), lucene, or unspecified",
+				"enum":        []string{"unspecified", "lucene", "dataprime"},
+				"default":     "dataprime",
 			},
-			"end_time": map[string]interface{}{
+			"start_date": map[string]interface{}{
 				"type":        "string",
-				"description": "End time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"description": "Start date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Optional, defaults to end - 15 minutes",
+			},
+			"end_date": map[string]interface{}{
+				"type":        "string",
+				"description": "End date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Optional, defaults to now",
 			},
 		},
-		Required: []string{"query", "start_time", "end_time"},
+		Required: []string{"query", "syntax"},
 	}
 }
 
@@ -159,20 +174,23 @@ func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	startTime, err := GetStringParam(arguments, "start_time", true)
+	syntax, err := GetStringParam(arguments, "syntax", true)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	endTime, err := GetStringParam(arguments, "end_time", true)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
+	// Build request body with required fields
 	body := map[string]interface{}{
-		"query":      query,
-		"start_time": startTime,
-		"end_time":   endTime,
+		"query":  query,
+		"syntax": syntax,
+	}
+
+	// Add optional date fields if provided
+	if startDate, _ := GetStringParam(arguments, "start_date", false); startDate != "" {
+		body["start_date"] = startDate
+	}
+	if endDate, _ := GetStringParam(arguments, "end_date", false); endDate != "" {
+		body["end_date"] = endDate
 	}
 
 	req := &client.Request{

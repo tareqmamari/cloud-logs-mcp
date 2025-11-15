@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/observability-c/logs-mcp-server/internal/client"
@@ -40,15 +41,68 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 		return nil, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(resp.Body))
 	}
 
-	// Parse response
+	// Parse response - handle both JSON and Server-Sent Events (SSE)
 	var result map[string]interface{}
 	if len(resp.Body) > 0 {
+		// Try parsing as Server-Sent Events first (for query responses)
+		if sseResult := parseSSEResponse(resp.Body); sseResult != nil {
+			return sseResult, nil
+		}
+
+		// Fall back to standard JSON
 		if err := json.Unmarshal(resp.Body, &result); err != nil {
 			return nil, fmt.Errorf("failed to parse response: %w", err)
 		}
 	}
 
 	return result, nil
+}
+
+// parseSSEResponse parses Server-Sent Events format responses
+// IBM Cloud Logs query API returns results in SSE format like:
+// : success
+// data: {"query_id":...}
+//
+// : success
+// data: {"result":{"results":[...]}}
+func parseSSEResponse(body []byte) map[string]interface{} {
+	bodyStr := string(body)
+
+	// Check if this looks like SSE format
+	if !strings.Contains(bodyStr, "data: {") {
+		return nil
+	}
+
+	result := make(map[string]interface{})
+	lines := strings.Split(bodyStr, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip comments and empty lines
+		if strings.HasPrefix(line, ":") || line == "" {
+			continue
+		}
+
+		// Parse data lines
+		if strings.HasPrefix(line, "data: ") {
+			dataJSON := strings.TrimPrefix(line, "data: ")
+
+			var dataObj map[string]interface{}
+			if err := json.Unmarshal([]byte(dataJSON), &dataObj); err == nil {
+				// Merge all data objects into result
+				for k, v := range dataObj {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	if len(result) > 0 {
+		return result
+	}
+
+	return nil
 }
 
 // FormatResponse formats the response as a text/content for MCP
