@@ -57,7 +57,29 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 
 ## Quick Start
 
-### Step 1: Build the Server
+### Installation
+
+#### Option 1: Homebrew (Recommended)
+
+```bash
+# Add the tap
+brew tap tareqmamari/tap
+
+# Install
+brew install logs-mcp-server
+
+# Verify installation
+logs-mcp-server --version
+```
+
+The binary will be installed at `/usr/local/bin/logs-mcp-server` (Intel) or `/opt/homebrew/bin/logs-mcp-server` (Apple Silicon).
+
+To find the exact path:
+```bash
+which logs-mcp-server
+```
+
+#### Option 2: Build from Source
 
 ```bash
 # Clone repository
@@ -94,6 +116,25 @@ Edit your Claude Desktop config file:
 
 Add this configuration:
 
+**If installed via Homebrew:**
+
+```json
+{
+  "mcpServers": {
+    "ibm-cloud-logs": {
+      "command": "logs-mcp-server",
+      "env": {
+        "LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+        "LOGS_API_KEY": "your-ibm-cloud-api-key-here",
+        "LOGS_REGION": "us-south"
+      }
+    }
+  }
+}
+```
+
+**If built from source:**
+
 ```json
 {
   "mcpServers": {
@@ -108,6 +149,8 @@ Add this configuration:
   }
 }
 ```
+
+**Tip**: If installed via Homebrew, you can use just `logs-mcp-server` as the command (no path needed). To verify the path, run `which logs-mcp-server`.
 
 **Important**:
 - Replace `/absolute/path/to/logs-mcp-server` with the actual full path from step 1
