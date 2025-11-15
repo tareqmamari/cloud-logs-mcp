@@ -117,6 +117,7 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 }
 
 // GetStringParam safely gets a string parameter from arguments
+// It also handles numeric IDs and converts them to strings
 func GetStringParam(arguments map[string]interface{}, key string, required bool) (string, error) {
 	val, exists := arguments[key]
 	if !exists {
@@ -126,12 +127,22 @@ func GetStringParam(arguments map[string]interface{}, key string, required bool)
 		return "", nil
 	}
 
-	str, ok := val.(string)
-	if !ok {
-		return "", fmt.Errorf("parameter %s must be a string", key)
+	// Handle string type
+	if str, ok := val.(string); ok {
+		return str, nil
 	}
 
-	return str, nil
+	// Handle numeric types (for IDs that might be numbers)
+	switch v := val.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", v), nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	default:
+		return "", fmt.Errorf("parameter %s must be a string or number", key)
+	}
 }
 
 // GetObjectParam safely gets an object parameter from arguments

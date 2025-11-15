@@ -65,40 +65,76 @@ func (t *CreateEventStreamTargetTool) Name() string {
 }
 
 func (t *CreateEventStreamTargetTool) Description() string {
-	return "Create a new event stream target for streaming logs to external systems"
+	return "Create a new event stream target for streaming logs to IBM Event Streams (Kafka)"
 }
 
 func (t *CreateEventStreamTargetTool) InputSchema() mcp.ToolInputSchema {
 	return mcp.ToolInputSchema{
 		Type: "object",
 		Properties: map[string]interface{}{
-			"target_type": map[string]interface{}{
+			"name": map[string]interface{}{
 				"type":        "string",
-				"description": "Type of event stream target (e.g., event_streams, event_notifications)",
+				"description": "The name of the event stream (1-4096 characters)",
 			},
-			"config": map[string]interface{}{
+			"dpxl_expression": map[string]interface{}{
+				"type":        "string",
+				"description": "DPXL expression to filter logs (e.g., '<v1>contains(kubernetes.labels.app, \"frontend\")')",
+			},
+			"is_active": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Whether the event stream is active (default: true)",
+			},
+			"compression_type": map[string]interface{}{
+				"type":        "string",
+				"description": "Compression type: gzip, snappy, lz4, zstd, or unspecified",
+				"enum":        []string{"gzip", "snappy", "lz4", "zstd", "unspecified"},
+			},
+			"ibm_event_streams": map[string]interface{}{
 				"type":        "object",
-				"description": "Configuration for the event stream target (specific to target_type)",
+				"description": "IBM Event Streams (Kafka) configuration",
+				"properties": map[string]interface{}{
+					"brokers": map[string]interface{}{
+						"type":        "string",
+						"description": "Kafka broker endpoints (comma-separated)",
+					},
+					"topic": map[string]interface{}{
+						"type":        "string",
+						"description": "Kafka topic name",
+					},
+				},
 			},
 		},
-		Required: []string{"target_type", "config"},
+		Required: []string{"name", "dpxl_expression"},
 	}
 }
 
 func (t *CreateEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	targetType, err := GetStringParam(arguments, "target_type", true)
+	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	config, ok := arguments["config"].(map[string]interface{})
-	if !ok {
-		return mcp.NewToolResultError("config must be an object"), nil
+	dpxlExpression, err := GetStringParam(arguments, "dpxl_expression", true)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	body := map[string]interface{}{
-		"target_type": targetType,
-		"config":      config,
+		"name":            name,
+		"dpxl_expression": dpxlExpression,
+	}
+
+	// Add optional fields
+	if isActive, ok := arguments["is_active"].(bool); ok {
+		body["is_active"] = isActive
+	}
+
+	if compressionType, _ := GetStringParam(arguments, "compression_type", false); compressionType != "" {
+		body["compression_type"] = compressionType
+	}
+
+	if eventStreams, ok := arguments["ibm_event_streams"].(map[string]interface{}); ok {
+		body["ibm_event_streams"] = eventStreams
 	}
 
 	req := &client.Request{
@@ -138,47 +174,73 @@ func (t *UpdateEventStreamTargetTool) InputSchema() mcp.ToolInputSchema {
 	return mcp.ToolInputSchema{
 		Type: "object",
 		Properties: map[string]interface{}{
-			"target_id": map[string]interface{}{
+			"stream_id": map[string]interface{}{
 				"type":        "string",
-				"description": "The unique identifier of the event stream target to update",
+				"description": "The unique identifier of the event stream to update",
 			},
-			"target_type": map[string]interface{}{
+			"name": map[string]interface{}{
 				"type":        "string",
-				"description": "Type of event stream target (e.g., event_streams, event_notifications)",
+				"description": "The name of the event stream (1-4096 characters)",
 			},
-			"config": map[string]interface{}{
+			"dpxl_expression": map[string]interface{}{
+				"type":        "string",
+				"description": "DPXL expression to filter logs",
+			},
+			"is_active": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Whether the event stream is active",
+			},
+			"compression_type": map[string]interface{}{
+				"type":        "string",
+				"description": "Compression type: gzip, snappy, lz4, zstd, or unspecified",
+				"enum":        []string{"gzip", "snappy", "lz4", "zstd", "unspecified"},
+			},
+			"ibm_event_streams": map[string]interface{}{
 				"type":        "object",
-				"description": "Updated configuration for the event stream target",
+				"description": "IBM Event Streams (Kafka) configuration",
 			},
 		},
-		Required: []string{"target_id", "target_type", "config"},
+		Required: []string{"stream_id", "name", "dpxl_expression"},
 	}
 }
 
 func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	targetID, err := GetStringParam(arguments, "target_id", true)
+	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	targetType, err := GetStringParam(arguments, "target_type", true)
+	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	config, ok := arguments["config"].(map[string]interface{})
-	if !ok {
-		return mcp.NewToolResultError("config must be an object"), nil
+	dpxlExpression, err := GetStringParam(arguments, "dpxl_expression", true)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	body := map[string]interface{}{
-		"target_type": targetType,
-		"config":      config,
+		"name":            name,
+		"dpxl_expression": dpxlExpression,
+	}
+
+	// Add optional fields
+	if isActive, ok := arguments["is_active"].(bool); ok {
+		body["is_active"] = isActive
+	}
+
+	if compressionType, _ := GetStringParam(arguments, "compression_type", false); compressionType != "" {
+		body["compression_type"] = compressionType
+	}
+
+	if eventStreams, ok := arguments["ibm_event_streams"].(map[string]interface{}); ok {
+		body["ibm_event_streams"] = eventStreams
 	}
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   "/v1/streams/" + targetID,
+		Path:   "/v1/streams/" + streamID,
 		Body:   body,
 	}
 
@@ -191,7 +253,7 @@ func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 }
 
 // DeleteEventStreamTargetTool deletes an event stream target
-type DeleteEventStreamTargetTool struct {
+type DeleteEventStreamTargetTool struct{
 	*BaseTool
 }
 
@@ -213,24 +275,24 @@ func (t *DeleteEventStreamTargetTool) InputSchema() mcp.ToolInputSchema {
 	return mcp.ToolInputSchema{
 		Type: "object",
 		Properties: map[string]interface{}{
-			"target_id": map[string]interface{}{
+			"stream_id": map[string]interface{}{
 				"type":        "string",
-				"description": "The unique identifier of the event stream target to delete",
+				"description": "The unique identifier of the event stream to delete",
 			},
 		},
-		Required: []string{"target_id"},
+		Required: []string{"stream_id"},
 	}
 }
 
 func (t *DeleteEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	targetID, err := GetStringParam(arguments, "target_id", true)
+	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/streams/" + targetID,
+		Path:   "/v1/streams/" + streamID,
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
