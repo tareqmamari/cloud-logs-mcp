@@ -1,6 +1,6 @@
 module github.com/observability-c/logs-mcp-server
 
-go 1.23.2
+go 1.24.0
 
 require (
 	github.com/IBM/go-sdk-core/v5 v5.17.4
@@ -8,7 +8,7 @@ require (
 	github.com/mark3labs/mcp-go v0.8.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/time v0.5.0
+	golang.org/x/time v0.14.0
 )
 
 require (
