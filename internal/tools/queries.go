@@ -5,8 +5,9 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // normalizeTier maps user-friendly tier names to API values

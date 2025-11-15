@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/observability-c/logs-mcp-server/internal/auth"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/auth"
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // Status represents the health status

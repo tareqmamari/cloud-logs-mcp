@@ -6,10 +6,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/observability-c/logs-mcp-server/internal/client"
-	"github.com/observability-c/logs-mcp-server/internal/config"
-	"github.com/observability-c/logs-mcp-server/internal/tools"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/tools"
 )
 
 // Server represents the MCP server

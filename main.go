@@ -8,7 +8,7 @@
 //
 // Configuration is provided through environment variables:
 //   - LOGS_SERVICE_URL: The IBM Cloud Logs service endpoint URL
-//   - LOGS_API_KEY: IBM Cloud API key for authentication
+//   - LOGS_API_KEY: IBM Cloud API key for authentication  // pragma: allowlist secret
 //   - LOGS_REGION: IBM Cloud region (e.g., au-syd, br-sao)
 //   - LOGS_INSTANCE_NAME: (Optional) Friendly name for the instance
 //   - ENVIRONMENT: (Optional) Set to "production" for production logging
@@ -29,9 +29,10 @@ import (
 	"syscall"
 
 	"github.com/joho/godotenv"
-	"github.com/observability-c/logs-mcp-server/internal/config"
-	"github.com/observability-c/logs-mcp-server/internal/server"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/server"
 )
 
 // version is the current version of the MCP server.

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // PromptHandler handles a prompt execution

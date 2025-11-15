@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // GetEventStreamTargetsTool lists all event stream targets
@@ -253,7 +254,7 @@ func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 }
 
 // DeleteEventStreamTargetTool deletes an event stream target
-type DeleteEventStreamTargetTool struct{
+type DeleteEventStreamTargetTool struct {
 	*BaseTool
 }
 

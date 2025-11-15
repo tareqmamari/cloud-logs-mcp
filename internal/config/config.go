@@ -27,12 +27,12 @@ type Config struct {
 	IdleConnTimeout time.Duration `json:"idle_conn_timeout"`
 
 	// Rate Limiting
-	RateLimit         int `json:"rate_limit"`          // requests per second
-	RateLimitBurst    int `json:"rate_limit_burst"`    // burst size
-	EnableRateLimit   bool `json:"enable_rate_limit"`
+	RateLimit       int  `json:"rate_limit"`       // requests per second
+	RateLimitBurst  int  `json:"rate_limit_burst"` // burst size
+	EnableRateLimit bool `json:"enable_rate_limit"`
 
 	// Security
-	TLSVerify       bool `json:"tls_verify"`
+	TLSVerify       bool     `json:"tls_verify"`
 	AllowedIPRanges []string `json:"allowed_ip_ranges,omitempty"`
 
 	// Logging

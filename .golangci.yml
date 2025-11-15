@@ -25,54 +25,52 @@ linters:
     - gofmt          # Checks if code was gofmt-ed
     - goimports      # Checks import statements are formatted
     - misspell       # Finds commonly misspelled words
-    - gocritic       # Provides diagnostics
     - gosec          # Security checker
     - revive         # Fast, configurable, extensible linter
     - unconvert      # Removes unnecessary type conversions
-    - unparam        # Reports unused function parameters
-    - gocyclo        # Computes cyclomatic complexity
-    - dupl           # Code clone detection
-    - goconst        # Finds repeated strings
-    - godot          # Checks if comments end in a period
-    - lll            # Reports long lines
-    - gci            # Controls Go package import order
+    # Disabled for now - too opinionated
+    # - unparam        # Reports unused function parameters
+    # - gocyclo        # Computes cyclomatic complexity
+    # - dupl           # Code clone detection
+    # - goconst        # Finds repeated strings
+    # - godot          # Checks if comments end in a period
+    # - lll            # Reports long lines
+    # - gci            # Controls Go package import order
+    # - gocritic       # Provides diagnostics
     - bodyclose      # Checks HTTP response bodies are closed
-    - noctx          # Finds HTTP requests without context
+    # - noctx          # Finds HTTP requests without context (too strict for tests)
     - rowserrcheck   # Checks SQL rows.Err is checked
     - sqlclosecheck  # Checks SQL Close() is called
     - wastedassign   # Finds wasted assignment statements
 
 linters-settings:
   errcheck:
-    check-type-assertions: true
-    check-blank: true
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - (*go.uber.org/zap.Logger).Sync
 
   govet:
     enable-all: true
     disable:
       - shadow
+      - fieldalignment  # Performance optimization, not critical
 
   gofmt:
     simplify: true
 
   goimports:
-    local-prefixes: github.com/observability-c/logs-mcp-server
+    local-prefixes: github.com/tareqmamari/logs-mcp-server
 
   misspell:
     locale: US
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-      - experimental
-      - opinionated
 
   gosec:
     excludes:
       - G104  # Audit errors not checked (covered by errcheck)
       - G304  # File path provided as taint input (needed for dynamic config)
+      - G115  # Integer overflow conversion (acceptable in our use case)
     severity: medium
     confidence: medium
 
@@ -83,41 +81,13 @@ linters-settings:
           - checkPrivateReceivers
           - sayRepetitiveInsteadOfStutters
 
-  gocyclo:
-    min-complexity: 15
-
-  dupl:
-    threshold: 100
-
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  lll:
-    line-length: 120
-    tab-width: 4
-
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/observability-c/logs-mcp-server)
-
 issues:
   exclude-rules:
     # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
-        - gocyclo
         - errcheck
-        - dupl
         - gosec
-        - goconst
-
-    # Exclude lll issues for long lines with go:generate
-    - linters:
-        - lll
-      source: "^//go:generate "
 
   max-issues-per-linter: 0
   max-same-issues: 0

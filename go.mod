@@ -1,4 +1,4 @@
-module github.com/observability-c/logs-mcp-server
+module github.com/tareqmamari/logs-mcp-server
 
 go 1.23.2
 

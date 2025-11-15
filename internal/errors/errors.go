@@ -32,14 +32,14 @@ const (
 	CodeRateLimitExceeded ErrorCode = "RATE_LIMIT_EXCEEDED"
 
 	// Server errors
-	CodeInternalError     ErrorCode = "INTERNAL_ERROR"
+	CodeInternalError      ErrorCode = "INTERNAL_ERROR"
 	CodeServiceUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
 	CodeTimeout            ErrorCode = "TIMEOUT"
 
 	// External errors
-	CodeAPIError          ErrorCode = "API_ERROR"
-	CodeAuthFailed        ErrorCode = "AUTH_FAILED"
-	CodeNetworkError      ErrorCode = "NETWORK_ERROR"
+	CodeAPIError     ErrorCode = "API_ERROR"
+	CodeAuthFailed   ErrorCode = "AUTH_FAILED"
+	CodeNetworkError ErrorCode = "NETWORK_ERROR"
 )
 
 // StructuredError represents a detailed error with category, code, and recovery suggestion

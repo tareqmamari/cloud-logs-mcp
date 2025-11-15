@@ -7,8 +7,9 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // BaseTool provides common functionality for all tools

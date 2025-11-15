@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/observability-c/logs-mcp-server/internal/auth"
-	"github.com/observability-c/logs-mcp-server/internal/config"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/auth"
+	"github.com/tareqmamari/logs-mcp-server/internal/config"
 )
 
 // Client is an HTTP client for the IBM Cloud Logs API

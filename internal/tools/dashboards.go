@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // ListDashboardsTool lists all dashboards in the catalog.
@@ -191,7 +192,7 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 }
 
 // UpdateDashboardTool updates an existing dashboard.
-type UpdateDashboardTool struct{
+type UpdateDashboardTool struct {
 	*BaseTool
 }
 

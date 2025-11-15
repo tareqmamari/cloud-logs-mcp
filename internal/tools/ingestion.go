@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
+
+	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
 // IngestLogsTool implements log ingestion to IBM Cloud Logs.
@@ -145,10 +146,10 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 	// It uses: https://{instance-id}.ingress.{region}.logs.cloud.ibm.com/logs/v1/singles
 	// We'll need to construct this from the service URL
 	req := &client.Request{
-		Method:          "POST",
-		Path:            "/logs/v1/singles",
-		Body:            logs,
-		UseIngressHost:  true, // Flag to use ingress endpoint instead of API endpoint
+		Method:         "POST",
+		Path:           "/logs/v1/singles",
+		Body:           logs,
+		UseIngressHost: true, // Flag to use ingress endpoint instead of API endpoint
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

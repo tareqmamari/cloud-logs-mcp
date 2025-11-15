@@ -17,10 +17,10 @@ type Metrics struct {
 	retriedRequests    atomic.Uint64
 
 	// Latency tracking
-	totalLatency    atomic.Int64 // microseconds
-	latencyCount    atomic.Uint64
-	maxLatency      atomic.Int64
-	minLatency      atomic.Int64
+	totalLatency atomic.Int64 // microseconds
+	latencyCount atomic.Uint64
+	maxLatency   atomic.Int64
+	minLatency   atomic.Int64
 
 	// Rate limiting metrics
 	rateLimitHits atomic.Uint64
@@ -30,10 +30,10 @@ type Metrics struct {
 	errorsByStatus map[int]uint64
 
 	// Tool usage tracking
-	toolsMu      sync.RWMutex
-	toolUsage    map[string]uint64
-	toolErrors   map[string]uint64
-	toolLatency  map[string]int64 // microseconds
+	toolsMu     sync.RWMutex
+	toolUsage   map[string]uint64
+	toolErrors  map[string]uint64
+	toolLatency map[string]int64 // microseconds
 
 	logger *zap.Logger
 }
