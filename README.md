@@ -55,51 +55,42 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 
 ## Quick Start
 
-### Prerequisites
-
-- Go 1.22+ installed ([download](https://go.dev/dl/))
-- IBM Cloud Logs service instance
-- IBM Cloud API key with appropriate permissions
-
-### Installation
+### Step 1: Build the Server
 
 ```bash
 # Clone repository
 git clone https://github.com/observability-c/logs-mcp-server.git
 cd logs-mcp-server
 
-# Download dependencies
+# Download dependencies and build
 make deps
-
-# Build
 make build
 ```
 
-Binary will be at `./bin/logs-mcp-server`
+Binary will be at `./bin/logs-mcp-server` - note this absolute path for step 3.
 
-### Get Your IBM Cloud Credentials
+### Step 2: Get Your IBM Cloud Credentials
 
-1. **Instance ID**:
-   - Go to [IBM Cloud Console](https://cloud.ibm.com) → Resource List → Cloud Logs
-   - Click your instance → Note the instance ID
-   - Format: `https://{instance-id}.api.{region}.logs.cloud.ibm.com`
+1. **API Key**:
+   - Go to [IBM Cloud Console](https://cloud.ibm.com/iam/apikeys)
+   - Click **Create** → Give it a name → **Copy the key immediately** (you won't see it again)
 
-2. **API Key**:
-   - Go to [IAM API Keys](https://cloud.ibm.com/iam/apikeys)
-   - Click **Create** → Give it a name → Copy the key immediately
+2. **Service URL** (format: `https://{instance-id}.api.{region}.logs.cloud.ibm.com`):
+   - Go to [Resource List](https://cloud.ibm.com/resources) → Cloud Logs
+   - Click your instance → Copy the instance ID from the details
+   - Construct URL: `https://<instance-id>.api.<region>.logs.cloud.ibm.com`
 
 3. **Region**: `us-south`, `us-east`, `eu-de`, `eu-gb`, `au-syd`, `jp-tok`, etc.
 
----
+### Step 3: Configure Claude Desktop
 
-## Configuration
+Edit your Claude Desktop config file:
 
-### Single Instance Setup
-
-**Recommended**: Configure directly in MCP client (e.g., Claude Desktop):
-
-**macOS/Linux**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+Add this configuration:
 
 ```json
 {
@@ -108,7 +99,7 @@ Binary will be at `./bin/logs-mcp-server`
       "command": "/absolute/path/to/logs-mcp-server/bin/logs-mcp-server",
       "env": {
         "LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-        "LOGS_API_KEY": "your-ibm-cloud-api-key",
+        "LOGS_API_KEY": "your-ibm-cloud-api-key-here",
         "LOGS_REGION": "us-south"
       }
     }
@@ -117,10 +108,26 @@ Binary will be at `./bin/logs-mcp-server`
 ```
 
 **Important**:
-- Use **absolute path** to the binary
-- Replace `your-instance-id` with actual instance ID
-- Replace `your-ibm-cloud-api-key` with your API key
-- **Restart** your MCP client completely after editing
+- Replace `/absolute/path/to/logs-mcp-server` with the actual full path from step 1
+- Replace `your-instance-id` with your actual instance ID
+- Replace `your-ibm-cloud-api-key-here` with the API key from step 2
+- Replace `us-south` with your actual region
+
+### Step 4: Restart Claude Desktop
+
+**Completely quit and restart Claude Desktop** for changes to take effect.
+
+### Step 5: Verify It Works
+
+In Claude Desktop, try asking:
+- "List my IBM Cloud Logs alerts"
+- "Query logs from the last hour"
+
+You should see the MCP server tools being used in Claude's responses.
+
+---
+
+## Configuration
 
 ### Multiple Instances Setup
 
