@@ -61,7 +61,7 @@ A production-ready Model Context Protocol (MCP) server for IBM Cloud Logs, enabl
 
 ```bash
 # Clone repository
-git clone https://github.com/observability-c/logs-mcp-server.git
+git clone https://github.com/tareqmamari/logs-mcp-server.git
 cd logs-mcp-server
 
 # Download dependencies and build
@@ -1103,7 +1103,7 @@ Contributions are welcome! Please:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/observability-c/logs-mcp-server/issues)
+- **Issues**: [GitHub Issues](https://github.com/tareqmamari/logs-mcp-server/issues)
 - **IBM Cloud Logs Docs**: https://cloud.ibm.com/docs/cloud-logs
 - **IBM Cloud Logs API**: https://cloud.ibm.com/apidocs/logs-service-api
 

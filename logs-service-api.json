@@ -7,7 +7,7 @@
     "x-alternate-name": "logs",
     "x-codegen-config": {
       "cli": {
-        "apiPackage": "github.com/observability-c/dragonlog-cli",
+        "apiPackage": "github.com/tareqmamari/dragonlog-cli",
         "cliPluginName": "cloud-logs",
         "privateEndpointSupported": true,
         "serviceCommandAliases": [
@@ -18,7 +18,7 @@
         "singleServicePlugin": true
       },
       "go": {
-        "apiPackage": "github.com/observability-c/dragonlog-logs-go-sdk"
+        "apiPackage": "github.com/tareqmamari/dragonlog-logs-go-sdk"
       },
       "python": {
         "apiPackage": "ibm_logs"

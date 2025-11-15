@@ -110,8 +110,8 @@ changelog:
 # Docker images (optional - can be enabled if needed)
 # dockers:
 #   - image_templates:
-#       - "ghcr.io/observability-c/logs-mcp-server:{{ .Version }}-amd64"
-#       - "ghcr.io/observability-c/logs-mcp-server:latest-amd64"
+#       - "ghcr.io/tareqmamari/logs-mcp-server:{{ .Version }}-amd64"
+#       - "ghcr.io/tareqmamari/logs-mcp-server:latest-amd64"
 #     use: buildx
 #     goos: linux
 #     goarch: amd64

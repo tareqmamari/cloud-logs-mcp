@@ -178,7 +178,7 @@ docs: ## Generate documentation
 	@echo "Generating documentation..."
 	@which godoc > /dev/null || (echo "Installing godoc..." && go install golang.org/x/tools/cmd/godoc@latest)
 	@echo "Starting godoc server on :6060"
-	@echo "Visit http://localhost:6060/pkg/github.com/observability-c/logs-mcp-server/"
+	@echo "Visit http://localhost:6060/pkg/github.com/tareqmamari/logs-mcp-server/"
 	godoc -http=:6060
 
 # API Update helpers
