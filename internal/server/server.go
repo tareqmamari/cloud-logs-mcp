@@ -32,7 +32,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
 		"IBM Cloud Logs MCP Server",
-		"0.1.0",
+		"0.2.0",
 	)
 
 	s := &Server{
