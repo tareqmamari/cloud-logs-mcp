@@ -321,6 +321,45 @@ Once configured, you can ask your AI assistant:
 "List all alerts across all my log instances"
 ```
 
+### Workflow Prompts (Advanced)
+
+The server includes pre-built workflow prompts for common scenarios:
+
+**Investigate Error Spikes:**
+```
+"I'm seeing high error rates - help me investigate"
+→ Uses investigate_errors prompt
+→ Guides you through: query errors, check alerts, review definitions, analyze policies
+```
+
+**Setup Monitoring:**
+```
+"Help me set up monitoring for my-service"
+→ Uses setup_monitoring prompt
+→ Walks through: create alert definition, webhook, alert, and policy
+```
+
+**Compare Environments:**
+```
+"Compare production and staging logs"
+→ Uses compare_environments prompt
+→ Analyzes: error patterns, alert configs, policy differences
+```
+
+**Debug Issues:**
+```
+"Debug error: 'database connection timeout'"
+→ Uses debugging_workflow prompt
+→ Systematic approach: search logs, analyze context, check resources, correlate
+```
+
+**Optimize Costs:**
+```
+"How can I optimize my log retention costs?"
+→ Uses optimize_retention prompt
+→ Reviews: policies, E2M conversions, access rules, enrichments
+```
+
 ---
 
 ## Architecture
