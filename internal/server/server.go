@@ -139,6 +139,20 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewUpdateEventStreamTargetTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteEventStreamTargetTool(s.apiClient, s.logger))
 
+	// Dashboard tools
+	s.registerTool(tools.NewListDashboardsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDashboardTool(s.apiClient, s.logger))
+
+	// Dashboard Folder and Management tools
+	s.registerTool(tools.NewListDashboardFoldersTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewMoveDashboardToFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewPinDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUnpinDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSetDefaultDashboardTool(s.apiClient, s.logger))
+
 	s.logger.Info("Registered all MCP tools")
 	return nil
 }
