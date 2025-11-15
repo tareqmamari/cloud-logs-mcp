@@ -38,7 +38,7 @@ func (t *GetEventStreamTargetsTool) InputSchema() mcp.ToolInputSchema {
 func (t *GetEventStreamTargetsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
-		Path:   "/v1/config/event_stream_targets",
+		Path:   "/v1/streams",
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -103,7 +103,7 @@ func (t *CreateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 
 	req := &client.Request{
 		Method: "POST",
-		Path:   "/v1/config/event_stream_targets",
+		Path:   "/v1/streams",
 		Body:   body,
 	}
 
@@ -178,7 +178,7 @@ func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   "/v1/config/event_stream_targets/" + targetID,
+		Path:   "/v1/streams/" + targetID,
 		Body:   body,
 	}
 
@@ -230,7 +230,7 @@ func (t *DeleteEventStreamTargetTool) Execute(ctx context.Context, arguments map
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/config/event_stream_targets/" + targetID,
+		Path:   "/v1/streams/" + targetID,
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

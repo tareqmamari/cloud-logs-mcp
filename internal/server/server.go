@@ -103,7 +103,6 @@ func (s *Server) registerTools() error {
 	// Data Access Rule tools
 	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetDataAccessRuleTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewUpdateDataAccessRuleTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteDataAccessRuleTool(s.apiClient, s.logger))
 
@@ -111,8 +110,6 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetEnrichmentsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetEnrichmentTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteEnrichmentTool(s.apiClient, s.logger))
 
 	// View tools
