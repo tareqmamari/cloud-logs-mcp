@@ -2,11 +2,53 @@ package tools
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/observability-c/logs-mcp-server/internal/client"
 	"go.uber.org/zap"
 )
+
+// normalizeTier maps user-friendly tier names to API values
+func normalizeTier(tier string) string {
+	// Convert to lowercase for case-insensitive matching
+	tier = strings.ToLower(strings.TrimSpace(tier))
+
+	// Map Priority Insights / frequent search aliases
+	frequentSearchAliases := []string{
+		"pi", "priority", "insights", "priority insights",
+		"frequent", "quick", "fast", "hot", "realtime", "real-time",
+	}
+	for _, alias := range frequentSearchAliases {
+		if strings.Contains(tier, alias) {
+			return "frequent_search"
+		}
+	}
+
+	// Map archive / cold storage aliases
+	archiveAliases := []string{
+		"archive", "storage", "cos", "cold", "s3", "object storage",
+		"long term", "long-term", "historical",
+	}
+	for _, alias := range archiveAliases {
+		if strings.Contains(tier, alias) {
+			return "archive"
+		}
+	}
+
+	// If it's already a valid value, return it
+	validTiers := map[string]bool{
+		"unspecified":     true,
+		"archive":         true,
+		"frequent_search": true,
+	}
+	if validTiers[tier] {
+		return tier
+	}
+
+	// Default to frequent_search if unrecognized
+	return "frequent_search"
+}
 
 // QueryTool executes a synchronous query
 type QueryTool struct {
@@ -37,7 +79,7 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
-				"description": "Log tier to query: frequent_search (default), archive, or unspecified",
+				"description": "Log tier to query. frequent_search (default, aliases: PI, priority, insights, quick), archive (aliases: COS, storage, cold), or unspecified",
 				"enum":        []string{"unspecified", "archive", "frequent_search"},
 				"default":     "frequent_search",
 			},
@@ -73,10 +115,13 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	// Build metadata object with all optional parameters
 	metadata := make(map[string]interface{})
 
-	// Apply defaults for tier and syntax
+	// Apply defaults for tier and syntax with intelligent alias mapping
 	tier, _ := GetStringParam(arguments, "tier", false)
 	if tier == "" {
 		tier = "frequent_search"
+	} else {
+		// Normalize user-friendly aliases (PI, archive, COS, etc.)
+		tier = normalizeTier(tier)
 	}
 	metadata["tier"] = tier
 
