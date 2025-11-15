@@ -182,14 +182,16 @@ version-patch: ## Calculate next patch version
 # Changelog management
 changelog: ## Generate changelog from git history
 	@echo "Generating changelog..."
-	@which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest)
-	@git-chglog -o CHANGELOG.md
+	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	git-chglog -o CHANGELOG.md
 	@echo "Changelog updated: CHANGELOG.md"
 
 changelog-next: ## Preview changelog for next version
 	@echo "Preview changelog for next version:"
-	@which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest)
-	@NEXT_VERSION=$$(svu next 2>/dev/null || echo "next"); \
+	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	NEXT_VERSION=$$(svu next 2>/dev/null || echo "next"); \
 	git-chglog --next-tag $$NEXT_VERSION $$NEXT_VERSION
 
 version-tag: ## Create and push next version tag (automated release)
@@ -205,6 +207,7 @@ version-tag: ## Create and push next version tag (automated release)
 		exit 1; \
 	fi; \
 	echo "Updating changelog..."; \
+	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
 	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
 	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
 	git add CHANGELOG.md; \
@@ -225,6 +228,7 @@ release-patch: ## Create patch release (for dependency updates, security fixes)
 	echo "Next version: $$NEXT_VERSION"; \
 	echo ""; \
 	echo "Updating changelog..."; \
+	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
 	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
 	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
 	git add CHANGELOG.md; \
@@ -245,6 +249,7 @@ release-minor: ## Create minor release (for new features)
 	echo "Next version: $$NEXT_VERSION"; \
 	echo ""; \
 	echo "Updating changelog..."; \
+	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
 	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
 	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
 	git add CHANGELOG.md; \
@@ -271,6 +276,7 @@ release-major: ## Create major release (for breaking changes)
 		exit 1; \
 	fi; \
 	echo "Updating changelog..."; \
+	export PATH="$$PATH:$$(go env GOPATH)/bin"; \
 	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
 	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
 	git add CHANGELOG.md; \
