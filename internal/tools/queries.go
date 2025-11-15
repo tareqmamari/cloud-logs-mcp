@@ -49,11 +49,11 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 			},
 			"start_time": map[string]interface{}{
 				"type":        "string",
-				"description": "Start time for the query (ISO 8601 format)",
+				"description": "Start time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"end_time": map[string]interface{}{
 				"type":        "string",
-				"description": "End time for the query (ISO 8601 format)",
+				"description": "End time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"limit": map[string]interface{}{
 				"type":        "number",
@@ -142,11 +142,11 @@ func (t *SubmitBackgroundQueryTool) InputSchema() mcp.ToolInputSchema {
 			},
 			"start_time": map[string]interface{}{
 				"type":        "string",
-				"description": "Start time for the query (ISO 8601 format)",
+				"description": "Start time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"end_time": map[string]interface{}{
 				"type":        "string",
-				"description": "End time for the query (ISO 8601 format)",
+				"description": "End time for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 		},
 		Required: []string{"query", "start_time", "end_time"},
