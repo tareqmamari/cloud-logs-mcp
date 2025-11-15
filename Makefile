@@ -197,8 +197,11 @@ version-tag: ## Create and push next version tag (automated release)
 	@NEXT_VERSION=$$(svu next); \
 	CURRENT_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	if [ "$$NEXT_VERSION" = "$$CURRENT_VERSION" ]; then \
-		echo "No conventional commits found since $$CURRENT_VERSION"; \
-		echo "Use 'git commit' with prefixes: feat:, fix:, etc."; \
+		echo "⚠️  No conventional commits found since $$CURRENT_VERSION"; \
+		echo ""; \
+		echo "For dependency updates, use: make release-patch"; \
+		echo "For features, use 'feat:' prefix"; \
+		echo "For bug fixes, use 'fix:' prefix"; \
 		exit 1; \
 	fi; \
 	echo "Updating changelog..."; \
@@ -211,7 +214,73 @@ version-tag: ## Create and push next version tag (automated release)
 	echo "Pushing changes and tag to origin..."; \
 	git push origin main; \
 	git push origin $$NEXT_VERSION; \
-	echo "Tag $$NEXT_VERSION created and pushed!"; \
+	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
+	echo "GitHub Actions will now build and publish the release."
+
+release-patch: ## Create patch release (for dependency updates, security fixes)
+	@echo "Creating patch release..."
+	@NEXT_VERSION=$$(svu patch); \
+	CURRENT_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	echo "Current version: $$CURRENT_VERSION"; \
+	echo "Next version: $$NEXT_VERSION"; \
+	echo ""; \
+	echo "Updating changelog..."; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
+	git add CHANGELOG.md; \
+	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
+	echo "Creating tag $$NEXT_VERSION..."; \
+	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+	echo "Pushing changes and tag to origin..."; \
+	git push origin main; \
+	git push origin $$NEXT_VERSION; \
+	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
+	echo "GitHub Actions will now build and publish the release."
+
+release-minor: ## Create minor release (for new features)
+	@echo "Creating minor release..."
+	@NEXT_VERSION=$$(svu minor); \
+	CURRENT_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	echo "Current version: $$CURRENT_VERSION"; \
+	echo "Next version: $$NEXT_VERSION"; \
+	echo ""; \
+	echo "Updating changelog..."; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
+	git add CHANGELOG.md; \
+	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
+	echo "Creating tag $$NEXT_VERSION..."; \
+	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+	echo "Pushing changes and tag to origin..."; \
+	git push origin main; \
+	git push origin $$NEXT_VERSION; \
+	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
+	echo "GitHub Actions will now build and publish the release."
+
+release-major: ## Create major release (for breaking changes)
+	@echo "Creating major release..."
+	@NEXT_VERSION=$$(svu major); \
+	CURRENT_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	echo "Current version: $$CURRENT_VERSION"; \
+	echo "Next version: $$NEXT_VERSION"; \
+	echo ""; \
+	read -p "⚠️  This is a BREAKING CHANGE release. Are you sure? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "Aborted."; \
+		exit 1; \
+	fi; \
+	echo "Updating changelog..."; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
+	git add CHANGELOG.md; \
+	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
+	echo "Creating tag $$NEXT_VERSION..."; \
+	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
+	echo "Pushing changes and tag to origin..."; \
+	git push origin main; \
+	git push origin $$NEXT_VERSION; \
+	echo "✅ Tag $$NEXT_VERSION created and pushed!"; \
 	echo "GitHub Actions will now build and publish the release."
 
 # Development helpers
