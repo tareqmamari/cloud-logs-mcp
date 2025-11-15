@@ -70,11 +70,16 @@ make deps && make build
 
 **After setup**: Restart Claude Desktop and ask "List my IBM Cloud Logs alerts"
 
-#### For Microsoft Copilot
+#### For Microsoft 365 Copilot
 
-**Prerequisites**: Windows with Microsoft Copilot (built into Windows 11 or via app)
+**Prerequisites**:
+- Microsoft 365 Copilot subscription (Enterprise or Business)
+- Windows 11 or Windows 10 with Microsoft 365 apps
+- Admin access to configure organization settings (for enterprise deployment)
 
-**Configuration**: Microsoft Copilot uses the same Model Context Protocol. Configure via environment variables:
+**Configuration Options:**
+
+**Option 1: Personal Setup (Environment Variables)**
 
 ```powershell
 # PowerShell (Windows)
@@ -86,9 +91,25 @@ $env:LOGS_REGION = "us-south"
 logs-mcp-server
 ```
 
-**After setup**: Ask Microsoft Copilot "Query my IBM Cloud Logs for errors"
+**Option 2: Enterprise Deployment (Microsoft 365 Admin Center)**
 
-**Note**: Microsoft Copilot MCP support may vary by version. See [CONTRIBUTING.md](CONTRIBUTING.md) for alternative setup methods.
+For organization-wide deployment, configure through Microsoft 365 Admin Center:
+
+1. Navigate to **Settings** > **Integrated apps** > **Copilot extensions**
+2. Add custom MCP server with the following configuration:
+   - **Name**: IBM Cloud Logs
+   - **Command**: `logs-mcp-server`
+   - **Environment Variables**:
+     - `LOGS_SERVICE_URL`: Your IBM Cloud Logs endpoint
+     - `LOGS_API_KEY`: Service ID API key (recommended for enterprise)
+     - `LOGS_REGION`: Your IBM Cloud region
+
+**After setup**:
+- In Microsoft 365 Copilot, ask "Query my IBM Cloud Logs for errors"
+- In Microsoft Teams, use "@Copilot list my dashboards in IBM Cloud Logs"
+- In Outlook, ask "Show me alerts from IBM Cloud Logs"
+
+**Note**: Microsoft 365 Copilot MCP support is currently in preview. Configuration steps may vary by tenant settings. See [CONTRIBUTING.md](CONTRIBUTING.md) for alternative setup methods.
 
 #### For Other MCP Clients
 
