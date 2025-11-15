@@ -134,14 +134,25 @@ clean-all: clean ## Clean all generated files
 	@echo "Deep clean complete"
 
 # Release targets
-release: check build-all ## Create a release
-	@echo "Creating release $(VERSION)..."
-	@mkdir -p release
-	@cd $(BUILD_DIR) && \
-		for f in $(BINARY_NAME)-*; do \
-			tar czf ../release/$$f-$(VERSION).tar.gz $$f; \
-		done
-	@echo "Release files created in ./release/"
+release: ## Create a release with GoReleaser (dry-run)
+	@echo "Running GoReleaser in snapshot mode..."
+	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+	goreleaser release --snapshot --clean
+
+release-dry-run: ## Test release without publishing
+	@echo "Running GoReleaser dry-run..."
+	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+	goreleaser release --skip=publish --clean
+
+release-publish: ## Create and publish a release (requires git tag)
+	@echo "Publishing release with GoReleaser..."
+	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+	goreleaser release --clean
+
+release-check: ## Validate GoReleaser configuration
+	@echo "Validating GoReleaser configuration..."
+	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+	goreleaser check
 
 # Development helpers
 watch: ## Watch for changes and rebuild

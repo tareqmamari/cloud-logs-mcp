@@ -52,3 +52,4 @@ temp/
 *.crt
 credentials.json
 secrets.yaml
+dist/

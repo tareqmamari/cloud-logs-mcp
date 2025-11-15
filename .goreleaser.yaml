@@ -37,7 +37,6 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -46,9 +45,6 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    format_overrides:
-      - goos: windows
-        format: zip
     files:
       - README.md
       - LICENSE
@@ -59,7 +55,7 @@ checksum:
   algorithm: sha256
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   use: github
@@ -85,26 +81,31 @@ changelog:
       order: 999
 
 # Sign artifacts
-signs:
-  - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: '${artifact}.pem'
-    args:
-      - sign-blob
-      - '--output-certificate=${certificate}'
-      - '--output-signature=${signature}'
-      - '${artifact}'
-      - "--yes"
-    artifacts: checksum
-    output: true
+# Note: Requires cosign for production releases
+# Disabled for snapshots - enable by installing cosign: brew install cosign
+# signs:
+#   - cmd: cosign
+#     env:
+#       - COSIGN_EXPERIMENTAL=1
+#     certificate: '${artifact}.pem'
+#     args:
+#       - sign-blob
+#       - '--output-certificate=${certificate}'
+#       - '--output-signature=${signature}'
+#       - '${artifact}'
+#       - "--yes"
+#     artifacts: checksum
+#     output: true
+#     signature: '${artifact}.sig'
 
 # Generate SBOM (Software Bill of Materials)
-sboms:
-  - id: archive
-    artifacts: archive
-  - id: source
-    artifacts: source
+# Note: Requires syft (brew install syft)
+# Disabled for now - uncomment and install syft to enable
+# sboms:
+#   - id: archive
+#     artifacts: archive
+#   - id: source
+#     artifacts: source
 
 # Docker images (optional - can be enabled if needed)
 # dockers:
@@ -124,8 +125,8 @@ sboms:
 # Release configuration
 release:
   github:
-    owner: observability-c
-    name: logs-mcp-server
+    owner: tareqmamari
+    name: cloud-logs-mcp
   draft: false
   prerelease: auto
   mode: append
@@ -141,7 +142,7 @@ release:
   footer: |
     ---
 
-    **Full Changelog**: https://github.com/observability-c/logs-mcp-server/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/tareqmamari/cloud-logs-mcp/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 # Announce release (optional)
 # announce:
