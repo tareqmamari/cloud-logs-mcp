@@ -174,7 +174,7 @@ func (s *Server) registerTool(toolInterface interface {
 
 	// Create handler that calls the tool's Execute method
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return toolInterface.Execute(ctx, request.Params.Arguments)
+		return toolInterface.Execute(ctx, request.GetArguments())
 	}
 
 	// Register tool with MCP server

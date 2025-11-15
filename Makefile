@@ -179,6 +179,19 @@ version-minor: ## Calculate next minor version
 version-patch: ## Calculate next patch version
 	@svu patch
 
+# Changelog management
+changelog: ## Generate changelog from git history
+	@echo "Generating changelog..."
+	@which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest)
+	@git-chglog -o CHANGELOG.md
+	@echo "Changelog updated: CHANGELOG.md"
+
+changelog-next: ## Preview changelog for next version
+	@echo "Preview changelog for next version:"
+	@which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest)
+	@NEXT_VERSION=$$(svu next 2>/dev/null || echo "next"); \
+	git-chglog --next-tag $$NEXT_VERSION $$NEXT_VERSION
+
 version-tag: ## Create and push next version tag (automated release)
 	@echo "Calculating next version..."
 	@NEXT_VERSION=$$(svu next); \
@@ -188,9 +201,15 @@ version-tag: ## Create and push next version tag (automated release)
 		echo "Use 'git commit' with prefixes: feat:, fix:, etc."; \
 		exit 1; \
 	fi; \
+	echo "Updating changelog..."; \
+	which git-chglog > /dev/null || (echo "Installing git-chglog..." && go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest); \
+	git-chglog -o CHANGELOG.md --next-tag $$NEXT_VERSION; \
+	git add CHANGELOG.md; \
+	git commit -m "chore: update changelog for $$NEXT_VERSION" || true; \
 	echo "Creating tag $$NEXT_VERSION..."; \
 	git tag -a $$NEXT_VERSION -m "Release $$NEXT_VERSION"; \
-	echo "Pushing tag to origin..."; \
+	echo "Pushing changes and tag to origin..."; \
+	git push origin main; \
 	git push origin $$NEXT_VERSION; \
 	echo "Tag $$NEXT_VERSION created and pushed!"; \
 	echo "GitHub Actions will now build and publish the release."
