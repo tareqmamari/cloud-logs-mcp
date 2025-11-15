@@ -1,6 +1,6 @@
 # IBM Cloud Logs MCP Server
 
-Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs infrastructure.
+Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs instances.
 
 **Version**: 0.1.0 | **Go**: 1.23.2+
 
