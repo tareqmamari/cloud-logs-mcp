@@ -1,3 +1,24 @@
+// Package main implements the IBM Cloud Logs MCP (Model Context Protocol) server.
+//
+// This server provides MCP tools for interacting with IBM Cloud Logs service,
+// including operations for alerts, policies, queries, log ingestion, and more.
+//
+// The server communicates using the MCP protocol over stdio, making it compatible
+// with Claude Desktop and other MCP clients.
+//
+// Configuration is provided through environment variables:
+//   - LOGS_SERVICE_URL: The IBM Cloud Logs service endpoint URL
+//   - LOGS_API_KEY: IBM Cloud API key for authentication
+//   - LOGS_REGION: IBM Cloud region (e.g., au-syd, br-sao)
+//   - LOGS_INSTANCE_NAME: (Optional) Friendly name for the instance
+//   - ENVIRONMENT: (Optional) Set to "production" for production logging
+//
+// Example usage:
+//
+//	export LOGS_SERVICE_URL="https://<instance-id>.api.<region>.logs.cloud.ibm.com"
+//	export LOGS_API_KEY="<your-api-key>"
+//	export LOGS_REGION="au-syd"
+//	./logs-mcp-server
 package main
 
 import (
@@ -13,8 +34,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// version is the current version of the MCP server.
+// This is set at build time via ldflags: -X main.version=x.y.z
 const version = "0.1.0"
 
+// main is the entry point for the IBM Cloud Logs MCP server.
+// It initializes the server, loads configuration, and handles graceful shutdown.
 func main() {
 	// Load .env file if it exists (optional, for development)
 	_ = godotenv.Load()
@@ -74,6 +99,9 @@ func main() {
 	logger.Info("Server shutdown complete")
 }
 
+// initLogger initializes and returns a zap logger.
+// It creates a production logger if ENVIRONMENT=production, otherwise returns
+// a development logger with more verbose output.
 func initLogger() (*zap.Logger, error) {
 	env := os.Getenv("ENVIRONMENT")
 	if env == "production" {

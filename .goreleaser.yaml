@@ -1,0 +1,148 @@
+# GoReleaser configuration for logs-mcp-server
+# https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    # Run tests before building
+    - go test ./...
+
+builds:
+  - id: logs-mcp-server
+    binary: logs-mcp-server
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Ignore specific OS/arch combinations
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - typo
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+# Sign artifacts
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+# Generate SBOM (Software Bill of Materials)
+sboms:
+  - id: archive
+    artifacts: archive
+  - id: source
+    artifacts: source
+
+# Docker images (optional - can be enabled if needed)
+# dockers:
+#   - image_templates:
+#       - "ghcr.io/observability-c/logs-mcp-server:{{ .Version }}-amd64"
+#       - "ghcr.io/observability-c/logs-mcp-server:latest-amd64"
+#     use: buildx
+#     goos: linux
+#     goarch: amd64
+#     build_flag_templates:
+#       - "--platform=linux/amd64"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+
+# Release configuration
+release:
+  github:
+    owner: observability-c
+    name: logs-mcp-server
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    ## IBM Cloud Logs MCP Server {{ .Version }}
+
+    Release of IBM Cloud Logs Model Context Protocol (MCP) server.
+
+    ### Installation
+
+    Download the appropriate archive for your platform below.
+
+  footer: |
+    ---
+
+    **Full Changelog**: https://github.com/observability-c/logs-mcp-server/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+# Announce release (optional)
+# announce:
+#   skip: '{{gt .Patch 0}}'  # Skip patch releases

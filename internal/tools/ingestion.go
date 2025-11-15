@@ -9,25 +9,40 @@ import (
 	"go.uber.org/zap"
 )
 
-// IngestLogsTool sends log entries to IBM Cloud Logs ingestion endpoint
+// IngestLogsTool implements log ingestion to IBM Cloud Logs.
+// It sends log entries to the ingestion endpoint (uses .ingress. subdomain
+// instead of the standard .api. subdomain).
+//
+// The tool supports:
+//   - Automatic timestamp generation if not provided
+//   - Severity levels from 1 (Debug) to 6 (Critical)
+//   - Optional structured JSON data
+//   - Batch ingestion of multiple log entries
 type IngestLogsTool struct {
 	*BaseTool
 }
 
+// NewIngestLogsTool creates a new IngestLogsTool instance.
 func NewIngestLogsTool(client *client.Client, logger *zap.Logger) *IngestLogsTool {
 	return &IngestLogsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name for MCP registration.
 func (t *IngestLogsTool) Name() string {
 	return "ingest_logs"
 }
 
+// Description returns a human-readable description of the tool.
 func (t *IngestLogsTool) Description() string {
 	return "Ingest, push, or add log entries to IBM Cloud Logs for real-time log ingestion"
 }
 
+// InputSchema returns the JSON schema for the tool's input parameters.
+// Required fields: logs (array of log entries)
+// Each log entry must have: applicationName, subsystemName, severity, text
+// Optional fields: timestamp, json
 func (t *IngestLogsTool) InputSchema() mcp.ToolInputSchema {
 	return mcp.ToolInputSchema{
 		Type: "object",
@@ -73,6 +88,11 @@ func (t *IngestLogsTool) InputSchema() mcp.ToolInputSchema {
 	}
 }
 
+// Execute ingests log entries to IBM Cloud Logs.
+// It validates input, adds timestamps where missing, and sends logs to the
+// ingestion endpoint (.ingress. subdomain).
+//
+// Returns an error if validation fails or the API request fails.
 func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Get logs array
 	logsRaw, ok := arguments["logs"].([]interface{})

@@ -212,3 +212,62 @@ Ready to analyze your current configuration?`
 
 	return prompt, nil
 }
+
+// TestLogIngestionPrompt handles the "test_log_ingestion" prompt
+func (h *PromptHandler) TestLogIngestionPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+	applicationName, _ := arguments["application_name"].(string)
+	if applicationName == "" {
+		applicationName = "test-app"
+	}
+
+	prompt := fmt.Sprintf(`I'll help you test log ingestion into IBM Cloud Logs. Here's the workflow:
+
+**Step 1: Ingest Test Logs**
+- Use: ingest_logs (or push/add logs)
+- Parameters:
+  - logs: array of log entries
+    - applicationName: "%s"
+    - subsystemName: "test"
+    - severity: 1-6 (1=Debug, 2=Verbose, 3=Info, 4=Warning, 5=Error, 6=Critical)
+    - text: "your log message"
+    - timestamp: (optional, auto-generated if not provided)
+    - json: (optional, structured metadata)
+
+Example:
+{
+  "applicationName": "%s",
+  "subsystemName": "api",
+  "severity": 3,
+  "text": "Test log message",
+  "json": {
+    "user_id": "12345",
+    "endpoint": "/api/users"
+  }
+}
+
+**Step 2: Verify Ingestion**
+Wait a few seconds for indexing, then query:
+- Use: query_logs
+- Query: "application:%s"
+- Time range: "5m"
+
+**Step 3: Check Log Details**
+Verify the ingested logs contain:
+- Correct application and subsystem names
+- Proper severity levels
+- Structured JSON data (if provided)
+- Accurate timestamps
+
+**Ingestion Best Practices:**
+- Batch multiple logs in a single request for efficiency
+- Use structured JSON for searchable metadata
+- Set appropriate severity levels for filtering
+- Include timestamps for historical data import
+
+**Note:** The ingestion endpoint uses a different subdomain (.ingress.)
+than the management API (.api.), but this is handled automatically.
+
+Ready to start ingesting logs?`, applicationName, applicationName, applicationName)
+
+	return prompt, nil
+}
