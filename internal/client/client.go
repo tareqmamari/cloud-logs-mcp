@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/observability-c/logs-mcp-server/internal/auth"
@@ -62,12 +63,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 
 // Request represents an HTTP request
 type Request struct {
-	Method    string
-	Path      string
-	Query     map[string]string
-	Body      interface{}
-	Headers   map[string]string
-	RequestID string // Optional client-provided request ID for idempotency
+	Method         string
+	Path           string
+	Query          map[string]string
+	Body           interface{}
+	Headers        map[string]string
+	RequestID      string // Optional client-provided request ID for idempotency
+	UseIngressHost bool   // Use ingress endpoint instead of API endpoint for log ingestion
 }
 
 // Response represents an HTTP response
@@ -131,8 +133,16 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		}
 	}
 
-	// Build URL
-	url := fmt.Sprintf("%s%s", c.config.ServiceURL, req.Path)
+	// Build URL - use ingress endpoint for log ingestion, API endpoint for everything else
+	baseURL := c.config.ServiceURL
+	if req.UseIngressHost {
+		// Convert API URL to ingress URL
+		// From: https://{instance-id}.api.{region}.logs.cloud.ibm.com
+		// To:   https://{instance-id}.ingress.{region}.logs.cloud.ibm.com
+		baseURL = convertToIngressURL(baseURL)
+	}
+
+	url := fmt.Sprintf("%s%s", baseURL, req.Path)
 	if len(req.Query) > 0 {
 		url += "?"
 		first := true
@@ -224,6 +234,13 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		Body:       body,
 		Headers:    httpResp.Header,
 	}, nil
+}
+
+// convertToIngressURL converts an API URL to an ingress URL for log ingestion
+// From: https://{instance-id}.api.{region}.logs.cloud.ibm.com
+// To:   https://{instance-id}.ingress.{region}.logs.cloud.ibm.com
+func convertToIngressURL(apiURL string) string {
+	return strings.Replace(apiURL, ".api.", ".ingress.", 1)
 }
 
 // isRetryable determines if an error is retryable

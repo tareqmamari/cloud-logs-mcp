@@ -100,6 +100,9 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCancelBackgroundQueryTool(s.apiClient, s.logger))
 
+	// Log Ingestion tools
+	s.registerTool(tools.NewIngestLogsTool(s.apiClient, s.logger))
+
 	// Data Access Rule tools
 	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
