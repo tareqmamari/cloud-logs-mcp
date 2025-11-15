@@ -33,7 +33,19 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 		Properties: map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
-				"description": "The query string to execute (e.g., Lucene or DataPrime query)",
+				"description": "The query string to execute (DataPrime or Lucene syntax)",
+			},
+			"tier": map[string]interface{}{
+				"type":        "string",
+				"description": "Log tier to query: frequent (default), monitoring, or archive",
+				"enum":        []string{"frequent", "monitoring", "archive"},
+				"default":     "frequent",
+			},
+			"syntax": map[string]interface{}{
+				"type":        "string",
+				"description": "Query syntax: dataprime (default) or lucene",
+				"enum":        []string{"dataprime", "lucene"},
+				"default":     "dataprime",
 			},
 			"start_time": map[string]interface{}{
 				"type":        "string",
@@ -45,7 +57,7 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 			},
 			"limit": map[string]interface{}{
 				"type":        "number",
-				"description": "Maximum number of results to return",
+				"description": "Maximum number of results to return (default: 50)",
 			},
 		},
 		Required: []string{"query"},
@@ -58,8 +70,21 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	// Apply defaults for tier and syntax
+	tier, _ := GetStringParam(arguments, "tier", false)
+	if tier == "" {
+		tier = "frequent"
+	}
+
+	syntax, _ := GetStringParam(arguments, "syntax", false)
+	if syntax == "" {
+		syntax = "dataprime"
+	}
+
 	body := map[string]interface{}{
-		"query": query,
+		"query":  query,
+		"tier":   tier,
+		"syntax": syntax,
 	}
 
 	if startTime, _ := GetStringParam(arguments, "start_time", false); startTime != "" {
@@ -70,6 +95,8 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	}
 	if limit, _ := GetIntParam(arguments, "limit", false); limit > 0 {
 		body["limit"] = limit
+	} else {
+		body["limit"] = 50 // Default limit
 	}
 
 	req := &client.Request{
