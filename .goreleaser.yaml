@@ -9,6 +9,8 @@ before:
     - go mod tidy
     # Run tests before building
     - go test ./...
+    # Update CHANGELOG.md with release notes
+    - ./scripts/update-changelog.sh {{ .Tag }}
 
 builds:
   - id: logs-mcp-server
