@@ -106,6 +106,7 @@ func (s *Server) registerTools() error {
 
 	// Data Access Rule tools
 	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDataAccessRuleTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewUpdateDataAccessRuleTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteDataAccessRuleTool(s.apiClient, s.logger))
@@ -114,6 +115,7 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetEnrichmentsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteEnrichmentTool(s.apiClient, s.logger))
 
 	// View tools
@@ -149,10 +151,21 @@ func (s *Server) registerTools() error {
 
 	// Dashboard Folder and Management tools
 	s.registerTool(tools.NewListDashboardFoldersTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDashboardFolderTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewMoveDashboardToFolderTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewPinDashboardTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewUnpinDashboardTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewSetDefaultDashboardTool(s.apiClient, s.logger))
+
+	// Stream tools
+	s.registerTool(tools.NewListStreamsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteStreamTool(s.apiClient, s.logger))
 
 	s.logger.Info("Registered all MCP tools")
 	return nil

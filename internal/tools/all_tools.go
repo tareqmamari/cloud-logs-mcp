@@ -414,6 +414,25 @@ func (t *ListDataAccessRulesTool) Execute(ctx context.Context, args map[string]i
 	return t.FormatResponse(res)
 }
 
+type GetDataAccessRuleTool struct{ *BaseTool }
+
+func NewGetDataAccessRuleTool(c *client.Client, l *zap.Logger) *GetDataAccessRuleTool {
+	return &GetDataAccessRuleTool{NewBaseTool(c, l)}
+}
+func (t *GetDataAccessRuleTool) Name() string        { return "get_data_access_rule" }
+func (t *GetDataAccessRuleTool) Description() string { return "Get a specific data access rule by ID" }
+func (t *GetDataAccessRuleTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"id": map[string]interface{}{"type": "string", "description": "The unique identifier of the data access rule"}}, Required: []string{"id"}}
+}
+func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	id, _ := GetStringParam(args, "id", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules/" + id})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return t.FormatResponse(res)
+}
+
 type CreateDataAccessRuleTool struct{ *BaseTool }
 
 func NewCreateDataAccessRuleTool(c *client.Client, l *zap.Logger) *CreateDataAccessRuleTool {
@@ -504,6 +523,26 @@ func (t *CreateEnrichmentTool) InputSchema() mcp.ToolInputSchema {
 func (t *CreateEnrichmentTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	enr, _ := GetObjectParam(args, "enrichment", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/enrichments", Body: enr})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return t.FormatResponse(res)
+}
+
+type UpdateEnrichmentTool struct{ *BaseTool }
+
+func NewUpdateEnrichmentTool(c *client.Client, l *zap.Logger) *UpdateEnrichmentTool {
+	return &UpdateEnrichmentTool{NewBaseTool(c, l)}
+}
+func (t *UpdateEnrichmentTool) Name() string        { return "update_enrichment" }
+func (t *UpdateEnrichmentTool) Description() string { return "Update an existing enrichment" }
+func (t *UpdateEnrichmentTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{"id": map[string]interface{}{"type": "string", "description": "The unique identifier of the enrichment"}, "enrichment": map[string]interface{}{"type": "object"}}, Required: []string{"id", "enrichment"}}
+}
+func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	id, _ := GetStringParam(args, "id", true)
+	enr, _ := GetObjectParam(args, "enrichment", true)
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/enrichments/" + id, Body: enr})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

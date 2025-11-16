@@ -56,6 +56,265 @@ func (t *ListDashboardFoldersTool) Execute(ctx context.Context, arguments map[st
 	return t.FormatResponse(result)
 }
 
+// GetDashboardFolderTool gets a specific dashboard folder by ID.
+type GetDashboardFolderTool struct {
+	*BaseTool
+}
+
+// NewGetDashboardFolderTool creates a new GetDashboardFolderTool instance.
+func NewGetDashboardFolderTool(client *client.Client, logger *zap.Logger) *GetDashboardFolderTool {
+	return &GetDashboardFolderTool{
+		BaseTool: NewBaseTool(client, logger),
+	}
+}
+
+// Name returns the tool name for MCP registration.
+func (t *GetDashboardFolderTool) Name() string {
+	return "get_dashboard_folder"
+}
+
+// Description returns a human-readable description of the tool.
+func (t *GetDashboardFolderTool) Description() string {
+	return "Get details of a specific dashboard folder by ID"
+}
+
+// InputSchema returns the JSON schema for the tool's input parameters.
+func (t *GetDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{
+		Type: "object",
+		Properties: map[string]interface{}{
+			"folder_id": map[string]interface{}{
+				"type":        "string",
+				"description": "The unique identifier of the folder",
+			},
+		},
+		Required: []string{"folder_id"},
+	}
+}
+
+// Execute gets a specific dashboard folder.
+func (t *GetDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	folderID, ok := arguments["folder_id"].(string)
+	if !ok || folderID == "" {
+		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+	}
+
+	req := &client.Request{
+		Method: "GET",
+		Path:   "/v1/folders/" + folderID,
+	}
+
+	result, err := t.ExecuteRequest(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return t.FormatResponse(result)
+}
+
+// CreateDashboardFolderTool creates a new dashboard folder.
+type CreateDashboardFolderTool struct {
+	*BaseTool
+}
+
+// NewCreateDashboardFolderTool creates a new CreateDashboardFolderTool instance.
+func NewCreateDashboardFolderTool(client *client.Client, logger *zap.Logger) *CreateDashboardFolderTool {
+	return &CreateDashboardFolderTool{
+		BaseTool: NewBaseTool(client, logger),
+	}
+}
+
+// Name returns the tool name for MCP registration.
+func (t *CreateDashboardFolderTool) Name() string {
+	return "create_dashboard_folder"
+}
+
+// Description returns a human-readable description of the tool.
+func (t *CreateDashboardFolderTool) Description() string {
+	return "Create a new dashboard folder for organizing dashboards"
+}
+
+// InputSchema returns the JSON schema for the tool's input parameters.
+func (t *CreateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{
+		Type: "object",
+		Properties: map[string]interface{}{
+			"name": map[string]interface{}{
+				"type":        "string",
+				"description": "The name of the folder",
+			},
+			"parent_id": map[string]interface{}{
+				"type":        "string",
+				"description": "Optional parent folder ID for nested folders",
+			},
+		},
+		Required: []string{"name"},
+	}
+}
+
+// Execute creates a new dashboard folder.
+func (t *CreateDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	name, ok := arguments["name"].(string)
+	if !ok || name == "" {
+		return mcp.NewToolResultError("name is required and must be a string"), nil
+	}
+
+	body := map[string]interface{}{
+		"name": name,
+	}
+
+	if parentID, ok := arguments["parent_id"].(string); ok && parentID != "" {
+		body["parent_id"] = parentID
+	}
+
+	req := &client.Request{
+		Method: "POST",
+		Path:   "/v1/folders",
+		Body:   body,
+	}
+
+	result, err := t.ExecuteRequest(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return t.FormatResponse(result)
+}
+
+// UpdateDashboardFolderTool updates a dashboard folder.
+type UpdateDashboardFolderTool struct {
+	*BaseTool
+}
+
+// NewUpdateDashboardFolderTool creates a new UpdateDashboardFolderTool instance.
+func NewUpdateDashboardFolderTool(client *client.Client, logger *zap.Logger) *UpdateDashboardFolderTool {
+	return &UpdateDashboardFolderTool{
+		BaseTool: NewBaseTool(client, logger),
+	}
+}
+
+// Name returns the tool name for MCP registration.
+func (t *UpdateDashboardFolderTool) Name() string {
+	return "update_dashboard_folder"
+}
+
+// Description returns a human-readable description of the tool.
+func (t *UpdateDashboardFolderTool) Description() string {
+	return "Update an existing dashboard folder"
+}
+
+// InputSchema returns the JSON schema for the tool's input parameters.
+func (t *UpdateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{
+		Type: "object",
+		Properties: map[string]interface{}{
+			"folder_id": map[string]interface{}{
+				"type":        "string",
+				"description": "The unique identifier of the folder to update",
+			},
+			"name": map[string]interface{}{
+				"type":        "string",
+				"description": "The new name for the folder",
+			},
+			"parent_id": map[string]interface{}{
+				"type":        "string",
+				"description": "Optional new parent folder ID",
+			},
+		},
+		Required: []string{"folder_id", "name"},
+	}
+}
+
+// Execute updates a dashboard folder.
+func (t *UpdateDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	folderID, ok := arguments["folder_id"].(string)
+	if !ok || folderID == "" {
+		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+	}
+
+	name, ok := arguments["name"].(string)
+	if !ok || name == "" {
+		return mcp.NewToolResultError("name is required and must be a string"), nil
+	}
+
+	body := map[string]interface{}{
+		"name": name,
+	}
+
+	if parentID, ok := arguments["parent_id"].(string); ok && parentID != "" {
+		body["parent_id"] = parentID
+	}
+
+	req := &client.Request{
+		Method: "PUT",
+		Path:   "/v1/folders/" + folderID,
+		Body:   body,
+	}
+
+	result, err := t.ExecuteRequest(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return t.FormatResponse(result)
+}
+
+// DeleteDashboardFolderTool deletes a dashboard folder.
+type DeleteDashboardFolderTool struct {
+	*BaseTool
+}
+
+// NewDeleteDashboardFolderTool creates a new DeleteDashboardFolderTool instance.
+func NewDeleteDashboardFolderTool(client *client.Client, logger *zap.Logger) *DeleteDashboardFolderTool {
+	return &DeleteDashboardFolderTool{
+		BaseTool: NewBaseTool(client, logger),
+	}
+}
+
+// Name returns the tool name for MCP registration.
+func (t *DeleteDashboardFolderTool) Name() string {
+	return "delete_dashboard_folder"
+}
+
+// Description returns a human-readable description of the tool.
+func (t *DeleteDashboardFolderTool) Description() string {
+	return "Delete a dashboard folder"
+}
+
+// InputSchema returns the JSON schema for the tool's input parameters.
+func (t *DeleteDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
+	return mcp.ToolInputSchema{
+		Type: "object",
+		Properties: map[string]interface{}{
+			"folder_id": map[string]interface{}{
+				"type":        "string",
+				"description": "The unique identifier of the folder to delete",
+			},
+		},
+		Required: []string{"folder_id"},
+	}
+}
+
+// Execute deletes a dashboard folder.
+func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	folderID, ok := arguments["folder_id"].(string)
+	if !ok || folderID == "" {
+		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+	}
+
+	req := &client.Request{
+		Method: "DELETE",
+		Path:   "/v1/folders/" + folderID,
+	}
+
+	result, err := t.ExecuteRequest(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return t.FormatResponse(result)
+}
+
 // MoveDashboardToFolderTool moves a dashboard to a specific folder.
 type MoveDashboardToFolderTool struct {
 	*BaseTool

@@ -8,10 +8,10 @@ Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants t
 
 ## Overview
 
-This MCP server provides comprehensive access to IBM Cloud Logs through 70+ tools covering queries, alerts, dashboards, policies, webhooks, and more.
+This MCP server provides comprehensive access to IBM Cloud Logs through 86 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (70+ tools)
+- Complete IBM Cloud Logs API coverage (86 tools)
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
 - Configurable rate limiting
@@ -121,7 +121,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-70+ tools organized by functionality:
+86 tools organized by functionality:
 
 #### Query Operations (5 tools)
 - `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
@@ -133,9 +133,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 - `list_alerts`, `get_alert`, `create_alert`, `update_alert`, `delete_alert`
 - `list_alert_definitions`, `get_alert_definition`, `create_alert_definition`, `update_alert_definition`, `delete_alert_definition`
 
-#### Dashboard Management (10 tools)
+#### Dashboard Management (14 tools)
 - `list_dashboards`, `get_dashboard`, `create_dashboard`, `update_dashboard`, `delete_dashboard`
-- `list_dashboard_folders`, `move_dashboard_to_folder`, `pin_dashboard`, `unpin_dashboard`, `set_default_dashboard`
+- `list_dashboard_folders`, `get_dashboard_folder`, `create_dashboard_folder`, `update_dashboard_folder`, `delete_dashboard_folder`
+- `move_dashboard_to_folder`, `pin_dashboard`, `unpin_dashboard`, `set_default_dashboard`
 
 #### Policies (5 tools)
 - `list_policies`, `get_policy`, `create_policy`, `update_policy`, `delete_policy`
@@ -154,6 +155,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 #### Enrichments (5 tools)
 - `list_enrichments`, `get_enrichment`, `create_enrichment`, `update_enrichment`, `delete_enrichment`
+
+#### Streams (5 tools)
+- `list_streams`, `get_stream`, `create_stream`, `update_stream`, `delete_stream`
 
 #### Views (5 tools)
 - `list_views`, `get_view`, `create_view`, `replace_view`, `delete_view`
