@@ -163,7 +163,7 @@ brews:
         1. Get your IBM Cloud API key: https://cloud.ibm.com/iam/apikeys
         2. Set environment variables:
            export LOGS_API_KEY='your-api-key'
-           export LOGS_SERVICE_URL='https://instance-id.api.region.logs.cloud.ibm.com'
+           export LOGS_SERVICE_URL='https://[instance-id].api.[region].logs.cloud.ibm.com'
            export LOGS_REGION='us-south'
         3. Configure in Claude Desktop
 
