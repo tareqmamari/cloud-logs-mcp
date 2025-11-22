@@ -33,7 +33,7 @@ builds:
       - -s -w
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X main._date={{.Date}}
       - -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
@@ -100,14 +100,18 @@ changelog:
 #     output: true
 #     signature: '${artifact}.sig'
 
-# Generate SBOM (Software Bill of Materials)
-# Note: Requires syft (brew install syft)
-# Disabled for now - uncomment and install syft to enable
-# sboms:
-#   - id: archive
-#     artifacts: archive
-#   - id: source
-#     artifacts: source
+# Generate SBOM (Software Bill of Materials) for security and compliance
+# Requires syft: brew install syft
+sboms:
+  - id: archive
+    artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+  - id: source
+    artifacts: source
+    documents:
+      - "${artifact}.sbom.json"
+
 
 # Docker images (optional - can be enabled if needed)
 # dockers:

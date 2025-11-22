@@ -1,0 +1,12 @@
+# Environment files with credentials
+.env
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Test data
+test_data/
+*.log
