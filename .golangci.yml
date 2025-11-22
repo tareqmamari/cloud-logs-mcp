@@ -1,4 +1,4 @@
-# golangci-lint configuration
+# golangci-lint configuration v2
 # https://golangci-lint.run/usage/configuration/
 
 version: "2"
@@ -25,17 +25,3 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - wastedassign
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - (net/http.ResponseWriter).Write
-      - (*go.uber.org/zap.Logger).Sync
-
-  goimports:
-    local-prefixes: github.com/tareqmamari/logs-mcp-server
-
-  gosec:
-    excludes:
-      - G104
-      - G304
