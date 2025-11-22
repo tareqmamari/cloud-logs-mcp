@@ -20,7 +20,6 @@ linters:
     - govet          # Reports suspicious constructs
     - ineffassign    # Detects ineffectual assignments
     - staticcheck    # Static analysis
-    - typecheck      # Type checks
     - unused         # Checks for unused constants, variables, functions
     - gofmt          # Checks if code was gofmt-ed
     - goimports      # Checks import statements are formatted
