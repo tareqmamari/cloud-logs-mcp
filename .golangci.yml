@@ -1,5 +1,4 @@
 # golangci-lint configuration v2
-# Minimal config for golangci-lint v2.6.2 compatibility
 
 version: "2"
 
@@ -23,3 +22,8 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - wastedassign
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
