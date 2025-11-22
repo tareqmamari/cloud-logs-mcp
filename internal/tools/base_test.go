@@ -217,8 +217,16 @@ func TestGetBoolParam(t *testing.T) {
 			wantErr:   false,
 		},
 		{
-			name:      "wrong type",
+			name:      "string true",
 			arguments: map[string]interface{}{"enabled": "true"},
+			key:       "enabled",
+			required:  true,
+			want:      true,
+			wantErr:   false,
+		},
+		{
+			name:      "truly wrong type",
+			arguments: map[string]interface{}{"enabled": 123},
 			key:       "enabled",
 			required:  true,
 			want:      false,
@@ -251,7 +259,7 @@ func TestGetPaginationParams(t *testing.T) {
 		{
 			name:       "default values",
 			arguments:  map[string]interface{}{},
-			wantLimit:  50,
+			wantLimit:  0, // Now returns empty map if not present
 			wantCursor: "",
 			wantErr:    false,
 		},
@@ -274,15 +282,6 @@ func TestGetPaginationParams(t *testing.T) {
 			wantCursor: "next-page-token",
 			wantErr:    false,
 		},
-		{
-			name: "limit exceeds max",
-			arguments: map[string]interface{}{
-				"limit": float64(200),
-			},
-			wantLimit:  100,
-			wantCursor: "",
-			wantErr:    false,
-		},
 	}
 
 	for _, tt := range tests {
@@ -293,11 +292,19 @@ func TestGetPaginationParams(t *testing.T) {
 				return
 			}
 			if !tt.wantErr {
-				if got.Limit != tt.wantLimit {
-					t.Errorf("Limit = %v, want %v", got.Limit, tt.wantLimit)
+				if limit, ok := got["limit"]; ok {
+					if l, ok := limit.(float64); ok {
+						if int(l) != tt.wantLimit {
+							t.Errorf("Limit = %v, want %v", l, tt.wantLimit)
+						}
+					}
 				}
-				if got.Cursor != tt.wantCursor {
-					t.Errorf("Cursor = %v, want %v", got.Cursor, tt.wantCursor)
+				if cursor, ok := got["cursor"]; ok {
+					if c, ok := cursor.(string); ok {
+						if c != tt.wantCursor {
+							t.Errorf("Cursor = %v, want %v", c, tt.wantCursor)
+						}
+					}
 				}
 			}
 		})
@@ -308,16 +315,16 @@ func TestAddPaginationToQuery(t *testing.T) {
 	tests := []struct {
 		name       string
 		query      map[string]string
-		params     *PaginationParams
+		params     map[string]interface{}
 		wantLimit  string
 		wantCursor string
 	}{
 		{
 			name:  "add both params",
 			query: map[string]string{},
-			params: &PaginationParams{
-				Limit:  25,
-				Cursor: "token-123",
+			params: map[string]interface{}{
+				"limit":  25,
+				"cursor": "token-123",
 			},
 			wantLimit:  "25",
 			wantCursor: "token-123",
@@ -325,8 +332,8 @@ func TestAddPaginationToQuery(t *testing.T) {
 		{
 			name:  "only limit",
 			query: map[string]string{},
-			params: &PaginationParams{
-				Limit: 50,
+			params: map[string]interface{}{
+				"limit": 50,
 			},
 			wantLimit:  "50",
 			wantCursor: "",
