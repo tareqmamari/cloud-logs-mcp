@@ -1,5 +1,5 @@
 # golangci-lint configuration v2
-# https://golangci-lint.run/usage/configuration/
+# Minimal config for golangci-lint v2.6.2 compatibility
 
 version: "2"
 
@@ -15,8 +15,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - gosec
     - revive
