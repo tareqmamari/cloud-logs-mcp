@@ -1,3 +1,4 @@
+// Package prompts provides pre-built prompts for common IBM Cloud Logs operations.
 package prompts
 
 import (
@@ -24,7 +25,7 @@ func NewPromptHandler(client *client.Client, logger *zap.Logger) *PromptHandler 
 }
 
 // InvestigateErrorsPrompt handles the "investigate_errors" prompt
-func (h *PromptHandler) InvestigateErrorsPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) InvestigateErrorsPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	timeRange, _ := arguments["time_range"].(string)
 	if timeRange == "" {
 		timeRange = "1h"
@@ -50,7 +51,7 @@ I'll help you correlate the errors with alerts and policies to identify the root
 }
 
 // SetupMonitoringPrompt handles the "setup_monitoring" prompt
-func (h *PromptHandler) SetupMonitoringPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) SetupMonitoringPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	serviceName, _ := arguments["service_name"].(string)
 	if serviceName == "" {
 		serviceName = "your-service"
@@ -95,7 +96,7 @@ Would you like to proceed with these steps? I'll guide you through each one.`, s
 }
 
 // CompareEnvironmentsPrompt handles the "compare_environments" prompt
-func (h *PromptHandler) CompareEnvironmentsPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) CompareEnvironmentsPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	timeRange, _ := arguments["time_range"].(string)
 	if timeRange == "" {
 		timeRange = "1h"
@@ -133,7 +134,7 @@ Ready to start? Let's begin with querying production logs.`, timeRange, timeRang
 }
 
 // DebuggingWorkflowPrompt handles the "debugging_workflow" prompt
-func (h *PromptHandler) DebuggingWorkflowPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) DebuggingWorkflowPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	errorMessage, _ := arguments["error_message"].(string)
 	if errorMessage == "" {
 		errorMessage = "your error message"
@@ -174,7 +175,7 @@ Let's start with searching for the error in recent logs.`, errorMessage)
 }
 
 // OptimizeRetentionPrompt handles the "optimize_retention" prompt
-func (h *PromptHandler) OptimizeRetentionPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) OptimizeRetentionPrompt(_ context.Context, _ map[string]interface{}) (string, error) {
 	prompt := `I'll help you optimize log retention and reduce costs. Here's the analysis workflow:
 
 **Step 1: Review Current Policies**
@@ -215,7 +216,7 @@ Ready to analyze your current configuration?`
 }
 
 // TestLogIngestionPrompt handles the "test_log_ingestion" prompt
-func (h *PromptHandler) TestLogIngestionPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) TestLogIngestionPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	applicationName, _ := arguments["application_name"].(string)
 	if applicationName == "" {
 		applicationName = "test-app"
@@ -274,7 +275,7 @@ Ready to start ingesting logs?`, applicationName, applicationName, applicationNa
 }
 
 // CreateDashboardWorkflowPrompt handles the "create_dashboard_workflow" prompt
-func (h *PromptHandler) CreateDashboardWorkflowPrompt(ctx context.Context, arguments map[string]interface{}) (string, error) {
+func (h *PromptHandler) CreateDashboardWorkflowPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
 	dashboardName, _ := arguments["dashboard_name"].(string)
 	if dashboardName == "" {
 		dashboardName = "Custom Dashboard"

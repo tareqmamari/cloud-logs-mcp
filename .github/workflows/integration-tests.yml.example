@@ -1,0 +1,153 @@
+name: Integration Tests
+
+on:
+  # Run on manual trigger
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run (all, alerts, policies, e2m, views, webhooks)'
+        required: false
+        default: 'all'
+
+  # Run on schedule (daily at 2 AM UTC)
+  schedule:
+    - cron: '0 2 * * *'
+
+  # Optional: Run on PR when integration tests are explicitly requested
+  pull_request:
+    types: [labeled]
+
+jobs:
+  integration-tests:
+    # Only run if the PR has the 'run-integration-tests' label or on schedule/manual trigger
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: "alerts"
+            command: "test-integration-alerts"
+          - name: "policies"
+            command: "test-integration-policies"
+          - name: "e2m"
+            command: "test-integration-e2m"
+          - name: "views"
+            command: "test-integration-views"
+          - name: "webhooks"
+            command: "test-integration-webhooks"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run ${{ matrix.suite.name }} integration tests
+        env:
+          IBM_API_KEY: ${{ secrets.IBM_API_KEY }}
+          IBM_LOGS_INSTANCE_ID: ${{ secrets.IBM_LOGS_INSTANCE_ID }}
+          IBM_LOGS_REGION: ${{ secrets.IBM_LOGS_REGION }}
+        run: |
+          if [ "${{ github.event.inputs.test_suite }}" = "all" ] || [ "${{ github.event.inputs.test_suite }}" = "${{ matrix.suite.name }}" ] || [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            make ${{ matrix.suite.command }}
+          else
+            echo "Skipping ${{ matrix.suite.name }} tests (not selected)"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: integration-test-results-${{ matrix.suite.name }}
+          path: |
+            coverage.out
+            *.log
+          retention-days: 7
+
+  integration-tests-all:
+    # Run all tests together on manual trigger with "all" option
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_suite == 'all'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run all integration tests
+        env:
+          IBM_API_KEY: ${{ secrets.IBM_API_KEY }}
+          IBM_LOGS_INSTANCE_ID: ${{ secrets.IBM_LOGS_INSTANCE_ID }}
+          IBM_LOGS_REGION: ${{ secrets.IBM_LOGS_REGION }}
+        run: make test-integration
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: ./coverage.out
+          flags: integration
+          name: integration-tests
+
+  notify:
+    needs: [integration-tests]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.integration-tests.result }}" = "failure" ]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+
+      # Optional: Add Slack/email notification here
+      # - name: Notify on failure
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "Integration tests failed for ${{ github.repository }}"
+      #       }
+
+# Required secrets:
+# - IBM_API_KEY: Your IBM Cloud API key
+# - IBM_LOGS_INSTANCE_ID: Your IBM Cloud Logs instance ID
+# - IBM_LOGS_REGION: Your IBM Cloud region (e.g., us-south)
+#
+# To set these secrets:
+# 1. Go to your repository Settings > Secrets and variables > Actions
+# 2. Click "New repository secret"
+# 3. Add each secret with the appropriate value
+#
+# Security best practices:
+# - Use a dedicated service account API key with minimal required permissions
+# - Use a test/development IBM Cloud Logs instance, not production
+# - Rotate API keys regularly
+# - Monitor API usage and costs

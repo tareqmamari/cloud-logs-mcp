@@ -1,3 +1,4 @@
+// Package metrics provides metrics collection and reporting for the MCP server.
 package metrics
 
 import (
@@ -88,11 +89,13 @@ func (m *Metrics) RecordToolExecution(toolName string, success bool, latency tim
 		m.toolErrors[toolName]++
 	}
 
-	// Update average latency
-	if latency > 0 {
+	// Update average latency using rolling average to avoid integer overflow
+	if latency > 0 && m.toolUsage[toolName] > 0 {
 		currentLatency := m.toolLatency[toolName]
-		count := m.toolUsage[toolName]
-		m.toolLatency[toolName] = (currentLatency*int64(count-1) + latency.Microseconds()) / int64(count)
+		// Use float64 for calculation to avoid integer overflow issues
+		count := float64(m.toolUsage[toolName])
+		avgLatency := (float64(currentLatency)*(count-1) + float64(latency.Microseconds())) / count
+		m.toolLatency[toolName] = int64(avgLatency)
 	}
 }
 
@@ -164,7 +167,9 @@ func (m *Metrics) GetStats() Stats {
 
 	var avgLatency time.Duration
 	if latencyCount > 0 {
-		avgLatency = time.Duration(m.totalLatency.Load()/int64(latencyCount)) * time.Microsecond
+		// Use float64 division to avoid integer overflow issues
+		avgLatencyMicros := float64(m.totalLatency.Load()) / float64(latencyCount)
+		avgLatency = time.Duration(avgLatencyMicros) * time.Microsecond
 	}
 
 	return Stats{

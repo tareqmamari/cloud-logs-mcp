@@ -1,5 +1,6 @@
 # Binaries
 logs-mcp-server
+bin/
 *.exe
 *.dll
 *.so
@@ -7,6 +8,10 @@ logs-mcp-server
 
 # Test binary
 *.test
+integration_test_*
+coverage.txt
+coverage.out
+coverage.html
 
 # Output of the go coverage tool
 *.out

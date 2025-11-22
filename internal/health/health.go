@@ -1,3 +1,4 @@
+// Package health provides health checking functionality for the MCP server.
 package health
 
 import (
@@ -15,8 +16,11 @@ import (
 type Status string
 
 const (
-	StatusHealthy   Status = "healthy"
-	StatusDegraded  Status = "degraded"
+	// StatusHealthy indicates the service is healthy
+	StatusHealthy Status = "healthy"
+	// StatusDegraded indicates the service is degraded
+	StatusDegraded Status = "degraded"
+	// StatusUnhealthy indicates the service is unhealthy
 	StatusUnhealthy Status = "unhealthy"
 )
 

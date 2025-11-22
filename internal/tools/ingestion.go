@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -44,10 +44,10 @@ func (t *IngestLogsTool) Description() string {
 // Required fields: logs (array of log entries)
 // Each log entry must have: applicationName, subsystemName, severity, text
 // Optional fields: timestamp, json
-func (t *IngestLogsTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *IngestLogsTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"logs": map[string]interface{}{
 				"type":        "array",
 				"description": "Array of log entries to ingest",
@@ -85,7 +85,7 @@ func (t *IngestLogsTool) InputSchema() mcp.ToolInputSchema {
 				},
 			},
 		},
-		Required: []string{"logs"},
+		"required": []string{"logs"},
 	}
 }
 
@@ -98,11 +98,11 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 	// Get logs array
 	logsRaw, ok := arguments["logs"].([]interface{})
 	if !ok {
-		return mcp.NewToolResultError("logs must be an array"), nil
+		return NewToolResultError("logs must be an array"), nil
 	}
 
 	if len(logsRaw) == 0 {
-		return mcp.NewToolResultError("logs array cannot be empty"), nil
+		return NewToolResultError("logs array cannot be empty"), nil
 	}
 
 	// Process each log entry and add timestamp if missing
@@ -110,21 +110,21 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 	for i, logRaw := range logsRaw {
 		logEntry, ok := logRaw.(map[string]interface{})
 		if !ok {
-			return mcp.NewToolResultError("each log entry must be an object"), nil
+			return NewToolResultError("each log entry must be an object"), nil
 		}
 
 		// Validate required fields
 		if _, exists := logEntry["applicationName"]; !exists {
-			return mcp.NewToolResultError("log entry missing required field: applicationName"), nil
+			return NewToolResultError("log entry missing required field: applicationName"), nil
 		}
 		if _, exists := logEntry["subsystemName"]; !exists {
-			return mcp.NewToolResultError("log entry missing required field: subsystemName"), nil
+			return NewToolResultError("log entry missing required field: subsystemName"), nil
 		}
 		if _, exists := logEntry["severity"]; !exists {
-			return mcp.NewToolResultError("log entry missing required field: severity"), nil
+			return NewToolResultError("log entry missing required field: severity"), nil
 		}
 		if _, exists := logEntry["text"]; !exists {
-			return mcp.NewToolResultError("log entry missing required field: text"), nil
+			return NewToolResultError("log entry missing required field: text"), nil
 		}
 
 		// Add current timestamp if not provided
@@ -154,7 +154,7 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

@@ -16,7 +16,7 @@ func TestLoadConfiguration(t *testing.T) {
 			name: "valid configuration",
 			envVars: map[string]string{
 				"LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-				"LOGS_API_KEY":     "test-api-key",
+				"LOGS_API_KEY":     "test-api-key", // pragma: allowlist secret
 				"LOGS_REGION":      "us-south",
 			},
 			wantErr: false,
@@ -24,7 +24,7 @@ func TestLoadConfiguration(t *testing.T) {
 		{
 			name: "missing service URL",
 			envVars: map[string]string{
-				"LOGS_API_KEY": "test-api-key",
+				"LOGS_API_KEY": "test-api-key", // pragma: allowlist secret
 			},
 			wantErr: true,
 		},
@@ -44,7 +44,7 @@ func TestLoadConfiguration(t *testing.T) {
 
 			// Set test environment variables
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 
 			cfg, err := Load()
@@ -62,8 +62,8 @@ func TestLoadConfiguration(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	os.Clearenv()
-	os.Setenv("LOGS_SERVICE_URL", "https://your-instance-id.api.us-south.logs.cloud.ibm.com")
-	os.Setenv("LOGS_API_KEY", "test-key")
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://your-instance-id.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret)
 
 	cfg, err := Load()
 	if err != nil {
@@ -94,12 +94,12 @@ func TestConfigDefaults(t *testing.T) {
 func TestConfigRedact(t *testing.T) {
 	cfg := &Config{
 		ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-		APIKey:     "secret-key-12345",
+		APIKey:     "secret-key-12345", // pragma: allowlist secret
 	}
 
 	redacted := cfg.Redact()
 
-	if redacted.APIKey == cfg.APIKey {
+	if redacted.APIKey == cfg.APIKey { // pragma: allowlist secret
 		t.Error("API key should be redacted")
 	}
 
@@ -123,7 +123,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "valid config",
 			config: Config{
 				ServiceURL:      "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-				APIKey:          "test-key",
+				APIKey:          "test-key", // pragma: allowlist secret
 				Timeout:         30 * time.Second,
 				MaxRetries:      3,
 				RateLimit:       100,
@@ -136,7 +136,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid timeout",
 			config: Config{
 				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-				APIKey:     "test-key",
+				APIKey:     "test-key", // pragma: allowlist secret
 				Timeout:    0,
 			},
 			wantErr: true,
@@ -146,7 +146,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid log level",
 			config: Config{
 				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
-				APIKey:     "test-key",
+				APIKey:     "test-key", // pragma: allowlist secret
 				Timeout:    30 * time.Second,
 				LogLevel:   "invalid",
 			},

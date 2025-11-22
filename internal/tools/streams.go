@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -15,29 +15,33 @@ type ListStreamsTool struct {
 	*BaseTool
 }
 
+// NewListStreamsTool creates a new tool instance
 func NewListStreamsTool(client *client.Client, logger *zap.Logger) *ListStreamsTool {
 	return &ListStreamsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *ListStreamsTool) Name() string {
 	return "list_streams"
 }
 
+// Description returns the tool description
 func (t *ListStreamsTool) Description() string {
 	return "List all streams configured for the IBM Cloud Logs instance"
 }
 
-func (t *ListStreamsTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
-		Required:   []string{},
+// InputSchema returns the input schema
+func (t *ListStreamsTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
-func (t *ListStreamsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+// Execute executes the tool
+func (t *ListStreamsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/streams",
@@ -45,7 +49,7 @@ func (t *ListStreamsTool) Execute(ctx context.Context, arguments map[string]inte
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -57,37 +61,42 @@ type GetStreamTool struct {
 	*BaseTool
 }
 
+// NewGetStreamTool creates a new tool instance
 func NewGetStreamTool(client *client.Client, logger *zap.Logger) *GetStreamTool {
 	return &GetStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *GetStreamTool) Name() string {
 	return "get_stream"
 }
 
+// Description returns the tool description
 func (t *GetStreamTool) Description() string {
 	return "Get details of a specific stream by ID"
 }
 
-func (t *GetStreamTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+// InputSchema returns the input schema
+func (t *GetStreamTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"stream_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the stream",
 			},
 		},
-		Required: []string{"stream_id"},
+		"required": []string{"stream_id"},
 	}
 }
 
+// Execute executes the tool
 func (t *GetStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// List all streams and filter for the requested ID
@@ -98,7 +107,7 @@ func (t *GetStreamTool) Execute(ctx context.Context, arguments map[string]interf
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// Parse the response to filter by ID
@@ -123,7 +132,7 @@ func (t *GetStreamTool) Execute(ctx context.Context, arguments map[string]interf
 		}
 	}
 
-	return mcp.NewToolResultError("Stream not found with ID: " + streamID), nil
+	return NewToolResultError("Stream not found with ID: " + streamID), nil
 }
 
 // CreateStreamTool creates a new stream
@@ -131,24 +140,28 @@ type CreateStreamTool struct {
 	*BaseTool
 }
 
+// NewCreateStreamTool creates a new tool instance
 func NewCreateStreamTool(client *client.Client, logger *zap.Logger) *CreateStreamTool {
 	return &CreateStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *CreateStreamTool) Name() string {
 	return "create_stream"
 }
 
+// Description returns the tool description
 func (t *CreateStreamTool) Description() string {
 	return "Create a new stream for streaming logs to IBM Event Streams (Kafka)"
 }
 
-func (t *CreateStreamTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+// InputSchema returns the input schema
+func (t *CreateStreamTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"name": map[string]interface{}{
 				"type":        "string",
 				"description": "The name of the stream (1-4096 characters)",
@@ -181,19 +194,20 @@ func (t *CreateStreamTool) InputSchema() mcp.ToolInputSchema {
 				},
 			},
 		},
-		Required: []string{"name", "dpxl_expression"},
+		"required": []string{"name", "dpxl_expression"},
 	}
 }
 
+// Execute executes the tool
 func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	dpxlExpression, err := GetStringParam(arguments, "dpxl_expression", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	body := map[string]interface{}{
@@ -222,7 +236,7 @@ func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -234,24 +248,28 @@ type UpdateStreamTool struct {
 	*BaseTool
 }
 
+// NewUpdateStreamTool creates a new tool instance
 func NewUpdateStreamTool(client *client.Client, logger *zap.Logger) *UpdateStreamTool {
 	return &UpdateStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *UpdateStreamTool) Name() string {
 	return "update_stream"
 }
 
+// Description returns the tool description
 func (t *UpdateStreamTool) Description() string {
 	return "Update an existing stream. All fields must be provided (name, dpxl_expression, compression_type, ibm_event_streams)."
 }
 
-func (t *UpdateStreamTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+// InputSchema returns the input schema
+func (t *UpdateStreamTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"stream_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the stream to update",
@@ -285,34 +303,35 @@ func (t *UpdateStreamTool) InputSchema() mcp.ToolInputSchema {
 				"required": []string{"brokers", "topic"},
 			},
 		},
-		Required: []string{"stream_id", "name", "dpxl_expression", "compression_type", "ibm_event_streams"},
+		"required": []string{"stream_id", "name", "dpxl_expression", "compression_type", "ibm_event_streams"},
 	}
 }
 
+// Execute executes the tool
 func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	dpxlExpression, err := GetStringParam(arguments, "dpxl_expression", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	compressionType, err := GetStringParam(arguments, "compression_type", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	eventStreams, err := GetObjectParam(arguments, "ibm_event_streams", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	body := map[string]interface{}{
@@ -330,7 +349,7 @@ func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -341,37 +360,42 @@ type DeleteStreamTool struct {
 	*BaseTool
 }
 
+// NewDeleteStreamTool creates a new tool instance
 func NewDeleteStreamTool(client *client.Client, logger *zap.Logger) *DeleteStreamTool {
 	return &DeleteStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *DeleteStreamTool) Name() string {
 	return "delete_stream"
 }
 
+// Description returns the tool description
 func (t *DeleteStreamTool) Description() string {
 	return "Delete a stream"
 }
 
-func (t *DeleteStreamTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+// InputSchema returns the input schema
+func (t *DeleteStreamTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"stream_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the stream to delete",
 			},
 		},
-		Required: []string{"stream_id"},
+		"required": []string{"stream_id"},
 	}
 }
 
+// Execute executes the tool
 func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -381,7 +405,7 @@ func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

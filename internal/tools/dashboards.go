@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -33,16 +33,15 @@ func (t *ListDashboardsTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *ListDashboardsTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
-		Required:   []string{},
+func (t *ListDashboardsTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
 // Execute lists all dashboards.
-func (t *ListDashboardsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListDashboardsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/dashboards",
@@ -50,7 +49,7 @@ func (t *ListDashboardsTool) Execute(ctx context.Context, arguments map[string]i
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -79,16 +78,16 @@ func (t *GetDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *GetDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard",
 			},
 		},
-		Required: []string{"dashboard_id"},
+		"required": []string{"dashboard_id"},
 	}
 }
 
@@ -96,7 +95,7 @@ func (t *GetDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -106,7 +105,7 @@ func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -135,10 +134,10 @@ func (t *CreateDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *CreateDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *CreateDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"name": map[string]interface{}{
 				"type":        "string",
 				"description": "Display name for the dashboard",
@@ -152,7 +151,7 @@ func (t *CreateDashboardTool) InputSchema() mcp.ToolInputSchema {
 				"description": "Dashboard layout configuration with sections and widgets",
 			},
 		},
-		Required: []string{"name", "layout"},
+		"required": []string{"name", "layout"},
 	}
 }
 
@@ -160,12 +159,12 @@ func (t *CreateDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	name, ok := arguments["name"].(string)
 	if !ok || name == "" {
-		return mcp.NewToolResultError("name is required and must be a string"), nil
+		return NewToolResultError("name is required and must be a string"), nil
 	}
 
 	layout, ok := arguments["layout"]
 	if !ok {
-		return mcp.NewToolResultError("layout is required"), nil
+		return NewToolResultError("layout is required"), nil
 	}
 
 	body := map[string]interface{}{
@@ -185,7 +184,7 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -214,10 +213,10 @@ func (t *UpdateDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *UpdateDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UpdateDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to update",
@@ -235,7 +234,7 @@ func (t *UpdateDashboardTool) InputSchema() mcp.ToolInputSchema {
 				"description": "Dashboard layout configuration with sections and widgets",
 			},
 		},
-		Required: []string{"dashboard_id", "name", "layout"},
+		"required": []string{"dashboard_id", "name", "layout"},
 	}
 }
 
@@ -243,17 +242,17 @@ func (t *UpdateDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	name, ok := arguments["name"].(string)
 	if !ok || name == "" {
-		return mcp.NewToolResultError("name is required and must be a string"), nil
+		return NewToolResultError("name is required and must be a string"), nil
 	}
 
 	layout, ok := arguments["layout"]
 	if !ok {
-		return mcp.NewToolResultError("layout is required"), nil
+		return NewToolResultError("layout is required"), nil
 	}
 
 	body := map[string]interface{}{
@@ -273,7 +272,7 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -302,16 +301,16 @@ func (t *DeleteDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *DeleteDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *DeleteDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to delete",
 			},
 		},
-		Required: []string{"dashboard_id"},
+		"required": []string{"dashboard_id"},
 	}
 }
 
@@ -319,7 +318,7 @@ func (t *DeleteDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *DeleteDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -329,7 +328,7 @@ func (t *DeleteDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

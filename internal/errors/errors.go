@@ -1,3 +1,4 @@
+// Package errors provides structured error handling for the IBM Cloud Logs MCP server.
 package errors
 
 import (
@@ -21,24 +22,35 @@ const (
 type ErrorCode string
 
 const (
-	// Client errors
-	CodeInvalidInput      ErrorCode = "INVALID_INPUT"
-	CodeMissingParameter  ErrorCode = "MISSING_PARAMETER"
-	CodeInvalidQuery      ErrorCode = "INVALID_QUERY_SYNTAX"
-	CodeResourceNotFound  ErrorCode = "RESOURCE_NOT_FOUND"
-	CodeUnauthorized      ErrorCode = "UNAUTHORIZED"
-	CodeForbidden         ErrorCode = "FORBIDDEN"
-	CodeConflict          ErrorCode = "CONFLICT"
+	// CodeInvalidInput indicates invalid input from client
+	CodeInvalidInput ErrorCode = "INVALID_INPUT"
+	// CodeMissingParameter indicates a required parameter is missing
+	CodeMissingParameter ErrorCode = "MISSING_PARAMETER"
+	// CodeInvalidQuery indicates invalid query syntax
+	CodeInvalidQuery ErrorCode = "INVALID_QUERY_SYNTAX"
+	// CodeResourceNotFound indicates the requested resource was not found
+	CodeResourceNotFound ErrorCode = "RESOURCE_NOT_FOUND"
+	// CodeUnauthorized indicates the request is unauthorized
+	CodeUnauthorized ErrorCode = "UNAUTHORIZED"
+	// CodeForbidden indicates the request is forbidden
+	CodeForbidden ErrorCode = "FORBIDDEN"
+	// CodeConflict indicates a conflict with existing resource
+	CodeConflict ErrorCode = "CONFLICT"
+	// CodeRateLimitExceeded indicates rate limit has been exceeded
 	CodeRateLimitExceeded ErrorCode = "RATE_LIMIT_EXCEEDED"
 
-	// Server errors
-	CodeInternalError      ErrorCode = "INTERNAL_ERROR"
+	// CodeInternalError represents an internal server error
+	CodeInternalError ErrorCode = "INTERNAL_ERROR"
+	// CodeServiceUnavailable represents a service unavailable error
 	CodeServiceUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
-	CodeTimeout            ErrorCode = "TIMEOUT"
+	// CodeTimeout represents a timeout error
+	CodeTimeout ErrorCode = "TIMEOUT"
 
-	// External errors
-	CodeAPIError     ErrorCode = "API_ERROR"
-	CodeAuthFailed   ErrorCode = "AUTH_FAILED"
+	// CodeAPIError represents an API error
+	CodeAPIError ErrorCode = "API_ERROR"
+	// CodeAuthFailed represents an authentication failure
+	CodeAuthFailed ErrorCode = "AUTH_FAILED"
+	// CodeNetworkError represents a network error
 	CodeNetworkError ErrorCode = "NETWORK_ERROR"
 )
 

@@ -2,11 +2,14 @@
 
 # Variables
 BINARY_NAME=logs-mcp-server
-VERSION?=0.1.0
+# Get version from git tags using svu (fallback to v0.0.0 if no tags exist)
+VERSION?=$(shell svu current 2>/dev/null || echo "v0.0.0")
 BUILD_DIR=./bin
 GO=go
 GOFLAGS=-v
-LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
+GIT_COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION) -X main.commit=$(GIT_COMMIT) -X main._date=$(BUILD_DATE) -X main.builtBy=make"
 
 # Default target
 help: ## Show this help message
@@ -64,9 +67,29 @@ test-unit: ## Run unit tests only
 	@echo "Running unit tests..."
 	$(GO) test -v -race -short ./...
 
-test-integration: ## Run integration tests only
+test-integration: ## Run integration tests (requires IBM Cloud credentials)
 	@echo "Running integration tests..."
-	$(GO) test -v -race -run Integration ./...
+	$(GO) test -v -tags=integration ./tests/integration/...
+
+test-integration-alerts: ## Run alert integration tests only
+	@echo "Running alert integration tests..."
+	$(GO) test -v -tags=integration ./tests/integration/ -run TestAlerts
+
+test-integration-policies: ## Run policy integration tests only
+	@echo "Running policy integration tests..."
+	$(GO) test -v -tags=integration ./tests/integration/ -run TestPolicies
+
+test-integration-e2m: ## Run E2M integration tests only
+	@echo "Running E2M integration tests..."
+	$(GO) test -v -tags=integration ./tests/integration/ -run TestE2M
+
+test-integration-views: ## Run view integration tests only
+	@echo "Running view integration tests..."
+	$(GO) test -v -tags=integration ./tests/integration/ -run TestViews
+
+test-integration-webhooks: ## Run webhook integration tests only
+	@echo "Running webhook integration tests..."
+	$(GO) test -v -tags=integration ./tests/integration/ -run TestWebhooks
 
 bench: ## Run benchmarks
 	@echo "Running benchmarks..."
@@ -75,14 +98,20 @@ bench: ## Run benchmarks
 # Code quality targets
 lint: ## Run linters
 	@echo "Running linters..."
-	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run ./...
+	@if ! command -v golangci-lint &> /dev/null; then \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2; \
+	fi
+	@$(shell go env GOPATH)/bin/golangci-lint run ./...
 
 fmt: ## Format code
 	@echo "Formatting code..."
 	$(GO) fmt ./...
-	@which goimports > /dev/null || (echo "Installing goimports..." && go install golang.org/x/tools/cmd/goimports@latest)
-	goimports -w .
+	@if ! command -v goimports &> /dev/null; then \
+		echo "Installing goimports..."; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/goimports -w .
 
 vet: ## Run go vet
 	@echo "Running go vet..."
@@ -90,13 +119,19 @@ vet: ## Run go vet
 
 sec: ## Run security checks
 	@echo "Running security checks..."
-	@which gosec > /dev/null || (echo "Installing gosec..." && go install github.com/securego/gosec/v2/cmd/gosec@latest)
-	gosec -quiet ./...
+	@if ! command -v gosec &> /dev/null; then \
+		echo "Installing gosec..."; \
+		go install github.com/securego/gosec/v2/cmd/gosec@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/gosec ./...
 
 vuln: ## Check for vulnerabilities
 	@echo "Checking for vulnerabilities..."
-	@which govulncheck > /dev/null || (echo "Installing govulncheck..." && go install golang.org/x/vuln/cmd/govulncheck@latest)
-	govulncheck ./...
+	@if ! command -v govulncheck &> /dev/null; then \
+		echo "Installing govulncheck..."; \
+		go install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/govulncheck ./...
 
 check: fmt vet lint sec vuln test ## Run all checks
 
@@ -136,30 +171,42 @@ clean-all: clean ## Clean all generated files
 # Release targets
 release: ## Create a release with GoReleaser (dry-run)
 	@echo "Running GoReleaser in snapshot mode..."
-	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
-	goreleaser release --snapshot --clean
+	@if ! command -v goreleaser &> /dev/null; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/goreleaser release --snapshot --clean
 
 release-dry-run: ## Test release without publishing
 	@echo "Running GoReleaser dry-run..."
-	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
-	goreleaser release --skip=publish --clean
+	@if ! command -v goreleaser &> /dev/null; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/goreleaser release --skip=publish --clean
 
 release-publish: ## Create and publish a release (requires git tag)
 	@echo "Publishing release with GoReleaser..."
-	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
+	@if ! command -v goreleaser &> /dev/null; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
 	@which gh > /dev/null || (echo "Error: GitHub CLI (gh) not found. Please install it: brew install gh" && exit 1)
 	@if [ -z "$$GITHUB_TOKEN" ]; then \
 		echo "Exporting GitHub token..."; \
-		export GITHUB_TOKEN=$$(gh auth token) && goreleaser release --clean; \
+		export GITHUB_TOKEN=$$(gh auth token) && $(shell go env GOPATH)/bin/goreleaser release --clean; \
 	else \
 		echo "Using existing GITHUB_TOKEN"; \
-		goreleaser release --clean; \
+		$(shell go env GOPATH)/bin/goreleaser release --clean; \
 	fi
 
 release-check: ## Validate GoReleaser configuration
 	@echo "Validating GoReleaser configuration..."
-	@which goreleaser > /dev/null || (echo "Installing goreleaser..." && go install github.com/goreleaser/goreleaser@latest)
-	goreleaser check
+	@if ! command -v goreleaser &> /dev/null; then \
+		echo "Installing goreleaser..."; \
+		go install github.com/goreleaser/goreleaser@latest; \
+	fi
+	@$(shell go env GOPATH)/bin/goreleaser check
 
 # Semantic versioning with svu
 version-current: ## Show current version
@@ -283,10 +330,13 @@ setup: deps ## Set up development environment
 # Documentation
 docs: ## Generate documentation
 	@echo "Generating documentation..."
-	@which godoc > /dev/null || (echo "Installing godoc..." && go install golang.org/x/tools/cmd/godoc@latest)
+	@if ! command -v godoc &> /dev/null; then \
+		echo "Installing godoc..."; \
+		go install golang.org/x/tools/cmd/godoc@latest; \
+	fi
 	@echo "Starting godoc server on :6060"
 	@echo "Visit http://localhost:6060/pkg/github.com/tareqmamari/logs-mcp-server/"
-	godoc -http=:6060
+	@$(shell go env GOPATH)/bin/godoc -http=:6060
 
 # API Update helpers
 compare-api: ## Compare old and new API definitions

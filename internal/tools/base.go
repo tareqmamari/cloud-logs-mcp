@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -18,7 +19,7 @@ type BaseTool struct {
 	logger *zap.Logger
 }
 
-// NewBaseTool creates a new base tool
+// NewBaseTool creates a new BaseTool
 func NewBaseTool(client *client.Client, logger *zap.Logger) *BaseTool {
 	return &BaseTool{
 		client: client,
@@ -59,48 +60,33 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 	return result, nil
 }
 
-// parseSSEResponse parses Server-Sent Events format responses
-// IBM Cloud Logs query API returns results in SSE format like:
-// : success
-// data: {"query_id":...}
-//
-// : success
-// data: {"result":{"results":[...]}}
+// parseSSEResponse attempts to parse a response body as Server-Sent Events
+// Returns nil if parsing fails or if it doesn't look like SSE
 func parseSSEResponse(body []byte) map[string]interface{} {
 	bodyStr := string(body)
-
-	// Check if this looks like SSE format
-	if !strings.Contains(bodyStr, "data: {") {
+	if !strings.Contains(bodyStr, "data:") {
 		return nil
 	}
 
-	result := make(map[string]interface{})
+	// Simple SSE parser for our use case
+	// We expect lines starting with "data: " containing JSON
+	// We'll aggregate them into a list of events
+	var events []interface{}
 	lines := strings.Split(bodyStr, "\n")
-
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Skip comments and empty lines
-		if strings.HasPrefix(line, ":") || line == "" {
-			continue
-		}
-
-		// Parse data lines
 		if strings.HasPrefix(line, "data: ") {
-			dataJSON := strings.TrimPrefix(line, "data: ")
-
-			var dataObj map[string]interface{}
-			if err := json.Unmarshal([]byte(dataJSON), &dataObj); err == nil {
-				// Merge all data objects into result
-				for k, v := range dataObj {
-					result[k] = v
-				}
+			dataStr := strings.TrimPrefix(line, "data: ")
+			var data interface{}
+			if err := json.Unmarshal([]byte(dataStr), &data); err == nil {
+				events = append(events, data)
 			}
 		}
 	}
 
-	if len(result) > 0 {
-		return result
+	if len(events) > 0 {
+		return map[string]interface{}{
+			"events": events,
+		}
 	}
 
 	return nil
@@ -114,51 +100,65 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 		return nil, fmt.Errorf("failed to format response: %w", err)
 	}
 
-	return mcp.NewToolResultText(string(jsonBytes)), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Text: string(jsonBytes),
+			},
+		},
+	}, nil
+}
+
+// NewToolResultError creates a new tool result with an error message
+func NewToolResultError(message string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Text: message,
+			},
+		},
+		IsError: true,
+	}
 }
 
 // GetStringParam safely gets a string parameter from arguments
 // It also handles numeric IDs and converts them to strings
 func GetStringParam(arguments map[string]interface{}, key string, required bool) (string, error) {
-	val, exists := arguments[key]
-	if !exists {
+	val, ok := arguments[key]
+	if !ok {
 		if required {
-			return "", fmt.Errorf("missing required parameter: %s", key)
+			return "", fmt.Errorf("missing required argument: %s", key)
 		}
 		return "", nil
 	}
 
-	// Handle string type
-	if str, ok := val.(string); ok {
-		return str, nil
-	}
-
-	// Handle numeric types (for IDs that might be numbers)
 	switch v := val.(type) {
+	case string:
+		return v, nil
 	case float64:
-		return fmt.Sprintf("%.0f", v), nil
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
 	case int:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.Itoa(v), nil
 	case int64:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.FormatInt(v, 10), nil
 	default:
-		return "", fmt.Errorf("parameter %s must be a string or number", key)
+		return "", fmt.Errorf("invalid type for argument %s: expected string or number, got %T", key, val)
 	}
 }
 
-// GetObjectParam safely gets an object parameter from arguments
+// GetObjectParam safely gets a map/object parameter from arguments
 func GetObjectParam(arguments map[string]interface{}, key string, required bool) (map[string]interface{}, error) {
-	val, exists := arguments[key]
-	if !exists {
+	val, ok := arguments[key]
+	if !ok {
 		if required {
-			return nil, fmt.Errorf("missing required parameter: %s", key)
+			return nil, fmt.Errorf("missing required argument: %s", key)
 		}
 		return nil, nil
 	}
 
 	obj, ok := val.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("parameter %s must be an object", key)
+		return nil, fmt.Errorf("invalid type for argument %s: expected object", key)
 	}
 
 	return obj, nil
@@ -166,88 +166,77 @@ func GetObjectParam(arguments map[string]interface{}, key string, required bool)
 
 // GetIntParam safely gets an integer parameter from arguments
 func GetIntParam(arguments map[string]interface{}, key string, required bool) (int, error) {
-	val, exists := arguments[key]
-	if !exists {
+	val, ok := arguments[key]
+	if !ok {
 		if required {
-			return 0, fmt.Errorf("missing required parameter: %s", key)
+			return 0, fmt.Errorf("missing required argument: %s", key)
 		}
 		return 0, nil
 	}
 
-	// Handle both float64 (JSON numbers) and int
 	switch v := val.(type) {
 	case float64:
 		return int(v), nil
 	case int:
 		return v, nil
+	case int64:
+		return int(v), nil
+	case string:
+		return strconv.Atoi(v)
 	default:
-		return 0, fmt.Errorf("parameter %s must be a number", key)
+		return 0, fmt.Errorf("invalid type for argument %s: expected number or string, got %T", key, val)
 	}
 }
 
 // GetBoolParam safely gets a boolean parameter from arguments
 func GetBoolParam(arguments map[string]interface{}, key string, required bool) (bool, error) {
-	val, exists := arguments[key]
-	if !exists {
+	val, ok := arguments[key]
+	if !ok {
 		if required {
-			return false, fmt.Errorf("missing required parameter: %s", key)
+			return false, fmt.Errorf("missing required argument: %s", key)
 		}
 		return false, nil
 	}
 
-	boolVal, ok := val.(bool)
-	if !ok {
-		return false, fmt.Errorf("parameter %s must be a boolean", key)
+	switch v := val.(type) {
+	case bool:
+		return v, nil
+	case string:
+		return strconv.ParseBool(v)
+	default:
+		return false, fmt.Errorf("invalid type for argument %s: expected boolean or string, got %T", key, val)
 	}
-
-	return boolVal, nil
 }
 
-// PaginationParams holds pagination parameters
-type PaginationParams struct {
-	Limit  int
-	Cursor string
+// GetPaginationParams extracts pagination parameters (limit, cursor)
+func GetPaginationParams(arguments map[string]interface{}) (map[string]interface{}, error) {
+	params := make(map[string]interface{})
+
+	if limit, ok := arguments["limit"]; ok {
+		params["limit"] = limit
+	}
+
+	if cursor, ok := arguments["cursor"]; ok {
+		params["cursor"] = cursor
+	}
+
+	return params, nil
 }
 
-// GetPaginationParams extracts pagination parameters from arguments
-func GetPaginationParams(arguments map[string]interface{}) (*PaginationParams, error) {
-	limit, err := GetIntParam(arguments, "limit", false)
-	if err != nil {
-		return nil, err
+// AddPaginationToQuery adds pagination parameters to query map
+func AddPaginationToQuery(query map[string]string, pagination map[string]interface{}) {
+	if limit, ok := pagination["limit"]; ok {
+		switch v := limit.(type) {
+		case float64:
+			query["limit"] = strconv.FormatFloat(v, 'f', -1, 64)
+		case int:
+			query["limit"] = strconv.Itoa(v)
+		}
 	}
 
-	// Default limit
-	if limit == 0 {
-		limit = 50
-	}
-
-	// Max limit
-	if limit > 100 {
-		limit = 100
-	}
-
-	cursor, err := GetStringParam(arguments, "cursor", false)
-	if err != nil {
-		return nil, err
-	}
-
-	return &PaginationParams{
-		Limit:  limit,
-		Cursor: cursor,
-	}, nil
-}
-
-// AddPaginationToQuery adds pagination parameters to request query
-func AddPaginationToQuery(query map[string]string, params *PaginationParams) {
-	if query == nil {
-		return
-	}
-
-	if params.Limit > 0 {
-		query["limit"] = fmt.Sprintf("%d", params.Limit)
-	}
-
-	if params.Cursor != "" {
-		query["cursor"] = params.Cursor
+	if cursor, ok := pagination["cursor"]; ok {
+		if s, ok := cursor.(string); ok {
+			query["cursor"] = s
+		}
 	}
 }
