@@ -34,13 +34,22 @@ func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
+	// Configure TLS with secure defaults
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12, // Enforce minimum TLS 1.2
+	}
+
+	// Only disable TLS verification if explicitly configured (for testing environments)
+	// By default, cfg.TLSVerify is true, so verification is enabled
+	if !cfg.TLSVerify {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
 	transport := &http.Transport{
 		MaxIdleConns:        cfg.MaxIdleConns,
 		IdleConnTimeout:     cfg.IdleConnTimeout,
 		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !cfg.TLSVerify,
-		},
+		TLSClientConfig:     tlsConfig,
 	}
 
 	httpClient := &http.Client{
@@ -86,8 +95,10 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff
-			waitTime := c.config.RetryWaitMin * time.Duration(1<<uint(attempt-1))
+			// Exponential backoff with overflow protection
+			// Cap shift value to prevent overflow (max 30 ensures we stay within reasonable time bounds)
+			shift := min(attempt-1, 30)
+			waitTime := c.config.RetryWaitMin * time.Duration(1<<shift)
 			if waitTime > c.config.RetryWaitMax {
 				waitTime = c.config.RetryWaitMax
 			}
