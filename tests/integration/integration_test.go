@@ -208,6 +208,8 @@ func AssertTimestamp(t *testing.T, timestamp interface{}, msgAndArgs ...interfac
 }
 
 // skipIfShort skips the test if running in short mode
+//
+//nolint:unused // Used in integration tests which are tagged
 func skipIfShort(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping in short mode")

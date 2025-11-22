@@ -10,6 +10,8 @@ bin/
 *.test
 integration_test_*
 coverage.txt
+coverage.out
+coverage.html
 
 # Output of the go coverage tool
 *.out
