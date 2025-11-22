@@ -123,7 +123,7 @@ sec: ## Run security checks
 		echo "Installing gosec..."; \
 		go install github.com/securego/gosec/v2/cmd/gosec@latest; \
 	fi
-	@$(shell go env GOPATH)/bin/gosec -exclude=G104,G304 -quiet ./...
+	@$(shell go env GOPATH)/bin/gosec ./...
 
 vuln: ## Check for vulnerabilities
 	@echo "Checking for vulnerabilities..."
