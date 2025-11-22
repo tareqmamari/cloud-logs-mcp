@@ -1,3 +1,4 @@
+// Package server provides the MCP server implementation for the logs service.
 package server
 
 import (

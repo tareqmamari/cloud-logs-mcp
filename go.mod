@@ -1,6 +1,6 @@
 module github.com/tareqmamari/logs-mcp-server
 
-go 1.25.4
+go 1.24.0
 
 require (
 	github.com/IBM/go-sdk-core/v5 v5.21.0

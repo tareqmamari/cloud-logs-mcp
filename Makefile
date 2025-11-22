@@ -100,7 +100,7 @@ lint: ## Run linters
 	@echo "Running linters..."
 	@if ! command -v golangci-lint &> /dev/null; then \
 		echo "Installing golangci-lint..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2; \
 	fi
 	@$(shell go env GOPATH)/bin/golangci-lint run ./...
 

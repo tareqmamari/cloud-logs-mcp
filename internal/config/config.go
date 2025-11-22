@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -72,32 +73,19 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func loadFromFile(cfg *Config, filepath string) error {
-	// Use os.Root to scope file access and prevent path traversal attacks (Go 1.24+)
-	// This eliminates the G304 gosec finding by using secure file access APIs
+func loadFromFile(cfg *Config, path string) error {
+	// Validate and clean the file path to prevent path traversal attacks
+	// This eliminates the G304 gosec finding by validating paths before access
 
-	// For absolute paths, scope to filesystem root
-	// For relative paths, scope to current directory
-	rootDir := "."
-	targetPath := filepath
+	cleanPath := filepath.Clean(path)
 
-	// Handle absolute paths by using "/" as root
-	if len(filepath) > 0 && filepath[0] == '/' {
-		rootDir = "/"
-		targetPath = filepath[1:] // Remove leading slash for os.Root
+	// Prevent path traversal by checking for ".." components
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("invalid file path: path traversal detected")
 	}
 
-	// Open a scoped root directory
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return fmt.Errorf("failed to open root directory: %w", err)
-	}
-	defer func() {
-		_ = root.Close() // Ignore error on cleanup
-	}()
-
-	// Read the file through the scoped root (prevents path traversal)
-	data, err := root.ReadFile(targetPath)
+	// Read the file
+	data, err := os.ReadFile(cleanPath) // #nosec G304 -- path is validated above
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}

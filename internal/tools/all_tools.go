@@ -11,7 +11,7 @@ import (
 
 // This file contains all remaining tools in a condensed format for brevity
 
-// Rule Groups
+// GetRuleGroupTool retrieves a specific rule group by ID.
 type GetRuleGroupTool struct{ *BaseTool }
 
 // NewGetRuleGroupTool creates a new tool instance
@@ -40,6 +40,7 @@ func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interfac
 	return t.FormatResponse(res)
 }
 
+// ListRuleGroupsTool lists all rule groups.
 type ListRuleGroupsTool struct{ *BaseTool }
 
 // NewListRuleGroupsTool creates a new tool instance
@@ -67,6 +68,7 @@ func (t *ListRuleGroupsTool) Execute(ctx context.Context, _ map[string]interface
 	return t.FormatResponse(res)
 }
 
+// CreateRuleGroupTool creates a new rule group.
 type CreateRuleGroupTool struct{ *BaseTool }
 
 // NewCreateRuleGroupTool creates a new tool instance
@@ -95,6 +97,7 @@ func (t *CreateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	return t.FormatResponse(res)
 }
 
+// UpdateRuleGroupTool updates an existing rule group.
 type UpdateRuleGroupTool struct{ *BaseTool }
 
 // NewUpdateRuleGroupTool creates a new tool instance
@@ -124,6 +127,7 @@ func (t *UpdateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	return t.FormatResponse(res)
 }
 
+// DeleteRuleGroupTool deletes a rule group.
 type DeleteRuleGroupTool struct{ *BaseTool }
 
 // NewDeleteRuleGroupTool creates a new tool instance
@@ -152,7 +156,7 @@ func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	return t.FormatResponse(res)
 }
 
-// Outgoing Webhooks
+// GetOutgoingWebhookTool retrieves a specific outgoing webhook by ID.
 type GetOutgoingWebhookTool struct{ *BaseTool }
 
 // NewGetOutgoingWebhookTool creates a new tool instance
@@ -181,6 +185,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 	return t.FormatResponse(res)
 }
 
+// ListOutgoingWebhooksTool lists all outgoing webhooks.
 type ListOutgoingWebhooksTool struct{ *BaseTool }
 
 // NewListOutgoingWebhooksTool creates a new tool instance
@@ -208,6 +213,7 @@ func (t *ListOutgoingWebhooksTool) Execute(ctx context.Context, _ map[string]int
 	return t.FormatResponse(res)
 }
 
+// CreateOutgoingWebhookTool creates a new outgoing webhook.
 type CreateOutgoingWebhookTool struct{ *BaseTool }
 
 // NewCreateOutgoingWebhookTool creates a new tool instance
@@ -236,6 +242,7 @@ func (t *CreateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	return t.FormatResponse(res)
 }
 
+// UpdateOutgoingWebhookTool updates an existing outgoing webhook.
 type UpdateOutgoingWebhookTool struct{ *BaseTool }
 
 // NewUpdateOutgoingWebhookTool creates a new tool instance
@@ -265,6 +272,7 @@ func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	return t.FormatResponse(res)
 }
 
+// DeleteOutgoingWebhookTool deletes an outgoing webhook.
 type DeleteOutgoingWebhookTool struct{ *BaseTool }
 
 // NewDeleteOutgoingWebhookTool creates a new tool instance
@@ -293,7 +301,7 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	return t.FormatResponse(res)
 }
 
-// Policies
+// GetPolicyTool retrieves a specific policy by ID.
 type GetPolicyTool struct{ *BaseTool }
 
 // NewGetPolicyTool creates a new tool instance
@@ -322,6 +330,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 	return t.FormatResponse(res)
 }
 
+// ListPoliciesTool lists all policies.
 type ListPoliciesTool struct{ *BaseTool }
 
 // NewListPoliciesTool creates a new tool instance
@@ -341,7 +350,7 @@ func (t *ListPoliciesTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListPoliciesTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListPoliciesTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/policies"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -349,6 +358,7 @@ func (t *ListPoliciesTool) Execute(ctx context.Context, args map[string]interfac
 	return t.FormatResponse(res)
 }
 
+// CreatePolicyTool creates a new policy.
 type CreatePolicyTool struct{ *BaseTool }
 
 // NewCreatePolicyTool creates a new tool instance
@@ -377,6 +387,7 @@ func (t *CreatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	return t.FormatResponse(res)
 }
 
+// UpdatePolicyTool updates an existing policy.
 type UpdatePolicyTool struct{ *BaseTool }
 
 // NewUpdatePolicyTool creates a new tool instance
@@ -406,6 +417,7 @@ func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	return t.FormatResponse(res)
 }
 
+// DeletePolicyTool deletes a policy.
 type DeletePolicyTool struct{ *BaseTool }
 
 // NewDeletePolicyTool creates a new tool instance
@@ -434,7 +446,7 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	return t.FormatResponse(res)
 }
 
-// E2M (Events to Metrics)
+// GetE2MTool retrieves a specific events-to-metrics configuration by ID.
 type GetE2MTool struct{ *BaseTool }
 
 // NewGetE2MTool creates a new tool instance
@@ -463,6 +475,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 	return t.FormatResponse(res)
 }
 
+// ListE2MTool lists all events-to-metrics configurations.
 type ListE2MTool struct{ *BaseTool }
 
 // NewListE2MTool creates a new tool instance
@@ -482,7 +495,7 @@ func (t *ListE2MTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListE2MTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListE2MTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -490,6 +503,7 @@ func (t *ListE2MTool) Execute(ctx context.Context, args map[string]interface{}) 
 	return t.FormatResponse(res)
 }
 
+// CreateE2MTool creates a new events-to-metrics configuration.
 type CreateE2MTool struct{ *BaseTool }
 
 // NewCreateE2MTool creates a new tool instance
@@ -518,6 +532,7 @@ func (t *CreateE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	return t.FormatResponse(res)
 }
 
+// ReplaceE2MTool replaces an events-to-metrics configuration.
 type ReplaceE2MTool struct{ *BaseTool }
 
 // NewReplaceE2MTool creates a new tool instance
@@ -547,6 +562,7 @@ func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{
 	return t.FormatResponse(res)
 }
 
+// DeleteE2MTool deletes an events-to-metrics configuration.
 type DeleteE2MTool struct{ *BaseTool }
 
 // NewDeleteE2MTool creates a new tool instance
@@ -575,7 +591,7 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	return t.FormatResponse(res)
 }
 
-// Data Access Rules
+// ListDataAccessRulesTool lists all data access rules.
 type ListDataAccessRulesTool struct{ *BaseTool }
 
 // NewListDataAccessRulesTool creates a new tool instance
@@ -595,7 +611,7 @@ func (t *ListDataAccessRulesTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListDataAccessRulesTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListDataAccessRulesTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -603,6 +619,7 @@ func (t *ListDataAccessRulesTool) Execute(ctx context.Context, args map[string]i
 	return t.FormatResponse(res)
 }
 
+// GetDataAccessRuleTool retrieves a specific data access rule by ID.
 type GetDataAccessRuleTool struct{ *BaseTool }
 
 // NewGetDataAccessRuleTool creates a new tool instance
@@ -631,6 +648,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 	return t.FormatResponse(res)
 }
 
+// CreateDataAccessRuleTool creates a new data access rule.
 type CreateDataAccessRuleTool struct{ *BaseTool }
 
 // NewCreateDataAccessRuleTool creates a new tool instance
@@ -659,6 +677,7 @@ func (t *CreateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	return t.FormatResponse(res)
 }
 
+// UpdateDataAccessRuleTool updates an existing data access rule.
 type UpdateDataAccessRuleTool struct{ *BaseTool }
 
 // NewUpdateDataAccessRuleTool creates a new tool instance
@@ -688,6 +707,7 @@ func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	return t.FormatResponse(res)
 }
 
+// DeleteDataAccessRuleTool deletes a data access rule.
 type DeleteDataAccessRuleTool struct{ *BaseTool }
 
 // NewDeleteDataAccessRuleTool creates a new tool instance
@@ -716,7 +736,7 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	return t.FormatResponse(res)
 }
 
-// Enrichments
+// ListEnrichmentsTool lists all enrichments.
 type ListEnrichmentsTool struct{ *BaseTool }
 
 // NewListEnrichmentsTool creates a new tool instance
@@ -736,7 +756,7 @@ func (t *ListEnrichmentsTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListEnrichmentsTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListEnrichmentsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/enrichments"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -744,6 +764,7 @@ func (t *ListEnrichmentsTool) Execute(ctx context.Context, args map[string]inter
 	return t.FormatResponse(res)
 }
 
+// CreateEnrichmentTool creates a new enrichment.
 type CreateEnrichmentTool struct{ *BaseTool }
 
 // NewCreateEnrichmentTool creates a new tool instance
@@ -772,6 +793,7 @@ func (t *CreateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	return t.FormatResponse(res)
 }
 
+// UpdateEnrichmentTool updates an existing enrichment.
 type UpdateEnrichmentTool struct{ *BaseTool }
 
 // NewUpdateEnrichmentTool creates a new tool instance
@@ -801,6 +823,7 @@ func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	return t.FormatResponse(res)
 }
 
+// DeleteEnrichmentTool deletes an enrichment.
 type DeleteEnrichmentTool struct{ *BaseTool }
 
 // NewDeleteEnrichmentTool creates a new tool instance
@@ -829,6 +852,7 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	return t.FormatResponse(res)
 }
 
+// GetEnrichmentsTool retrieves all enrichments (alias for list_enrichments).
 type GetEnrichmentsTool struct{ *BaseTool }
 
 // NewGetEnrichmentsTool creates a new tool instance
@@ -850,7 +874,7 @@ func (t *GetEnrichmentsTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *GetEnrichmentsTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *GetEnrichmentsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/enrichments"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -858,7 +882,7 @@ func (t *GetEnrichmentsTool) Execute(ctx context.Context, args map[string]interf
 	return t.FormatResponse(res)
 }
 
-// Views
+// ListViewsTool lists all views.
 type ListViewsTool struct{ *BaseTool }
 
 // NewListViewsTool creates a new tool instance
@@ -878,7 +902,7 @@ func (t *ListViewsTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListViewsTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListViewsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/views"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -886,6 +910,7 @@ func (t *ListViewsTool) Execute(ctx context.Context, args map[string]interface{}
 	return t.FormatResponse(res)
 }
 
+// CreateViewTool creates a new view.
 type CreateViewTool struct{ *BaseTool }
 
 // NewCreateViewTool creates a new tool instance
@@ -914,6 +939,7 @@ func (t *CreateViewTool) Execute(ctx context.Context, args map[string]interface{
 	return t.FormatResponse(res)
 }
 
+// GetViewTool retrieves a specific view by ID.
 type GetViewTool struct{ *BaseTool }
 
 // NewGetViewTool creates a new tool instance
@@ -942,6 +968,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 	return t.FormatResponse(res)
 }
 
+// ReplaceViewTool replaces a view.
 type ReplaceViewTool struct{ *BaseTool }
 
 // NewReplaceViewTool creates a new tool instance
@@ -971,6 +998,7 @@ func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface
 	return t.FormatResponse(res)
 }
 
+// DeleteViewTool deletes a view.
 type DeleteViewTool struct{ *BaseTool }
 
 // NewDeleteViewTool creates a new tool instance
@@ -999,7 +1027,7 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 	return t.FormatResponse(res)
 }
 
-// View Folders
+// ListViewFoldersTool lists all view folders.
 type ListViewFoldersTool struct{ *BaseTool }
 
 // NewListViewFoldersTool creates a new tool instance
@@ -1019,7 +1047,7 @@ func (t *ListViewFoldersTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool
-func (t *ListViewFoldersTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListViewFoldersTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1027,6 +1055,7 @@ func (t *ListViewFoldersTool) Execute(ctx context.Context, args map[string]inter
 	return t.FormatResponse(res)
 }
 
+// CreateViewFolderTool creates a new view folder.
 type CreateViewFolderTool struct{ *BaseTool }
 
 // NewCreateViewFolderTool creates a new tool instance
@@ -1055,6 +1084,7 @@ func (t *CreateViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	return t.FormatResponse(res)
 }
 
+// GetViewFolderTool retrieves a specific view folder by ID.
 type GetViewFolderTool struct{ *BaseTool }
 
 // NewGetViewFolderTool creates a new tool instance
@@ -1083,6 +1113,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 	return t.FormatResponse(res)
 }
 
+// ReplaceViewFolderTool replaces a view folder.
 type ReplaceViewFolderTool struct{ *BaseTool }
 
 // NewReplaceViewFolderTool creates a new tool instance
@@ -1112,6 +1143,7 @@ func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]int
 	return t.FormatResponse(res)
 }
 
+// DeleteViewFolderTool deletes a view folder.
 type DeleteViewFolderTool struct{ *BaseTool }
 
 // NewDeleteViewFolderTool creates a new tool instance
