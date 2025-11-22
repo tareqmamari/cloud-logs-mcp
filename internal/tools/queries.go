@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -70,10 +70,10 @@ func (t *QueryTool) Description() string {
 	return "Execute a synchronous query against IBM Cloud Logs to search and analyze log data"
 }
 
-func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *QueryTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
 				"description": "The query string to execute (DataPrime or Lucene syntax)",
@@ -99,18 +99,18 @@ func (t *QueryTool) InputSchema() mcp.ToolInputSchema {
 				"description": "End date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"limit": map[string]interface{}{
-				"type":        "number",
+				"type":        "integer",
 				"description": "Maximum number of results to return (default: 2000, max: 50000)",
 			},
 		},
-		Required: []string{"query"},
+		"required": []string{"query"},
 	}
 }
 
 func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(arguments, "query", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// Build metadata object with all optional parameters
@@ -162,7 +162,7 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -187,10 +187,10 @@ func (t *SubmitBackgroundQueryTool) Description() string {
 	return "Submit an asynchronous background query for large-scale log analysis"
 }
 
-func (t *SubmitBackgroundQueryTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *SubmitBackgroundQueryTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
 				"description": "The query string to execute (1-4096 characters)",
@@ -210,19 +210,19 @@ func (t *SubmitBackgroundQueryTool) InputSchema() mcp.ToolInputSchema {
 				"description": "End date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Optional, defaults to now",
 			},
 		},
-		Required: []string{"query", "syntax"},
+		"required": []string{"query", "syntax"},
 	}
 }
 
 func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(arguments, "query", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	syntax, err := GetStringParam(arguments, "syntax", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// Build request body with required fields
@@ -247,7 +247,7 @@ func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -272,23 +272,23 @@ func (t *GetBackgroundQueryStatusTool) Description() string {
 	return "Check the status of a background query"
 }
 
-func (t *GetBackgroundQueryStatusTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetBackgroundQueryStatusTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"query_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the background query",
 			},
 		},
-		Required: []string{"query_id"},
+		"required": []string{"query_id"},
 	}
 }
 
 func (t *GetBackgroundQueryStatusTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -298,7 +298,7 @@ func (t *GetBackgroundQueryStatusTool) Execute(ctx context.Context, arguments ma
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -323,23 +323,23 @@ func (t *GetBackgroundQueryDataTool) Description() string {
 	return "Retrieve the results of a completed background query"
 }
 
-func (t *GetBackgroundQueryDataTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetBackgroundQueryDataTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"query_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the background query",
 			},
 		},
-		Required: []string{"query_id"},
+		"required": []string{"query_id"},
 	}
 }
 
 func (t *GetBackgroundQueryDataTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -349,7 +349,7 @@ func (t *GetBackgroundQueryDataTool) Execute(ctx context.Context, arguments map[
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -374,23 +374,23 @@ func (t *CancelBackgroundQueryTool) Description() string {
 	return "Cancel a running background query"
 }
 
-func (t *CancelBackgroundQueryTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *CancelBackgroundQueryTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"query_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the background query to cancel",
 			},
 		},
-		Required: []string{"query_id"},
+		"required": []string{"query_id"},
 	}
 }
 
 func (t *CancelBackgroundQueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -400,7 +400,7 @@ func (t *CancelBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

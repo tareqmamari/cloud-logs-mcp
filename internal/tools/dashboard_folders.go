@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -33,11 +33,10 @@ func (t *ListDashboardFoldersTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *ListDashboardFoldersTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
-		Required:   []string{},
+func (t *ListDashboardFoldersTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
@@ -50,7 +49,7 @@ func (t *ListDashboardFoldersTool) Execute(ctx context.Context, arguments map[st
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -79,16 +78,16 @@ func (t *GetDashboardFolderTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *GetDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetDashboardFolderTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"folder_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the folder",
 			},
 		},
-		Required: []string{"folder_id"},
+		"required": []string{"folder_id"},
 	}
 }
 
@@ -96,7 +95,7 @@ func (t *GetDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 func (t *GetDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	folderID, ok := arguments["folder_id"].(string)
 	if !ok || folderID == "" {
-		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+		return NewToolResultError("folder_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -106,7 +105,7 @@ func (t *GetDashboardFolderTool) Execute(ctx context.Context, arguments map[stri
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -135,10 +134,10 @@ func (t *CreateDashboardFolderTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *CreateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *CreateDashboardFolderTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"name": map[string]interface{}{
 				"type":        "string",
 				"description": "The name of the folder",
@@ -148,7 +147,7 @@ func (t *CreateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 				"description": "Optional parent folder ID for nested folders",
 			},
 		},
-		Required: []string{"name"},
+		"required": []string{"name"},
 	}
 }
 
@@ -156,7 +155,7 @@ func (t *CreateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 func (t *CreateDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	name, ok := arguments["name"].(string)
 	if !ok || name == "" {
-		return mcp.NewToolResultError("name is required and must be a string"), nil
+		return NewToolResultError("name is required and must be a string"), nil
 	}
 
 	body := map[string]interface{}{
@@ -175,7 +174,7 @@ func (t *CreateDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -204,10 +203,10 @@ func (t *UpdateDashboardFolderTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *UpdateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UpdateDashboardFolderTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"folder_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the folder to update",
@@ -221,7 +220,7 @@ func (t *UpdateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 				"description": "Optional new parent folder ID",
 			},
 		},
-		Required: []string{"folder_id", "name"},
+		"required": []string{"folder_id", "name"},
 	}
 }
 
@@ -229,12 +228,12 @@ func (t *UpdateDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 func (t *UpdateDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	folderID, ok := arguments["folder_id"].(string)
 	if !ok || folderID == "" {
-		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+		return NewToolResultError("folder_id is required and must be a string"), nil
 	}
 
 	name, ok := arguments["name"].(string)
 	if !ok || name == "" {
-		return mcp.NewToolResultError("name is required and must be a string"), nil
+		return NewToolResultError("name is required and must be a string"), nil
 	}
 
 	body := map[string]interface{}{
@@ -253,7 +252,7 @@ func (t *UpdateDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -282,16 +281,16 @@ func (t *DeleteDashboardFolderTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *DeleteDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *DeleteDashboardFolderTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"folder_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the folder to delete",
 			},
 		},
-		Required: []string{"folder_id"},
+		"required": []string{"folder_id"},
 	}
 }
 
@@ -299,7 +298,7 @@ func (t *DeleteDashboardFolderTool) InputSchema() mcp.ToolInputSchema {
 func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	folderID, ok := arguments["folder_id"].(string)
 	if !ok || folderID == "" {
-		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+		return NewToolResultError("folder_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -309,7 +308,7 @@ func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -338,10 +337,10 @@ func (t *MoveDashboardToFolderTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *MoveDashboardToFolderTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *MoveDashboardToFolderTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to move",
@@ -351,7 +350,7 @@ func (t *MoveDashboardToFolderTool) InputSchema() mcp.ToolInputSchema {
 				"description": "The unique identifier of the target folder",
 			},
 		},
-		Required: []string{"dashboard_id", "folder_id"},
+		"required": []string{"dashboard_id", "folder_id"},
 	}
 }
 
@@ -359,12 +358,12 @@ func (t *MoveDashboardToFolderTool) InputSchema() mcp.ToolInputSchema {
 func (t *MoveDashboardToFolderTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	folderID, ok := arguments["folder_id"].(string)
 	if !ok || folderID == "" {
-		return mcp.NewToolResultError("folder_id is required and must be a string"), nil
+		return NewToolResultError("folder_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -374,7 +373,7 @@ func (t *MoveDashboardToFolderTool) Execute(ctx context.Context, arguments map[s
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -403,16 +402,16 @@ func (t *PinDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *PinDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *PinDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to pin",
 			},
 		},
-		Required: []string{"dashboard_id"},
+		"required": []string{"dashboard_id"},
 	}
 }
 
@@ -420,7 +419,7 @@ func (t *PinDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *PinDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -430,7 +429,7 @@ func (t *PinDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -459,16 +458,16 @@ func (t *UnpinDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *UnpinDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UnpinDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to unpin",
 			},
 		},
-		Required: []string{"dashboard_id"},
+		"required": []string{"dashboard_id"},
 	}
 }
 
@@ -476,7 +475,7 @@ func (t *UnpinDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *UnpinDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -486,7 +485,7 @@ func (t *UnpinDashboardTool) Execute(ctx context.Context, arguments map[string]i
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -515,16 +514,16 @@ func (t *SetDefaultDashboardTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-func (t *SetDefaultDashboardTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *SetDefaultDashboardTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"dashboard_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to set as default",
 			},
 		},
-		Required: []string{"dashboard_id"},
+		"required": []string{"dashboard_id"},
 	}
 }
 
@@ -532,7 +531,7 @@ func (t *SetDefaultDashboardTool) InputSchema() mcp.ToolInputSchema {
 func (t *SetDefaultDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
-		return mcp.NewToolResultError("dashboard_id is required and must be a string"), nil
+		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
 	req := &client.Request{
@@ -542,7 +541,7 @@ func (t *SetDefaultDashboardTool) Execute(ctx context.Context, arguments map[str
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

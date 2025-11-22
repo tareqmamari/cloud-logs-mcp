@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -28,23 +28,23 @@ func (t *GetAlertTool) Description() string {
 	return "Retrieve a specific alert by its ID from IBM Cloud Logs"
 }
 
-func (t *GetAlertTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetAlertTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the alert",
 			},
 		},
-		Required: []string{"id"},
+		"required": []string{"id"},
 	}
 }
 
 func (t *GetAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -54,7 +54,7 @@ func (t *GetAlertTool) Execute(ctx context.Context, arguments map[string]interfa
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -79,10 +79,10 @@ func (t *ListAlertsTool) Description() string {
 	return "List all alerts in IBM Cloud Logs"
 }
 
-func (t *ListAlertsTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *ListAlertsTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"limit": map[string]interface{}{
 				"type":        "integer",
 				"description": "Maximum number of results (default: 50, max: 100)",
@@ -99,7 +99,7 @@ func (t *ListAlertsTool) Execute(ctx context.Context, arguments map[string]inter
 	// Get pagination parameters
 	pagination, err := GetPaginationParams(arguments)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// Build query with pagination
@@ -114,7 +114,7 @@ func (t *ListAlertsTool) Execute(ctx context.Context, arguments map[string]inter
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -139,23 +139,23 @@ func (t *CreateAlertTool) Description() string {
 	return "Create a new alert in IBM Cloud Logs"
 }
 
-func (t *CreateAlertTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *CreateAlertTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"alert": map[string]interface{}{
 				"type":        "object",
 				"description": "The alert configuration object",
 			},
 		},
-		Required: []string{"alert"},
+		"required": []string{"alert"},
 	}
 }
 
 func (t *CreateAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	alert, err := GetObjectParam(arguments, "alert", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -166,7 +166,7 @@ func (t *CreateAlertTool) Execute(ctx context.Context, arguments map[string]inte
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -191,10 +191,10 @@ func (t *UpdateAlertTool) Description() string {
 	return "Update an existing alert in IBM Cloud Logs"
 }
 
-func (t *UpdateAlertTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UpdateAlertTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the alert to update",
@@ -204,19 +204,19 @@ func (t *UpdateAlertTool) InputSchema() mcp.ToolInputSchema {
 				"description": "The updated alert configuration",
 			},
 		},
-		Required: []string{"id", "alert"},
+		"required": []string{"id", "alert"},
 	}
 }
 
 func (t *UpdateAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	alert, err := GetObjectParam(arguments, "alert", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -227,7 +227,7 @@ func (t *UpdateAlertTool) Execute(ctx context.Context, arguments map[string]inte
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -252,23 +252,23 @@ func (t *DeleteAlertTool) Description() string {
 	return "Delete an alert from IBM Cloud Logs"
 }
 
-func (t *DeleteAlertTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *DeleteAlertTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id": map[string]interface{}{
 				"type":        "string",
 				"description": "The unique identifier of the alert to delete",
 			},
 		},
-		Required: []string{"id"},
+		"required": []string{"id"},
 	}
 }
 
 func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	req := &client.Request{
@@ -278,7 +278,7 @@ func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]inte
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

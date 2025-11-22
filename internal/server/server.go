@@ -2,10 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -15,25 +15,27 @@ import (
 
 // Server represents the MCP server
 type Server struct {
-	mcpServer *server.MCPServer
+	mcpServer *mcp.Server
 	apiClient *client.Client
 	config    *config.Config
 	logger    *zap.Logger
 }
 
-// New creates a new MCP server
-func New(cfg *config.Config, logger *zap.Logger) (*Server, error) {
-	// Create API client with IBM Cloud authentication
+// New creates a new MCP server instance.
+func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
+	// Create IBM Cloud Logs API client
 	apiClient, err := client.New(cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
 
 	// Create MCP server
-	mcpServer := server.NewMCPServer(
-		"IBM Cloud Logs MCP Server",
-		"0.2.0",
-	)
+	mcpServer := mcp.NewServer(&mcp.Implementation{
+		Name:    "IBM Cloud Logs MCP Server",
+		Version: version,
+	}, &mcp.ServerOptions{
+		HasTools: true,
+	})
 
 	s := &Server{
 		mcpServer: mcpServer,
@@ -175,19 +177,25 @@ func (s *Server) registerTools() error {
 func (s *Server) registerTool(toolInterface interface {
 	Name() string
 	Description() string
-	InputSchema() mcp.ToolInputSchema
+	InputSchema() interface{}
 	Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error)
 }) {
 	// Create tool definition
-	tool := mcp.Tool{
+	tool := &mcp.Tool{
 		Name:        toolInterface.Name(),
 		Description: toolInterface.Description(),
 		InputSchema: toolInterface.InputSchema(),
 	}
 
 	// Create handler that calls the tool's Execute method
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return toolInterface.Execute(ctx, request.GetArguments())
+	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]interface{}
+		if len(request.Params.Arguments) > 0 {
+			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
+			}
+		}
+		return toolInterface.Execute(ctx, args)
 	}
 
 	// Register tool with MCP server
@@ -206,9 +214,5 @@ func (s *Server) Start(ctx context.Context) error {
 	}()
 
 	// Start serving using stdio transport
-	if err := server.ServeStdio(s.mcpServer); err != nil {
-		return fmt.Errorf("server error: %w", err)
-	}
-
-	return nil
+	return s.mcpServer.Run(ctx, &mcp.StdioTransport{})
 }

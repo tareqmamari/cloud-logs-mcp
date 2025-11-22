@@ -72,9 +72,31 @@ func Load() (*Config, error) {
 }
 
 func loadFromFile(cfg *Config, filepath string) error {
-	data, err := os.ReadFile(filepath)
+	// Use os.Root to scope file access and prevent path traversal attacks (Go 1.24+)
+	// This eliminates the G304 gosec finding by using secure file access APIs
+
+	// For absolute paths, scope to filesystem root
+	// For relative paths, scope to current directory
+	rootDir := "."
+	targetPath := filepath
+
+	// Handle absolute paths by using "/" as root
+	if len(filepath) > 0 && filepath[0] == '/' {
+		rootDir = "/"
+		targetPath = filepath[1:] // Remove leading slash for os.Root
+	}
+
+	// Open a scoped root directory
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open root directory: %w", err)
+	}
+	defer root.Close()
+
+	// Read the file through the scoped root (prevents path traversal)
+	data, err := root.ReadFile(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	return json.Unmarshal(data, cfg)

@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -24,26 +24,26 @@ func (t *GetAlertDefinitionTool) Description() string {
 	return "Retrieve a specific alert definition by its ID"
 }
 
-func (t *GetAlertDefinitionTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *GetAlertDefinitionTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id": map[string]interface{}{
 				"type": "string", "description": "Alert definition ID",
 			},
 		},
-		Required: []string{"id"},
+		"required": []string{"id"},
 	}
 }
 
 func (t *GetAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/alert_definitions/" + id})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(result)
 }
@@ -63,14 +63,17 @@ func (t *ListAlertDefinitionsTool) Description() string {
 	return "List all alert definitions"
 }
 
-func (t *ListAlertDefinitionsTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{Type: "object", Properties: map[string]interface{}{}}
+func (t *ListAlertDefinitionsTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
+	}
 }
 
 func (t *ListAlertDefinitionsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/alert_definitions"})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(result)
 }
@@ -90,26 +93,26 @@ func (t *CreateAlertDefinitionTool) Description() string {
 	return "Create a new alert definition"
 }
 
-func (t *CreateAlertDefinitionTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"definition": map[string]interface{}{
 				"type": "object", "description": "Alert definition configuration",
 			},
 		},
-		Required: []string{"definition"},
+		"required": []string{"definition"},
 	}
 }
 
 func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	def, err := GetObjectParam(arguments, "definition", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/alert_definitions", Body: def})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(result)
 }
@@ -129,29 +132,29 @@ func (t *UpdateAlertDefinitionTool) Description() string {
 	return "Update an existing alert definition"
 }
 
-func (t *UpdateAlertDefinitionTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UpdateAlertDefinitionTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id":         map[string]interface{}{"type": "string", "description": "Alert definition ID"},
 			"definition": map[string]interface{}{"type": "object", "description": "Updated definition"},
 		},
-		Required: []string{"id", "definition"},
+		"required": []string{"id", "definition"},
 	}
 }
 
 func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	def, err := GetObjectParam(arguments, "definition", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/alert_definitions/" + id, Body: def})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(result)
 }
@@ -171,24 +174,24 @@ func (t *DeleteAlertDefinitionTool) Description() string {
 	return "Delete an alert definition"
 }
 
-func (t *DeleteAlertDefinitionTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *DeleteAlertDefinitionTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"id": map[string]interface{}{"type": "string", "description": "Alert definition ID"},
 		},
-		Required: []string{"id"},
+		"required": []string{"id"},
 	}
 }
 
 func (t *DeleteAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/alert_definitions/" + id})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(result)
 }

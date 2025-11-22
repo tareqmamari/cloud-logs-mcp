@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -28,11 +28,10 @@ func (t *ExportDataUsageTool) Description() string {
 	return "Export data usage metrics for the IBM Cloud Logs instance"
 }
 
-func (t *ExportDataUsageTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
-		Required:   []string{},
+func (t *ExportDataUsageTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
@@ -44,7 +43,7 @@ func (t *ExportDataUsageTool) Execute(ctx context.Context, arguments map[string]
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -69,23 +68,23 @@ func (t *UpdateDataUsageMetricsExportStatusTool) Description() string {
 	return "Update the data usage metrics export status (enable/disable)"
 }
 
-func (t *UpdateDataUsageMetricsExportStatusTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+func (t *UpdateDataUsageMetricsExportStatusTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"enabled": map[string]interface{}{
 				"type":        "boolean",
 				"description": "Whether to enable or disable data usage metrics export",
 			},
 		},
-		Required: []string{"enabled"},
+		"required": []string{"enabled"},
 	}
 }
 
 func (t *UpdateDataUsageMetricsExportStatusTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	enabled, ok := arguments["enabled"].(bool)
 	if !ok {
-		return mcp.NewToolResultError("enabled parameter must be a boolean"), nil
+		return NewToolResultError("enabled parameter must be a boolean"), nil
 	}
 
 	req := &client.Request{
@@ -98,7 +97,7 @@ func (t *UpdateDataUsageMetricsExportStatusTool) Execute(ctx context.Context, ar
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)

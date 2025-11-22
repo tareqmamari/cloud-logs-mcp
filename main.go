@@ -35,9 +35,16 @@ import (
 	"github.com/tareqmamari/logs-mcp-server/internal/server"
 )
 
-// version is the current version of the MCP server.
-// This is set at build time via ldflags: -X main.version=x.y.z
-const version = "0.1.0"
+// Build information - set at build time via ldflags
+// For GoReleaser builds: -X main.version={{.Version}} -X main.commit={{.Commit}} ...
+// For manual builds: make build VERSION=0.5.0
+var (
+	version = "dev"     // e.g., "v0.4.0" or "dev"
+	commit  = "unknown" // Git commit SHA
+	//nolint:unused // Build date (reserved for --version flag)
+	_date   = "unknown"
+	builtBy = "manual" // "goreleaser" or "manual"
+)
 
 // main is the entry point for the IBM Cloud Logs MCP server.
 // It initializes the server, loads configuration, and handles graceful shutdown.
@@ -66,6 +73,8 @@ func main() {
 
 	logFields := []zap.Field{
 		zap.String("version", version),
+		zap.String("commit", commit),
+		zap.String("built_by", builtBy),
 		zap.String("endpoint", cfg.ServiceURL),
 	}
 	if cfg.InstanceName != "" {
@@ -74,7 +83,7 @@ func main() {
 	logger.Info("Starting IBM Cloud Logs MCP Server", logFields...)
 
 	// Create and start MCP server
-	mcpServer, err := server.New(cfg, logger)
+	mcpServer, err := server.New(cfg, logger, version)
 	if err != nil {
 		logger.Fatal("Failed to create MCP server", zap.Error(err))
 	}
