@@ -225,7 +225,11 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() {
+		if closeErr := httpResp.Body.Close(); closeErr != nil {
+			c.logger.Warn("Failed to close response body", zap.Error(closeErr))
+		}
+	}()
 
 	// Read response body
 	body, err := io.ReadAll(httpResp.Body)
