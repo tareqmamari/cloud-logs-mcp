@@ -41,7 +41,7 @@ func (t *ListDashboardFoldersTool) InputSchema() interface{} {
 }
 
 // Execute lists all dashboard folders.
-func (t *ListDashboardFoldersTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListDashboardFoldersTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/folders",

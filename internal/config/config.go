@@ -1,3 +1,4 @@
+// Package config provides configuration management for the IBM Cloud Logs MCP server.
 package config
 
 import (
@@ -91,7 +92,9 @@ func loadFromFile(cfg *Config, filepath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open root directory: %w", err)
 	}
-	defer root.Close()
+	defer func() {
+		_ = root.Close() // Ignore error on cleanup
+	}()
 
 	// Read the file through the scoped root (prevents path traversal)
 	data, err := root.ReadFile(targetPath)

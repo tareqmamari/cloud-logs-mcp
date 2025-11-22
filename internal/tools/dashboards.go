@@ -41,7 +41,7 @@ func (t *ListDashboardsTool) InputSchema() interface{} {
 }
 
 // Execute lists all dashboards.
-func (t *ListDashboardsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListDashboardsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/dashboards",

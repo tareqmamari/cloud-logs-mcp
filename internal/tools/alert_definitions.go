@@ -1,3 +1,4 @@
+// Package tools provides MCP tools for IBM Cloud Logs operations.
 package tools
 
 import (
@@ -14,16 +15,20 @@ type GetAlertDefinitionTool struct {
 	*BaseTool
 }
 
+// NewGetAlertDefinitionTool creates a new tool instance
 func NewGetAlertDefinitionTool(client *client.Client, logger *zap.Logger) *GetAlertDefinitionTool {
 	return &GetAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
+// Name returns the tool name
 func (t *GetAlertDefinitionTool) Name() string { return "get_alert_definition" }
 
+// Description returns the tool description
 func (t *GetAlertDefinitionTool) Description() string {
 	return "Retrieve a specific alert definition by its ID"
 }
 
+// InputSchema returns the input schema
 func (t *GetAlertDefinitionTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -36,6 +41,7 @@ func (t *GetAlertDefinitionTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *GetAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
@@ -53,16 +59,20 @@ type ListAlertDefinitionsTool struct {
 	*BaseTool
 }
 
+// NewListAlertDefinitionsTool creates a new tool instance
 func NewListAlertDefinitionsTool(client *client.Client, logger *zap.Logger) *ListAlertDefinitionsTool {
 	return &ListAlertDefinitionsTool{BaseTool: NewBaseTool(client, logger)}
 }
 
+// Name returns the tool name
 func (t *ListAlertDefinitionsTool) Name() string { return "list_alert_definitions" }
 
+// Description returns the tool description
 func (t *ListAlertDefinitionsTool) Description() string {
 	return "List all alert definitions"
 }
 
+// InputSchema returns the input schema
 func (t *ListAlertDefinitionsTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type":       "object",
@@ -70,7 +80,8 @@ func (t *ListAlertDefinitionsTool) InputSchema() interface{} {
 	}
 }
 
-func (t *ListAlertDefinitionsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+// Execute executes the tool
+func (t *ListAlertDefinitionsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/alert_definitions"})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -83,16 +94,20 @@ type CreateAlertDefinitionTool struct {
 	*BaseTool
 }
 
+// NewCreateAlertDefinitionTool creates a new tool instance
 func NewCreateAlertDefinitionTool(client *client.Client, logger *zap.Logger) *CreateAlertDefinitionTool {
 	return &CreateAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
+// Name returns the tool name
 func (t *CreateAlertDefinitionTool) Name() string { return "create_alert_definition" }
 
+// Description returns the tool description
 func (t *CreateAlertDefinitionTool) Description() string {
 	return "Create a new alert definition"
 }
 
+// InputSchema returns the input schema
 func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -105,6 +120,7 @@ func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	def, err := GetObjectParam(arguments, "definition", true)
 	if err != nil {
@@ -122,16 +138,20 @@ type UpdateAlertDefinitionTool struct {
 	*BaseTool
 }
 
+// NewUpdateAlertDefinitionTool creates a new tool instance
 func NewUpdateAlertDefinitionTool(client *client.Client, logger *zap.Logger) *UpdateAlertDefinitionTool {
 	return &UpdateAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
+// Name returns the tool name
 func (t *UpdateAlertDefinitionTool) Name() string { return "update_alert_definition" }
 
+// Description returns the tool description
 func (t *UpdateAlertDefinitionTool) Description() string {
 	return "Update an existing alert definition"
 }
 
+// InputSchema returns the input schema
 func (t *UpdateAlertDefinitionTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -143,6 +163,7 @@ func (t *UpdateAlertDefinitionTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
@@ -164,16 +185,20 @@ type DeleteAlertDefinitionTool struct {
 	*BaseTool
 }
 
+// NewDeleteAlertDefinitionTool creates a new tool instance
 func NewDeleteAlertDefinitionTool(client *client.Client, logger *zap.Logger) *DeleteAlertDefinitionTool {
 	return &DeleteAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
+// Name returns the tool name
 func (t *DeleteAlertDefinitionTool) Name() string { return "delete_alert_definition" }
 
+// Description returns the tool description
 func (t *DeleteAlertDefinitionTool) Description() string {
 	return "Delete an alert definition"
 }
 
+// InputSchema returns the input schema
 func (t *DeleteAlertDefinitionTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -184,6 +209,7 @@ func (t *DeleteAlertDefinitionTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *DeleteAlertDefinitionTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {

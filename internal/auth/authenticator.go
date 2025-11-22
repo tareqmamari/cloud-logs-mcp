@@ -1,3 +1,4 @@
+// Package auth provides authentication functionality for IBM Cloud API access.
 package auth
 
 import (
@@ -22,7 +23,7 @@ func New(apiKey string, iamURL string, logger *zap.Logger) (*Authenticator, erro
 
 	// Create IBM Cloud IAM authenticator
 	authenticator := &core.IamAuthenticator{
-		ApiKey: apiKey,
+		ApiKey: apiKey, // pragma: allowlist secret
 	}
 
 	// Set custom IAM URL if provided (for staging/dev environments)

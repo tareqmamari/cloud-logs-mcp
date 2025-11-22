@@ -105,7 +105,7 @@ func NewTestContext(t *testing.T) *TestContext {
 // Cleanup performs cleanup of test resources
 func (tc *TestContext) Cleanup() {
 	if tc.Client != nil {
-		tc.Client.Close()
+		_ = tc.Client.Close() // Ignore error on cleanup
 	}
 }
 

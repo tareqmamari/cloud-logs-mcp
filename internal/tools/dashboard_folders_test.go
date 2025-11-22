@@ -78,9 +78,9 @@ func TestMoveDashboardToFolderTool_InputSchema(t *testing.T) {
 	assert.Equal(t, []string{"dashboard_id", "folder_id"}, schema["required"])
 
 	props := schema["properties"].(map[string]interface{})
-	dashIdProp := props["dashboard_id"].(map[string]interface{})
-	assert.Equal(t, "string", dashIdProp["type"])
+	dashIDProp := props["dashboard_id"].(map[string]interface{})
+	assert.Equal(t, "string", dashIDProp["type"])
 
-	folderIdProp := props["folder_id"].(map[string]interface{})
-	assert.Equal(t, "string", folderIdProp["type"])
+	folderIDProp := props["folder_id"].(map[string]interface{})
+	assert.Equal(t, "string", folderIDProp["type"])
 }

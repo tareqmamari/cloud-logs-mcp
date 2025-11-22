@@ -1,5 +1,4 @@
 //go:build integration
-// +build integration
 
 package integration
 
@@ -220,7 +219,7 @@ func TestWebhookTypes(t *testing.T) {
 				"name": GenerateUniqueName("webhook-pagerduty"),
 				"url":  "https://events.pagerduty.com/integration/key/enqueue",
 				"pager_duty": map[string]interface{}{
-					"service_key": "your-service-key-here",
+					"service_key": "your-service-key-here", // pragma: allowlist secret
 				},
 			},
 		},

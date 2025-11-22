@@ -1,3 +1,4 @@
+// Package client provides HTTP client functionality for IBM Cloud Logs API.
 package client
 
 import (
@@ -260,7 +261,7 @@ func convertToIngressURL(apiURL string) string {
 }
 
 // isRetryable determines if an error is retryable
-func isRetryable(err error) bool {
+func isRetryable(_ error) bool {
 	// Network errors are retryable
 	return true
 }

@@ -1,3 +1,4 @@
+// Package metrics provides metrics collection and reporting for the MCP server.
 package metrics
 
 import (

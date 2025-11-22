@@ -56,20 +56,24 @@ type QueryTool struct {
 	*BaseTool
 }
 
+// NewQueryTool creates a new tool instance
 func NewQueryTool(client *client.Client, logger *zap.Logger) *QueryTool {
 	return &QueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *QueryTool) Name() string {
 	return "query_logs"
 }
 
+// Description returns the tool description
 func (t *QueryTool) Description() string {
 	return "Execute a synchronous query against IBM Cloud Logs to search and analyze log data"
 }
 
+// InputSchema returns the input schema
 func (t *QueryTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -107,6 +111,7 @@ func (t *QueryTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(arguments, "query", true)
 	if err != nil {
@@ -173,20 +178,24 @@ type SubmitBackgroundQueryTool struct {
 	*BaseTool
 }
 
+// NewSubmitBackgroundQueryTool creates a new tool instance
 func NewSubmitBackgroundQueryTool(client *client.Client, logger *zap.Logger) *SubmitBackgroundQueryTool {
 	return &SubmitBackgroundQueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *SubmitBackgroundQueryTool) Name() string {
 	return "submit_background_query"
 }
 
+// Description returns the tool description
 func (t *SubmitBackgroundQueryTool) Description() string {
 	return "Submit an asynchronous background query for large-scale log analysis"
 }
 
+// InputSchema returns the input schema
 func (t *SubmitBackgroundQueryTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -214,6 +223,7 @@ func (t *SubmitBackgroundQueryTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(arguments, "query", true)
 	if err != nil {
@@ -258,20 +268,24 @@ type GetBackgroundQueryStatusTool struct {
 	*BaseTool
 }
 
+// NewGetBackgroundQueryStatusTool creates a new tool instance
 func NewGetBackgroundQueryStatusTool(client *client.Client, logger *zap.Logger) *GetBackgroundQueryStatusTool {
 	return &GetBackgroundQueryStatusTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *GetBackgroundQueryStatusTool) Name() string {
 	return "get_background_query_status"
 }
 
+// Description returns the tool description
 func (t *GetBackgroundQueryStatusTool) Description() string {
 	return "Check the status of a background query"
 }
 
+// InputSchema returns the input schema
 func (t *GetBackgroundQueryStatusTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -285,6 +299,7 @@ func (t *GetBackgroundQueryStatusTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *GetBackgroundQueryStatusTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {
@@ -309,20 +324,24 @@ type GetBackgroundQueryDataTool struct {
 	*BaseTool
 }
 
+// NewGetBackgroundQueryDataTool creates a new tool instance
 func NewGetBackgroundQueryDataTool(client *client.Client, logger *zap.Logger) *GetBackgroundQueryDataTool {
 	return &GetBackgroundQueryDataTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *GetBackgroundQueryDataTool) Name() string {
 	return "get_background_query_data"
 }
 
+// Description returns the tool description
 func (t *GetBackgroundQueryDataTool) Description() string {
 	return "Retrieve the results of a completed background query"
 }
 
+// InputSchema returns the input schema
 func (t *GetBackgroundQueryDataTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -336,6 +355,7 @@ func (t *GetBackgroundQueryDataTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *GetBackgroundQueryDataTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {
@@ -360,20 +380,24 @@ type CancelBackgroundQueryTool struct {
 	*BaseTool
 }
 
+// NewCancelBackgroundQueryTool creates a new CancelBackgroundQueryTool
 func NewCancelBackgroundQueryTool(client *client.Client, logger *zap.Logger) *CancelBackgroundQueryTool {
 	return &CancelBackgroundQueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *CancelBackgroundQueryTool) Name() string {
 	return "cancel_background_query"
 }
 
+// Description returns the tool description
 func (t *CancelBackgroundQueryTool) Description() string {
 	return "Cancel a running background query"
 }
 
+// InputSchema returns the input schema
 func (t *CancelBackgroundQueryTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -387,6 +411,7 @@ func (t *CancelBackgroundQueryTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *CancelBackgroundQueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	queryID, err := GetStringParam(arguments, "query_id", true)
 	if err != nil {

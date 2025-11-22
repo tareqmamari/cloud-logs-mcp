@@ -14,20 +14,24 @@ type GetEventStreamTargetsTool struct {
 	*BaseTool
 }
 
+// NewGetEventStreamTargetsTool creates a new tool instance
 func NewGetEventStreamTargetsTool(client *client.Client, logger *zap.Logger) *GetEventStreamTargetsTool {
 	return &GetEventStreamTargetsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *GetEventStreamTargetsTool) Name() string {
 	return "get_event_stream_targets"
 }
 
+// Description returns the tool description
 func (t *GetEventStreamTargetsTool) Description() string {
 	return "Get all event stream targets configured for the IBM Cloud Logs instance"
 }
 
+// InputSchema returns the input schema
 func (t *GetEventStreamTargetsTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type":       "object",
@@ -35,7 +39,8 @@ func (t *GetEventStreamTargetsTool) InputSchema() interface{} {
 	}
 }
 
-func (t *GetEventStreamTargetsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+// Execute executes the tool
+func (t *GetEventStreamTargetsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/streams",
@@ -54,20 +59,24 @@ type CreateEventStreamTargetTool struct {
 	*BaseTool
 }
 
+// NewCreateEventStreamTargetTool creates a new tool instance
 func NewCreateEventStreamTargetTool(client *client.Client, logger *zap.Logger) *CreateEventStreamTargetTool {
 	return &CreateEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *CreateEventStreamTargetTool) Name() string {
 	return "create_event_stream_target"
 }
 
+// Description returns the tool description
 func (t *CreateEventStreamTargetTool) Description() string {
 	return "Create a new event stream target for streaming logs to IBM Event Streams (Kafka)"
 }
 
+// InputSchema returns the input schema
 func (t *CreateEventStreamTargetTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -108,6 +117,7 @@ func (t *CreateEventStreamTargetTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *CreateEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
@@ -156,20 +166,24 @@ type UpdateEventStreamTargetTool struct {
 	*BaseTool
 }
 
+// NewUpdateEventStreamTargetTool creates a new tool instance
 func NewUpdateEventStreamTargetTool(client *client.Client, logger *zap.Logger) *UpdateEventStreamTargetTool {
 	return &UpdateEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *UpdateEventStreamTargetTool) Name() string {
 	return "update_event_stream_target"
 }
 
+// Description returns the tool description
 func (t *UpdateEventStreamTargetTool) Description() string {
 	return "Update an existing event stream target configuration"
 }
 
+// InputSchema returns the input schema
 func (t *UpdateEventStreamTargetTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -204,6 +218,7 @@ func (t *UpdateEventStreamTargetTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
@@ -257,20 +272,24 @@ type DeleteEventStreamTargetTool struct {
 	*BaseTool
 }
 
+// NewDeleteEventStreamTargetTool creates a new tool instance
 func NewDeleteEventStreamTargetTool(client *client.Client, logger *zap.Logger) *DeleteEventStreamTargetTool {
 	return &DeleteEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *DeleteEventStreamTargetTool) Name() string {
 	return "delete_event_stream_target"
 }
 
+// Description returns the tool description
 func (t *DeleteEventStreamTargetTool) Description() string {
 	return "Delete an event stream target"
 }
 
+// InputSchema returns the input schema
 func (t *DeleteEventStreamTargetTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -284,6 +303,7 @@ func (t *DeleteEventStreamTargetTool) InputSchema() interface{} {
 	}
 }
 
+// Execute executes the tool
 func (t *DeleteEventStreamTargetTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
