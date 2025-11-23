@@ -7,21 +7,24 @@ import (
 )
 
 // TestQueryTool_InputSchema verifies the schema matches API spec
+// TestQueryTool_InputSchema verifies the schema matches API spec
 func TestQueryTool_InputSchema(t *testing.T) {
 	tool := &QueryTool{}
-	schema := tool.InputSchema()
+	schema := tool.InputSchema().(map[string]interface{})
 
 	// Verify schema structure
-	assert.Equal(t, "object", schema.Type)
-	assert.Equal(t, []string{"query"}, schema.Required)
+	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, []string{"query"}, schema["required"])
+
+	props := schema["properties"].(map[string]interface{})
 
 	// Verify query property
-	queryProp, ok := schema.Properties["query"].(map[string]interface{})
+	queryProp, ok := props["query"].(map[string]interface{})
 	assert.True(t, ok, "query property should exist")
 	assert.Equal(t, "string", queryProp["type"])
 
 	// Verify tier property with correct API enum and default
-	tierProp, ok := schema.Properties["tier"].(map[string]interface{})
+	tierProp, ok := props["tier"].(map[string]interface{})
 	assert.True(t, ok, "tier property should exist")
 	assert.Equal(t, "string", tierProp["type"])
 	assert.Equal(t, "frequent_search", tierProp["default"], "tier should default to 'frequent_search'")
@@ -33,7 +36,7 @@ func TestQueryTool_InputSchema(t *testing.T) {
 	assert.Contains(t, enum, "unspecified")
 
 	// Verify syntax property with enum and default
-	syntaxProp, ok := schema.Properties["syntax"].(map[string]interface{})
+	syntaxProp, ok := props["syntax"].(map[string]interface{})
 	assert.True(t, ok, "syntax property should exist")
 	assert.Equal(t, "string", syntaxProp["type"])
 	assert.Equal(t, "dataprime", syntaxProp["default"], "syntax should default to 'dataprime'")
@@ -45,16 +48,16 @@ func TestQueryTool_InputSchema(t *testing.T) {
 	assert.Contains(t, syntaxEnum, "unspecified")
 
 	// Verify limit property has description about default
-	limitProp, ok := schema.Properties["limit"].(map[string]interface{})
+	limitProp, ok := props["limit"].(map[string]interface{})
 	assert.True(t, ok, "limit property should exist")
-	assert.Equal(t, "number", limitProp["type"])
+	assert.Equal(t, "integer", limitProp["type"])
 	assert.Contains(t, limitProp["description"], "default: 2000")
 
 	// Verify date fields exist
-	_, ok = schema.Properties["start_date"].(map[string]interface{})
+	_, ok = props["start_date"].(map[string]interface{})
 	assert.True(t, ok, "start_date property should exist")
 
-	_, ok = schema.Properties["end_date"].(map[string]interface{})
+	_, ok = props["end_date"].(map[string]interface{})
 	assert.True(t, ok, "end_date property should exist")
 }
 

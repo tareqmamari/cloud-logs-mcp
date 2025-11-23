@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
@@ -14,29 +14,33 @@ type ExportDataUsageTool struct {
 	*BaseTool
 }
 
+// NewExportDataUsageTool creates a new tool instance
 func NewExportDataUsageTool(client *client.Client, logger *zap.Logger) *ExportDataUsageTool {
 	return &ExportDataUsageTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *ExportDataUsageTool) Name() string {
 	return "export_data_usage"
 }
 
+// Description returns the tool description
 func (t *ExportDataUsageTool) Description() string {
 	return "Export data usage metrics for the IBM Cloud Logs instance"
 }
 
-func (t *ExportDataUsageTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type:       "object",
-		Properties: map[string]interface{}{},
-		Required:   []string{},
+// InputSchema returns the input schema
+func (t *ExportDataUsageTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
-func (t *ExportDataUsageTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+// Execute executes the tool
+func (t *ExportDataUsageTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/data_usage",
@@ -44,7 +48,7 @@ func (t *ExportDataUsageTool) Execute(ctx context.Context, arguments map[string]
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
@@ -55,37 +59,42 @@ type UpdateDataUsageMetricsExportStatusTool struct {
 	*BaseTool
 }
 
+// NewUpdateDataUsageMetricsExportStatusTool creates a new tool instance
 func NewUpdateDataUsageMetricsExportStatusTool(client *client.Client, logger *zap.Logger) *UpdateDataUsageMetricsExportStatusTool {
 	return &UpdateDataUsageMetricsExportStatusTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
 }
 
+// Name returns the tool name
 func (t *UpdateDataUsageMetricsExportStatusTool) Name() string {
 	return "update_data_usage_metrics_export_status"
 }
 
+// Description returns the tool description
 func (t *UpdateDataUsageMetricsExportStatusTool) Description() string {
 	return "Update the data usage metrics export status (enable/disable)"
 }
 
-func (t *UpdateDataUsageMetricsExportStatusTool) InputSchema() mcp.ToolInputSchema {
-	return mcp.ToolInputSchema{
-		Type: "object",
-		Properties: map[string]interface{}{
+// InputSchema returns the input schema
+func (t *UpdateDataUsageMetricsExportStatusTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
 			"enabled": map[string]interface{}{
 				"type":        "boolean",
 				"description": "Whether to enable or disable data usage metrics export",
 			},
 		},
-		Required: []string{"enabled"},
+		"required": []string{"enabled"},
 	}
 }
 
+// Execute executes the tool
 func (t *UpdateDataUsageMetricsExportStatusTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	enabled, ok := arguments["enabled"].(bool)
 	if !ok {
-		return mcp.NewToolResultError("enabled parameter must be a boolean"), nil
+		return NewToolResultError("enabled parameter must be a boolean"), nil
 	}
 
 	req := &client.Request{
@@ -98,7 +107,7 @@ func (t *UpdateDataUsageMetricsExportStatusTool) Execute(ctx context.Context, ar
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	return t.FormatResponse(result)
