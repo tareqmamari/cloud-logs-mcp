@@ -2,8 +2,6 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
 
@@ -14,14 +12,13 @@ permissions:
 
 jobs:
   release:
-    name: Automated Release
+    name: Release
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.0
         with:
-          fetch-depth: 0  # Fetch all history for svu
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -29,47 +26,7 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Install svu
-        run: |
-          echo "Installing svu..."
-          cd /tmp
-          wget -q https://github.com/caarlos0/svu/releases/download/v3.3.0/svu_3.3.0_linux_amd64.tar.gz
-          tar -xzf svu_3.3.0_linux_amd64.tar.gz
-          sudo mv svu /usr/local/bin/
-          svu --version
-          cd -
-
-      - name: Calculate next version
-        id: version
-        run: |
-          CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          NEXT_VERSION=$(svu next)
-          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "next=$NEXT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $CURRENT_VERSION"
-          echo "Next version: $NEXT_VERSION"
-
-      - name: Check if release needed
-        id: check
-        run: |
-          if [ "${{ steps.version.outputs.current }}" = "${{ steps.version.outputs.next }}" ]; then
-            echo "No conventional commits found. Skipping release."
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "Release needed: ${{ steps.version.outputs.next }}"
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create and push tag
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a ${{ steps.version.outputs.next }} -m "Release ${{ steps.version.outputs.next }}"
-          git push origin ${{ steps.version.outputs.next }}
-
       - name: Run GoReleaser
-        if: steps.check.outputs.skip == 'false' || startsWith(github.ref, 'refs/tags/')
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
@@ -79,11 +36,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
-        if: steps.check.outputs.skip == 'false'
         run: |
           echo "### :rocket: Release Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.next }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Previous:** ${{ steps.version.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.next }})" >> $GITHUB_STEP_SUMMARY
+          echo "[View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
