@@ -1,5 +1,7 @@
 # IBM Cloud Logs MCP Server
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/tareqmamari/cloud-logs-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/tareqmamari/cloud-logs-mcp)
+
 Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs instances.
 
 **Version**: 0.3.0 | **Go**: 1.25.4+

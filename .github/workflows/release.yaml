@@ -16,7 +16,7 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Fetch all history for svu
 
@@ -29,10 +29,12 @@ jobs:
       - name: Install svu
         run: |
           echo "Installing svu..."
+          cd /tmp
           wget -q https://github.com/caarlos0/svu/releases/download/v3.3.0/svu_3.3.0_linux_amd64.tar.gz
           tar -xzf svu_3.3.0_linux_amd64.tar.gz
           sudo mv svu /usr/local/bin/
           svu --version
+          cd -
 
       - name: Calculate next version
         id: version
