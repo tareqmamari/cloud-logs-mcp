@@ -1,7 +1,10 @@
 name: Auto Tag
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
@@ -12,7 +15,10 @@ jobs:
   tag:
     name: Create Tag
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip tag]')"
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      !contains(github.event.workflow_run.head_commit.message, '[skip ci]') &&
+      !contains(github.event.workflow_run.head_commit.message, '[skip tag]')
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.0
