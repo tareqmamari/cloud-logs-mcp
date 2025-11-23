@@ -99,16 +99,17 @@ changelog:
 #     signature: '${artifact}.sig'
 
 # Generate SBOM (Software Bill of Materials) for security and compliance
-# Requires syft: brew install syft
-sboms:
-  - id: archive
-    artifacts: archive
-    documents:
-      - "${artifact}.sbom.json"
-  - id: source
-    artifacts: source
-    documents:
-      - "${artifact}.sbom.json"
+# Disabled: requires syft which is not available in GitHub Actions by default
+# To enable locally: brew install syft
+# sboms:
+#   - id: archive
+#     artifacts: archive
+#     documents:
+#       - "${artifact}.sbom.json"
+#   - id: source
+#     artifacts: source
+#     documents:
+#       - "${artifact}.sbom.json"
 
 
 # Docker images (optional - can be enabled if needed)
