@@ -1,0 +1,14 @@
+# act configuration for running GitHub Actions locally
+# Install act: brew install act (macOS) or see https://github.com/nektos/act
+
+# Use medium-sized runner image for better compatibility
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Bind the current directory
+--bind
+
+# Use GitHub API for better action compatibility
+--github-instance github.com
+
+# Verbose output for debugging
+--verbose
