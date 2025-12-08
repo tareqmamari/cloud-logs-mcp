@@ -114,7 +114,7 @@ This document outlines security best practices for deploying and operating the I
 ```bash
 # ✅ GOOD - Use environment variables
 export LOGS_API_KEY="<your-api-key>"  # pragma: allowlist secret
-export LOGS_SERVICE_URL="https://your-instance-id.api.us-south.logs.cloud.ibm.com"
+export LOGS_SERVICE_URL="https://[your-instance-id].api.us-south.logs.cloud.ibm.com"
 
 # ❌ BAD - Never hardcode in scripts
 LOGS_API_KEY="<example-key>" ./logs-mcp-server  # pragma: allowlist secret
@@ -126,7 +126,7 @@ LOGS_API_KEY="<example-key>" ./logs-mcp-server  # pragma: allowlist secret
 
 ```json
 {
-  "service_url": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+  "service_url": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
   "region": "us-south",
   "tls_verify": true,
   "rate_limit": 100,
