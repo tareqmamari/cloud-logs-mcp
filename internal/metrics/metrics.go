@@ -2,16 +2,26 @@
 package metrics
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 )
 
-// Metrics tracks operational metrics
+// Prometheus metric labels
+const (
+	labelTool   = "tool"
+	labelStatus = "status"
+	labelType   = "type"
+)
+
+// Metrics tracks operational metrics with both internal counters and Prometheus metrics
 type Metrics struct {
-	// Request metrics
+	// Request metrics (internal atomic counters for fast access)
 	totalRequests      atomic.Uint64
 	successfulRequests atomic.Uint64
 	failedRequests     atomic.Uint64
@@ -37,9 +47,21 @@ type Metrics struct {
 	toolLatency map[string]int64 // microseconds
 
 	logger *zap.Logger
+
+	// Prometheus metrics
+	promRequestsTotal      prometheus.Counter
+	promRequestsSuccessful prometheus.Counter
+	promRequestsFailed     prometheus.Counter
+	promRequestsRetried    prometheus.Counter
+	promRateLimitHits      prometheus.Counter
+	promRequestLatency     prometheus.Histogram
+	promErrorsByStatus     *prometheus.CounterVec
+	promToolCalls          *prometheus.CounterVec
+	promToolErrors         *prometheus.CounterVec
+	promToolLatency        *prometheus.HistogramVec
 }
 
-// New creates a new metrics tracker
+// New creates a new metrics tracker with Prometheus integration
 func New(logger *zap.Logger) *Metrics {
 	m := &Metrics{
 		errorsByStatus: make(map[int]uint64),
@@ -47,6 +69,62 @@ func New(logger *zap.Logger) *Metrics {
 		toolErrors:     make(map[string]uint64),
 		toolLatency:    make(map[string]int64),
 		logger:         logger,
+
+		// Initialize Prometheus metrics using promauto (auto-registers with default registry)
+		promRequestsTotal: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "requests_total",
+			Help:      "Total number of API requests made to IBM Cloud Logs",
+		}),
+		promRequestsSuccessful: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "requests_successful_total",
+			Help:      "Total number of successful API requests",
+		}),
+		promRequestsFailed: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "requests_failed_total",
+			Help:      "Total number of failed API requests",
+		}),
+		promRequestsRetried: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "requests_retried_total",
+			Help:      "Total number of retried API requests",
+		}),
+		promRateLimitHits: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "rate_limit_hits_total",
+			Help:      "Total number of rate limit hits",
+		}),
+		promRequestLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+			Namespace: "logs_mcp",
+			Name:      "request_latency_seconds",
+			Help:      "API request latency in seconds",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 15), // 1ms to ~16s
+		}),
+		promErrorsByStatus: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "errors_by_status_total",
+			Help:      "Errors by HTTP status code",
+		}, []string{labelStatus}),
+
+		// Tool-specific metrics - tracks every tool call with labels for tool name
+		promToolCalls: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "tool_calls_total",
+			Help:      "Total number of tool calls, labeled by tool name (e.g., query_logs, create_alert, list_dashboards)",
+		}, []string{labelTool}),
+		promToolErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "logs_mcp",
+			Name:      "tool_errors_total",
+			Help:      "Total number of tool errors, labeled by tool name",
+		}, []string{labelTool}),
+		promToolLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "logs_mcp",
+			Name:      "tool_latency_seconds",
+			Help:      "Tool execution latency in seconds, labeled by tool name",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 15), // 1ms to ~16s
+		}, []string{labelTool}),
 	}
 
 	// Initialize min latency to max value
@@ -55,14 +133,21 @@ func New(logger *zap.Logger) *Metrics {
 	return m
 }
 
-// RecordRequest records a request
+// RecordRequest records a request (both internal counters and Prometheus)
 func (m *Metrics) RecordRequest(success bool, latency time.Duration, statusCode int) {
+	// Update internal counters
 	m.totalRequests.Add(1)
+
+	// Update Prometheus counters
+	m.promRequestsTotal.Inc()
+	m.promRequestLatency.Observe(latency.Seconds())
 
 	if success {
 		m.successfulRequests.Add(1)
+		m.promRequestsSuccessful.Inc()
 	} else {
 		m.failedRequests.Add(1)
+		m.promRequestsFailed.Inc()
 		m.recordErrorStatus(statusCode)
 	}
 
@@ -72,18 +157,23 @@ func (m *Metrics) RecordRequest(success bool, latency time.Duration, statusCode 
 // RecordRetry records a retry attempt
 func (m *Metrics) RecordRetry() {
 	m.retriedRequests.Add(1)
+	m.promRequestsRetried.Inc()
 }
 
 // RecordRateLimitHit records a rate limit hit
 func (m *Metrics) RecordRateLimitHit() {
 	m.rateLimitHits.Add(1)
+	m.promRateLimitHits.Inc()
 }
 
-// RecordToolExecution records tool usage
+// RecordToolExecution records tool usage (both internal counters and Prometheus)
+// This is called for every tool invocation, tracking:
+// - Total calls per tool
+// - Errors per tool
+// - Latency distribution per tool
 func (m *Metrics) RecordToolExecution(toolName string, success bool, latency time.Duration) {
+	// Update internal counters
 	m.toolsMu.Lock()
-	defer m.toolsMu.Unlock()
-
 	m.toolUsage[toolName]++
 	if !success {
 		m.toolErrors[toolName]++
@@ -96,6 +186,14 @@ func (m *Metrics) RecordToolExecution(toolName string, success bool, latency tim
 		count := float64(m.toolUsage[toolName])
 		avgLatency := (float64(currentLatency)*(count-1) + float64(latency.Microseconds())) / count
 		m.toolLatency[toolName] = int64(avgLatency)
+	}
+	m.toolsMu.Unlock()
+
+	// Update Prometheus metrics (labeled by tool name)
+	m.promToolCalls.WithLabelValues(toolName).Inc()
+	m.promToolLatency.WithLabelValues(toolName).Observe(latency.Seconds())
+	if !success {
+		m.promToolErrors.WithLabelValues(toolName).Inc()
 	}
 }
 
@@ -134,8 +232,11 @@ func (m *Metrics) recordErrorStatus(statusCode int) {
 	}
 
 	m.errorsMu.Lock()
-	defer m.errorsMu.Unlock()
 	m.errorsByStatus[statusCode]++
+	m.errorsMu.Unlock()
+
+	// Update Prometheus counter with status code label
+	m.promErrorsByStatus.WithLabelValues(fmt.Sprintf("%d", statusCode)).Inc()
 }
 
 // GetStats returns current statistics
@@ -226,4 +327,11 @@ type Stats struct {
 	ToolUsage          map[string]uint64
 	ToolErrors         map[string]uint64
 	ToolLatency        map[string]time.Duration
+}
+
+// GetPrometheusRegistry returns the default Prometheus registry
+// This can be used with promhttp.HandlerFor() to serve metrics
+func GetPrometheusRegistry() *prometheus.Registry {
+	// Return the default registry which promauto uses
+	return prometheus.DefaultRegisterer.(*prometheus.Registry)
 }
