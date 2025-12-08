@@ -567,3 +567,123 @@ func testContains(s, substr string) bool {
 	}
 	return false
 }
+
+// Benchmarks for performance-critical functions
+
+// BenchmarkExtractTopValues benchmarks the extractTopValues function
+// which is called for every query result to generate summaries.
+func BenchmarkExtractTopValues(b *testing.B) {
+	// Create a realistic set of events
+	events := make([]interface{}, 1000)
+	apps := []string{"app-a", "app-b", "app-c", "app-d", "app-e", "app-f", "app-g", "app-h", "app-i", "app-j"}
+	for i := 0; i < 1000; i++ {
+		appName := apps[i%10] // #nosec G602 -- index is always 0-9, within bounds
+		events[i] = map[string]interface{}{
+			"applicationname": appName,
+			"subsystemname":   "subsystem-" + string(rune('a'+i%5)),
+			"timestamp":       "2024-01-15T10:00:00Z",
+			"severity":        float64(i%6 + 1),
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		extractTopValues(events, "applicationname", MaxTopValues)
+	}
+}
+
+// BenchmarkParseSSEResponse benchmarks SSE response parsing
+// which handles streaming query responses.
+func BenchmarkParseSSEResponse(b *testing.B) {
+	// Create a realistic SSE response
+	var sseBuilder string
+	for i := 0; i < 100; i++ {
+		sseBuilder += `data: {"timestamp":"2024-01-15T10:00:00Z","severity":3,"applicationname":"test-app","text":"Log message ` + string(rune('0'+i%10)) + `"}` + "\n"
+	}
+	sseBytes := []byte(sseBuilder)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		parseSSEResponse(sseBytes)
+	}
+}
+
+// BenchmarkGenerateResultSummary benchmarks summary generation
+// which is called for query results to provide AI-friendly overviews.
+func BenchmarkGenerateResultSummary(b *testing.B) {
+	// Create a result with events
+	events := make([]interface{}, 500)
+	for i := 0; i < 500; i++ {
+		events[i] = map[string]interface{}{
+			"applicationname": "app-" + string(rune('a'+i%10)),
+			"subsystemname":   "sub-" + string(rune('a'+i%5)),
+			"timestamp":       "2024-01-15T10:00:00Z",
+			"severity":        float64(i%6 + 1),
+		}
+	}
+	result := map[string]interface{}{
+		"events": events,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		GenerateResultSummary(result, "query results")
+	}
+}
+
+// BenchmarkTruncateResult benchmarks the binary search truncation algorithm
+// which finds the optimal truncation point for large results.
+func BenchmarkTruncateResult(b *testing.B) {
+	// Create a large result that needs truncation
+	events := make([]interface{}, 1000)
+	for i := 0; i < 1000; i++ {
+		events[i] = map[string]interface{}{
+			"id":              "event-" + string(rune('0'+i%10)) + string(rune('0'+i/10%10)),
+			"applicationname": "application-with-a-long-name-" + string(rune('a'+i%26)),
+			"subsystemname":   "subsystem-with-details-" + string(rune('a'+i%10)),
+			"timestamp":       "2024-01-15T10:00:00.000000Z",
+			"severity":        float64(i%6 + 1),
+			"text":            "This is a log message with some content that makes it realistic in size for benchmarking purposes",
+		}
+	}
+	result := map[string]interface{}{
+		"events": events,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		truncateResult(result, MaxResultSize)
+	}
+}
+
+// BenchmarkCountItems benchmarks item counting in results
+func BenchmarkCountItems(b *testing.B) {
+	events := make([]interface{}, 500)
+	for i := 0; i < 500; i++ {
+		events[i] = map[string]interface{}{"id": i}
+	}
+	result := map[string]interface{}{
+		"events": events,
+		"other":  make([]interface{}, 100),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		countItems(result)
+	}
+}
+
+// BenchmarkAnalyzeSeverityDistribution benchmarks severity analysis
+func BenchmarkAnalyzeSeverityDistribution(b *testing.B) {
+	events := make([]interface{}, 1000)
+	for i := 0; i < 1000; i++ {
+		events[i] = map[string]interface{}{
+			"severity": float64(i%6 + 1),
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		analyzeSeverityDistribution(events)
+	}
+}
