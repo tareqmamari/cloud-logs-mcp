@@ -1,37 +1,100 @@
 // Package prompts provides pre-built prompts for common IBM Cloud Logs operations.
+//
+// Terminology Note: "IBM Cloud Logs", "ICL", and "Cloud Logs" all refer to the same service.
+// Users may use any of these terms interchangeably when referring to the logging service.
 package prompts
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
-
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
-// PromptHandler handles a prompt execution
-type PromptHandler struct {
-	client *client.Client
-	logger *zap.Logger
+// PromptDefinition represents a prompt with its metadata and handler
+type PromptDefinition struct {
+	// Prompt is the MCP prompt metadata
+	Prompt *mcp.Prompt
+	// Handler is the function that generates the prompt content
+	Handler mcp.PromptHandler
 }
 
-// NewPromptHandler creates a new prompt handler
-func NewPromptHandler(client *client.Client, logger *zap.Logger) *PromptHandler {
-	return &PromptHandler{
-		client: client,
+// Registry holds all registered prompts
+type Registry struct {
+	logger  *zap.Logger
+	prompts []*PromptDefinition
+}
+
+// NewRegistry creates a new prompt registry with all available prompts
+func NewRegistry(logger *zap.Logger) *Registry {
+	r := &Registry{
 		logger: logger,
 	}
+	r.registerPrompts()
+	return r
 }
 
-// InvestigateErrorsPrompt handles the "investigate_errors" prompt
-func (h *PromptHandler) InvestigateErrorsPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	timeRange, _ := arguments["time_range"].(string)
-	if timeRange == "" {
-		timeRange = "1h"
-	}
+// GetPrompts returns all registered prompt definitions
+func (r *Registry) GetPrompts() []*PromptDefinition {
+	return r.prompts
+}
 
-	prompt := fmt.Sprintf(`Let's investigate recent error spikes in your IBM Cloud Logs. I'll help you:
+// registerPrompts registers all available prompts
+func (r *Registry) registerPrompts() {
+	r.prompts = []*PromptDefinition{
+		r.investigateErrorsPrompt(),
+		r.setupMonitoringPrompt(),
+		r.compareEnvironmentsPrompt(),
+		r.debuggingWorkflowPrompt(),
+		r.optimizeRetentionPrompt(),
+		r.testLogIngestionPrompt(),
+		r.createDashboardWorkflowPrompt(),
+	}
+}
+
+// Helper to create a prompt result with user role
+func createPromptResult(description, content string) *mcp.GetPromptResult {
+	return &mcp.GetPromptResult{
+		Description: description,
+		Messages: []*mcp.PromptMessage{
+			{
+				Role: "user",
+				Content: &mcp.TextContent{
+					Text: content,
+				},
+			},
+		},
+	}
+}
+
+// getStringArg safely extracts a string argument with a default value
+func getStringArg(args map[string]string, key, defaultVal string) string {
+	if val, ok := args[key]; ok && val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+// investigateErrorsPrompt creates the "investigate_errors" prompt definition
+func (r *Registry) investigateErrorsPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "investigate_errors",
+			Title:       "Investigate Error Spikes",
+			Description: "Guide through investigating recent error spikes in IBM Cloud Logs",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "time_range",
+					Description: "Time range to investigate (e.g., '1h', '24h', '7d')",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			timeRange := getStringArg(req.Params.Arguments, "time_range", "1h")
+
+			content := fmt.Sprintf(`Let's investigate recent error spikes in your IBM Cloud Logs. I'll help you:
 
 1. **Query recent errors** (last %s)
 2. **List active alerts** that may have been triggered
@@ -47,17 +110,30 @@ To get started, please use these tools in sequence:
 
 I'll help you correlate the errors with alerts and policies to identify the root cause.`, timeRange, timeRange)
 
-	return prompt, nil
+			return createPromptResult("Investigate error spikes workflow", content), nil
+		},
+	}
 }
 
-// SetupMonitoringPrompt handles the "setup_monitoring" prompt
-func (h *PromptHandler) SetupMonitoringPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	serviceName, _ := arguments["service_name"].(string)
-	if serviceName == "" {
-		serviceName = "your-service"
-	}
+// setupMonitoringPrompt creates the "setup_monitoring" prompt definition
+func (r *Registry) setupMonitoringPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "setup_monitoring",
+			Title:       "Setup Monitoring",
+			Description: "Guide through setting up comprehensive monitoring for a service",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "service_name",
+					Description: "Name of the service to monitor",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			serviceName := getStringArg(req.Params.Arguments, "service_name", "your-service")
 
-	prompt := fmt.Sprintf(`I'll help you set up comprehensive monitoring for %s. Here's what we'll create:
+			content := fmt.Sprintf(`I'll help you set up comprehensive monitoring for %s. Here's what we'll create:
 
 **Step 1: Create Alert Definition**
 First, we'll create an alert that triggers when error rate exceeds threshold:
@@ -92,17 +168,30 @@ Set up log retention and routing:
 
 Would you like to proceed with these steps? I'll guide you through each one.`, serviceName, serviceName, serviceName, serviceName, serviceName)
 
-	return prompt, nil
+			return createPromptResult("Setup monitoring workflow", content), nil
+		},
+	}
 }
 
-// CompareEnvironmentsPrompt handles the "compare_environments" prompt
-func (h *PromptHandler) CompareEnvironmentsPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	timeRange, _ := arguments["time_range"].(string)
-	if timeRange == "" {
-		timeRange = "1h"
-	}
+// compareEnvironmentsPrompt creates the "compare_environments" prompt definition
+func (r *Registry) compareEnvironmentsPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "compare_environments",
+			Title:       "Compare Environments",
+			Description: "Compare logs across production and staging environments",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "time_range",
+					Description: "Time range to compare (e.g., '1h', '24h')",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			timeRange := getStringArg(req.Params.Arguments, "time_range", "1h")
 
-	prompt := fmt.Sprintf(`I'll help you compare logs across production and staging environments. Here's the process:
+			content := fmt.Sprintf(`I'll help you compare logs across production and staging environments. Here's the process:
 
 **Step 1: Query Production Logs**
 - Use: query_logs
@@ -130,17 +219,30 @@ This comparison will help identify environment-specific issues and configuration
 
 Ready to start? Let's begin with querying production logs.`, timeRange, timeRange)
 
-	return prompt, nil
+			return createPromptResult("Compare environments workflow", content), nil
+		},
+	}
 }
 
-// DebuggingWorkflowPrompt handles the "debugging_workflow" prompt
-func (h *PromptHandler) DebuggingWorkflowPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	errorMessage, _ := arguments["error_message"].(string)
-	if errorMessage == "" {
-		errorMessage = "your error message"
-	}
+// debuggingWorkflowPrompt creates the "debugging_workflow" prompt definition
+func (r *Registry) debuggingWorkflowPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "debugging_workflow",
+			Title:       "Debugging Workflow",
+			Description: "Systematic debugging workflow for investigating issues",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "error_message",
+					Description: "Error message or pattern to search for",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			errorMessage := getStringArg(req.Params.Arguments, "error_message", "your error message")
 
-	prompt := fmt.Sprintf(`Let's debug this issue systematically. I'll guide you through a structured debugging workflow:
+			content := fmt.Sprintf(`Let's debug this issue systematically. I'll guide you through a structured debugging workflow:
 
 **Step 1: Search for the Error**
 - Use: query_logs
@@ -171,12 +273,22 @@ Based on the findings, I'll help you:
 
 Let's start with searching for the error in recent logs.`, errorMessage)
 
-	return prompt, nil
+			return createPromptResult("Debugging workflow", content), nil
+		},
+	}
 }
 
-// OptimizeRetentionPrompt handles the "optimize_retention" prompt
-func (h *PromptHandler) OptimizeRetentionPrompt(_ context.Context, _ map[string]interface{}) (string, error) {
-	prompt := `I'll help you optimize log retention and reduce costs. Here's the analysis workflow:
+// optimizeRetentionPrompt creates the "optimize_retention" prompt definition
+func (r *Registry) optimizeRetentionPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "optimize_retention",
+			Title:       "Optimize Log Retention",
+			Description: "Analyze and optimize log retention settings for cost reduction",
+			Arguments:   []*mcp.PromptArgument{},
+		},
+		Handler: func(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			content := `I'll help you optimize log retention and reduce costs. Here's the analysis workflow:
 
 **Step 1: Review Current Policies**
 - Use: list_policies
@@ -212,17 +324,30 @@ Based on the analysis, I'll suggest:
 
 Ready to analyze your current configuration?`
 
-	return prompt, nil
+			return createPromptResult("Optimize retention workflow", content), nil
+		},
+	}
 }
 
-// TestLogIngestionPrompt handles the "test_log_ingestion" prompt
-func (h *PromptHandler) TestLogIngestionPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	applicationName, _ := arguments["application_name"].(string)
-	if applicationName == "" {
-		applicationName = "test-app"
-	}
+// testLogIngestionPrompt creates the "test_log_ingestion" prompt definition
+func (r *Registry) testLogIngestionPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "test_log_ingestion",
+			Title:       "Test Log Ingestion",
+			Description: "Test and validate log ingestion into IBM Cloud Logs",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "application_name",
+					Description: "Application name to use for test logs",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			applicationName := getStringArg(req.Params.Arguments, "application_name", "test-app")
 
-	prompt := fmt.Sprintf(`I'll help you test log ingestion into IBM Cloud Logs. Here's the workflow:
+			content := fmt.Sprintf(`I'll help you test log ingestion into IBM Cloud Logs. Here's the workflow:
 
 **Step 1: Ingest Test Logs**
 - Use: ingest_logs (or push/add logs)
@@ -271,17 +396,30 @@ than the management API (.api.), but this is handled automatically.
 
 Ready to start ingesting logs?`, applicationName, applicationName, applicationName)
 
-	return prompt, nil
+			return createPromptResult("Test log ingestion workflow", content), nil
+		},
+	}
 }
 
-// CreateDashboardWorkflowPrompt handles the "create_dashboard_workflow" prompt
-func (h *PromptHandler) CreateDashboardWorkflowPrompt(_ context.Context, arguments map[string]interface{}) (string, error) {
-	dashboardName, _ := arguments["dashboard_name"].(string)
-	if dashboardName == "" {
-		dashboardName = "Custom Dashboard"
-	}
+// createDashboardWorkflowPrompt creates the "create_dashboard_workflow" prompt definition
+func (r *Registry) createDashboardWorkflowPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "create_dashboard_workflow",
+			Title:       "Create Dashboard",
+			Description: "Guide through creating a dashboard in IBM Cloud Logs",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "dashboard_name",
+					Description: "Name for the new dashboard",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			dashboardName := getStringArg(req.Params.Arguments, "dashboard_name", "Custom Dashboard")
 
-	prompt := fmt.Sprintf(`I'll help you create a dashboard in IBM Cloud Logs. Here's the complete workflow:
+			content := fmt.Sprintf(`I'll help you create a dashboard in IBM Cloud Logs. Here's the complete workflow:
 
 **Step 1: Design Dashboard Layout**
 A dashboard consists of:
@@ -304,52 +442,34 @@ Available widget types:
 Use: create_dashboard
 - name: "%s"
 - description: "Description of dashboard purpose"
-- layout: {
-    "sections": [
-      {
-        "id": {"value": "uuid-section-1"},
-        "rows": [
-          {
-            "id": {"value": "uuid-row-1"},
-            "appearance": {"height": 19},
-            "widgets": [
-              {
-                "id": {"value": "uuid-widget-1"},
-                "title": "Widget Title",
-                "description": "Widget description",
-                "definition": {
-                  "line_chart": {
-                    "legend": {"is_visible": true, "group_by_query": true},
-                    "tooltip": {"show_labels": false, "type": "all"},
-                    "query_definitions": [
-                      {
-                        "id": "uuid-query-1",
-                        "color_scheme": "cold",
-                        "name": "Query Name",
-                        "is_visible": true,
-                        "scale_type": "linear",
-                        "resolution": {"buckets_presented": 96},
-                        "series_count_limit": 20,
-                        "query": {
-                          "logs": {
-                            "group_by": [],
-                            "aggregations": [{"count": {}}],
-                            "group_bys": [
-                              {"keypath": ["severity"], "scope": "metadata"}
-                            ]
-                          }
-                        }
-                      }
-                    ]
-                  }
+- layout: (see structure below)
+
+**Dashboard Structure Example:**
+{
+  "sections": [{
+    "id": {"value": "section-1"},
+    "rows": [{
+      "id": {"value": "row-1"},
+      "appearance": {"height": 19},
+      "widgets": [{
+        "id": {"value": "widget-1"},
+        "title": "Error Count",
+        "definition": {
+          "line_chart": {
+            "query_definitions": [{
+              "query": {
+                "logs": {
+                  "aggregations": [{"count": {}}],
+                  "group_bys": [{"keypath": ["severity"], "scope": "metadata"}]
                 }
               }
-            ]
+            }]
           }
-        ]
-      }
-    ]
-  }
+        }
+      }]
+    }]
+  }]
+}
 
 **Step 4: Organize Dashboard**
 After creation, you can:
@@ -361,47 +481,15 @@ After creation, you can:
 - Use: list_dashboards to confirm creation
 - Use: get_dashboard to view full details
 
-**Common Query Examples:**
-
-1. **Error Count by Severity:**
-{
-  "logs": {
-    "aggregations": [{"count": {}}],
-    "group_bys": [{"keypath": ["severity"], "scope": "metadata"}]
-  }
-}
-
-2. **Application Performance:**
-{
-  "logs": {
-    "aggregations": [{"average": {"observation_field": {"keypath": ["duration"]}}}],
-    "group_bys": [{"keypath": ["applicationName"], "scope": "metadata"}]
-  }
-}
-
-3. **Log Volume Over Time:**
-{
-  "logs": {
-    "aggregations": [{"count": {}}],
-    "group_bys": []
-  }
-}
-
 **Best Practices:**
 - Use meaningful widget titles and descriptions
 - Group related widgets in the same section
 - Set appropriate row heights (typical: 12-24)
-- Limit series count to improve performance
 - Use color schemes consistently (cold, warm, classic)
-- Add multiple query definitions for comparison
-
-**Dashboard Management:**
-- List folders: use list_dashboard_folders
-- Move between folders: use move_dashboard_to_folder
-- Update existing: use update_dashboard (replaces entire dashboard)
-- Delete: use delete_dashboard
 
 Ready to create your dashboard? Let me know what metrics you want to visualize!`, dashboardName)
 
-	return prompt, nil
+			return createPromptResult("Create dashboard workflow", content), nil
+		},
+	}
 }

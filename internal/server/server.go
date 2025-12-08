@@ -11,6 +11,7 @@ import (
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/prompts"
 	"github.com/tareqmamari/logs-mcp-server/internal/tools"
 )
 
@@ -25,17 +26,18 @@ type Server struct {
 // New creates a new MCP server instance.
 func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
 	// Create IBM Cloud Logs API client
-	apiClient, err := client.New(cfg, logger)
+	apiClient, err := client.New(cfg, logger, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Create MCP server
+	// Create MCP server with tools and prompts capabilities
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "IBM Cloud Logs MCP Server",
 		Version: version,
 	}, &mcp.ServerOptions{
-		HasTools: true,
+		HasTools:   true,
+		HasPrompts: true,
 	})
 
 	s := &Server{
@@ -49,6 +51,9 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 	if err := s.registerTools(); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
+
+	// Register all prompts
+	s.registerPrompts()
 
 	return s, nil
 }
@@ -99,6 +104,7 @@ func (s *Server) registerTools() error {
 
 	// Query tools
 	s.registerTool(tools.NewQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewBuildQueryTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewSubmitBackgroundQueryTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetBackgroundQueryStatusTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
@@ -174,18 +180,14 @@ func (s *Server) registerTools() error {
 	return nil
 }
 
-// registerTool is a helper to register a tool with proper error handling
-func (s *Server) registerTool(toolInterface interface {
-	Name() string
-	Description() string
-	InputSchema() interface{}
-	Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error)
-}) {
+// registerTool is a helper to register a tool with proper error handling.
+// It accepts any type that implements the tools.Tool interface.
+func (s *Server) registerTool(t tools.Tool) {
 	// Create tool definition
-	tool := &mcp.Tool{
-		Name:        toolInterface.Name(),
-		Description: toolInterface.Description(),
-		InputSchema: toolInterface.InputSchema(),
+	mcpTool := &mcp.Tool{
+		Name:        t.Name(),
+		Description: t.Description(),
+		InputSchema: t.InputSchema(),
 	}
 
 	// Create handler that calls the tool's Execute method
@@ -196,12 +198,24 @@ func (s *Server) registerTool(toolInterface interface {
 				return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
 			}
 		}
-		return toolInterface.Execute(ctx, args)
+		return t.Execute(ctx, args)
 	}
 
 	// Register tool with MCP server
-	s.mcpServer.AddTool(tool, handler)
-	s.logger.Debug("Registered tool", zap.String("tool", tool.Name))
+	s.mcpServer.AddTool(mcpTool, handler)
+	s.logger.Debug("Registered tool", zap.String("tool", mcpTool.Name))
+}
+
+// registerPrompts registers all available MCP prompts
+func (s *Server) registerPrompts() {
+	registry := prompts.NewRegistry(s.logger)
+
+	for _, p := range registry.GetPrompts() {
+		s.mcpServer.AddPrompt(p.Prompt, p.Handler)
+		s.logger.Debug("Registered prompt", zap.String("prompt", p.Prompt.Name))
+	}
+
+	s.logger.Info("Registered all MCP prompts", zap.Int("count", len(registry.GetPrompts())))
 }
 
 // Start starts the MCP server
