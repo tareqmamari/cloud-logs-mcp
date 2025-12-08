@@ -284,7 +284,7 @@ func validateCommonMistakes(query string) *DataPrimeValidationError {
 			if strings.Contains(correct, "$m.") {
 				return &DataPrimeValidationError{
 					Message:    fmt.Sprintf("Invalid field reference: %s", fullField),
-					Suggestion: fmt.Sprintf("Use $m.severity for log level instead"),
+					Suggestion: "Use $m.severity for log level instead",
 					Field:      fullField,
 				}
 			}
@@ -331,7 +331,7 @@ filter $l.applicationname == 'app1' || $l.applicationname == 'app2' || $l.applic
 }
 
 // SuggestQueryFix attempts to suggest a fix for a query that failed
-func SuggestQueryFix(query string, errorMessage string) string {
+func SuggestQueryFix(_ string, errorMessage string) string {
 	lowerError := strings.ToLower(errorMessage)
 
 	// Handle "~~ only works on $d" error (even though we validate against this)
