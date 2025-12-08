@@ -113,11 +113,11 @@ This document outlines security best practices for deploying and operating the I
 
 ```bash
 # ✅ GOOD - Use environment variables
-export LOGS_API_KEY="your-secret-key"
+export LOGS_API_KEY="<your-api-key>"  # pragma: allowlist secret
 export LOGS_SERVICE_URL="https://your-instance-id.api.us-south.logs.cloud.ibm.com"
 
 # ❌ BAD - Never hardcode in scripts
-LOGS_API_KEY="hardcoded-key" ./logs-mcp-server
+LOGS_API_KEY="<example-key>" ./logs-mcp-server  # pragma: allowlist secret
 ```
 
 ### Configuration Files
@@ -311,6 +311,140 @@ Set up alerts for:
 - Use only official Go modules
 - Verify module authenticity
 - Review third-party dependencies carefully
+
+## Static Application Security Testing (SAST)
+
+This project uses multiple SAST tools to identify security vulnerabilities before they reach production.
+
+### Automated SAST Scans
+
+**GitHub Actions Integration:**
+- SAST scans run automatically on push to main and pull requests
+- Scans run weekly on Sunday at midnight UTC
+- Results are uploaded to GitHub Security tab (Code Scanning)
+
+**Tools Integrated:**
+1. **Gosec** - Go security checker for common security issues
+   - Detects SQL injection, command injection, weak crypto, etc.
+   - Outputs: SARIF format for GitHub Security integration
+
+2. **govulncheck** - Official Go vulnerability scanner
+   - Scans for known vulnerabilities in dependencies
+   - Checks if vulnerable code paths are actually reachable
+   - Outputs: SARIF format for GitHub Security integration
+
+3. **Trivy** - Comprehensive vulnerability scanner
+   - Scans filesystem, dependencies, and configurations
+   - Detects CRITICAL, HIGH, and MEDIUM severity issues
+   - Outputs: SARIF format for GitHub Security integration
+
+4. **Semgrep** - Pattern-based static analysis
+   - Detects security anti-patterns and best practice violations
+   - Configurable rules for Go-specific security issues
+   - Outputs: SARIF format for GitHub Security integration
+
+### Running SAST Locally
+
+**Install SAST tools:**
+```bash
+# Gosec and govulncheck (auto-installed by make targets)
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+go install golang.org/x/vuln/cmd/govulncheck@latest
+
+# Trivy
+brew install trivy              # macOS
+# Linux: https://aquasecurity.github.io/trivy/latest/getting-started/installation/
+
+# Semgrep
+brew install semgrep            # macOS
+pip install semgrep             # Linux/Windows
+```
+
+**Run SAST scans:**
+```bash
+# Run all SAST scans
+make sast
+
+# Run individual scanners
+make sast-gosec         # Gosec only
+make sast-govulncheck   # govulncheck only
+make sast-trivy         # Trivy only
+make sast-semgrep       # Semgrep only
+
+# Clean reports
+make sast-clean
+```
+
+**Reports Location:**
+- Local reports: `.sast-reports/` directory (ignored by git)
+- GitHub Security: Code scanning alerts in repository Security tab
+
+### Testing GitHub Actions Locally
+
+Use `act` to run GitHub Actions workflows locally before pushing:
+
+```bash
+# Install act
+brew install act                # macOS
+# Linux/Windows: https://github.com/nektos/act#installation
+
+# List all workflows
+make act-list
+
+# Run specific workflows
+make act-ci        # Run CI workflow locally
+make act-sast      # Run SAST workflow locally
+make act-lint      # Run commitlint workflow locally
+```
+
+### SAST Configuration
+
+**Workflow File:** [`.github/workflows/sast.yaml`](.github/workflows/sast.yaml)
+
+**act Configuration:** [`.actrc`](.actrc) - Configuration for running actions locally
+
+### Interpreting Results
+
+**Severity Levels:**
+- **CRITICAL**: Immediate action required (e.g., RCE, SQL injection)
+- **HIGH**: Important vulnerabilities (e.g., XSS, path traversal)
+- **MEDIUM**: Security improvements (e.g., weak crypto, information disclosure)
+- **LOW**: Best practice violations
+
+**Where to View Results:**
+1. **GitHub Security Tab**: Navigate to repository → Security → Code scanning alerts
+2. **Pull Request Checks**: SAST results appear as PR check status
+3. **Local Reports**: JSON and SARIF files in `.sast-reports/`
+
+### SAST Best Practices
+
+1. **Fix Issues Early**: Address CRITICAL and HIGH severity issues before merging
+2. **Review Dependencies**: Run `make sast-govulncheck` after dependency updates
+3. **False Positives**: Document false positives with inline comments
+4. **Continuous Scanning**: SAST runs automatically on every push and weekly
+5. **Local Testing**: Run `make sast` before committing significant changes
+
+### Common Security Issues Detected
+
+**Gosec:**
+- G101: Hardcoded credentials
+- G104: Unhandled errors
+- G204: Command injection
+- G401: Weak crypto (MD5, SHA1)
+
+**govulncheck:**
+- Known CVEs in dependencies
+- Vulnerable code paths in use
+
+**Trivy:**
+- Dependency vulnerabilities
+- Misconfigurations
+- License issues
+
+**Semgrep:**
+- OWASP Top 10 violations
+- Security anti-patterns
+- Best practice violations
 
 ## Incident Response
 

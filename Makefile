@@ -135,6 +135,112 @@ vuln: ## Check for vulnerabilities
 
 check: fmt vet lint sec vuln test ## Run all checks
 
+# SAST security scanning targets
+sast: ## Run all SAST security scans locally
+	@echo "Running all SAST security scans..."
+	@$(MAKE) sast-gosec
+	@$(MAKE) sast-govulncheck
+	@$(MAKE) sast-trivy
+	@$(MAKE) sast-semgrep
+	@echo "✅ All SAST scans complete"
+
+sast-gosec: ## Run Gosec security scanner
+	@echo "Running Gosec security scanner..."
+	@if ! command -v gosec &> /dev/null; then \
+		echo "Installing gosec..."; \
+		go install github.com/securego/gosec/v2/cmd/gosec@latest; \
+	fi
+	@mkdir -p .sast-reports
+	@$(shell go env GOPATH)/bin/gosec -fmt json -out .sast-reports/gosec.json ./... || true
+	@$(shell go env GOPATH)/bin/gosec -fmt sarif -out .sast-reports/gosec.sarif ./... || true
+	@$(shell go env GOPATH)/bin/gosec ./...
+	@echo "Gosec report saved to .sast-reports/gosec.json and .sast-reports/gosec.sarif"
+
+sast-govulncheck: ## Run govulncheck for vulnerability scanning
+	@echo "Running govulncheck..."
+	@if ! command -v govulncheck &> /dev/null; then \
+		echo "Installing govulncheck..."; \
+		go install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@mkdir -p .sast-reports
+	@$(shell go env GOPATH)/bin/govulncheck -json ./... > .sast-reports/govulncheck.json || true
+	@$(shell go env GOPATH)/bin/govulncheck ./...
+	@echo "govulncheck report saved to .sast-reports/govulncheck.json"
+
+sast-trivy: ## Run Trivy filesystem scanner
+	@echo "Running Trivy filesystem scanner..."
+	@if ! command -v trivy &> /dev/null; then \
+		echo "Trivy not found. Please install it:"; \
+		echo "  macOS: brew install trivy"; \
+		echo "  Linux: https://aquasecurity.github.io/trivy/latest/getting-started/installation/"; \
+		exit 1; \
+	fi
+	@mkdir -p .sast-reports
+	@trivy fs --format json --output .sast-reports/trivy.json . || true
+	@trivy fs --format sarif --output .sast-reports/trivy.sarif . || true
+	@trivy fs --severity CRITICAL,HIGH,MEDIUM .
+	@echo "Trivy report saved to .sast-reports/trivy.json and .sast-reports/trivy.sarif"
+
+sast-semgrep: ## Run Semgrep security scanner
+	@echo "Running Semgrep security scanner..."
+	@if ! command -v semgrep &> /dev/null; then \
+		echo "Semgrep not found. Please install it:"; \
+		echo "  macOS: brew install semgrep"; \
+		echo "  Linux: pip install semgrep"; \
+		exit 1; \
+	fi
+	@mkdir -p .sast-reports
+	@semgrep scan --config=auto --json --output=.sast-reports/semgrep.json . || true
+	@semgrep scan --config=auto --sarif --output=.sast-reports/semgrep.sarif . || true
+	@semgrep scan --config=auto --severity=ERROR --severity=WARNING .
+	@echo "Semgrep report saved to .sast-reports/semgrep.json and .sast-reports/semgrep.sarif"
+
+sast-clean: ## Clean SAST reports
+	@echo "Cleaning SAST reports..."
+	@rm -rf .sast-reports
+	@echo "SAST reports cleaned"
+
+# GitHub Actions local testing with act
+act-list: ## List all GitHub Actions workflows
+	@echo "Listing GitHub Actions workflows..."
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Please install it:"; \
+		echo "  macOS: brew install act"; \
+		echo "  Linux: https://github.com/nektos/act#installation"; \
+		exit 1; \
+	fi
+	@act -l
+
+act-ci: ## Run CI workflow locally with act
+	@echo "Running CI workflow locally..."
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Please install it:"; \
+		echo "  macOS: brew install act"; \
+		echo "  Linux: https://github.com/nektos/act#installation"; \
+		exit 1; \
+	fi
+	@act push -W .github/workflows/ci.yaml
+
+act-sast: ## Run SAST workflow locally with act
+	@echo "Running SAST workflow locally..."
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Please install it:"; \
+		echo "  macOS: brew install act"; \
+		echo "  Linux: https://github.com/nektos/act#installation"; \
+		exit 1; \
+	fi
+	@act push -W .github/workflows/sast.yaml
+
+act-lint: ## Run commitlint workflow locally with act
+	@echo "Running commitlint workflow locally..."
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Please install it:"; \
+		echo "  macOS: brew install act"; \
+		echo "  Linux: https://github.com/nektos/act#installation"; \
+		exit 1; \
+	fi
+	@act pull_request -W .github/workflows/commitlint.yaml
+
 # Installation targets
 install: build ## Install the binary
 	@echo "Installing $(BINARY_NAME)..."
