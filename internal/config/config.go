@@ -28,6 +28,11 @@ type Config struct {
 	MaxIdleConns    int           `json:"max_idle_conns"`
 	IdleConnTimeout time.Duration `json:"idle_conn_timeout"`
 
+	// Operation-Specific Timeouts
+	QueryTimeout          time.Duration `json:"query_timeout"`           // Timeout for synchronous queries (default: 60s)
+	BackgroundPollTimeout time.Duration `json:"background_poll_timeout"` // Timeout for background query status checks (default: 10s)
+	BulkOperationTimeout  time.Duration `json:"bulk_operation_timeout"`  // Timeout for bulk operations (default: 120s)
+
 	// Rate Limiting
 	RateLimit       int  `json:"rate_limit"`       // requests per second
 	RateLimitBurst  int  `json:"rate_limit_burst"` // burst size
@@ -35,6 +40,11 @@ type Config struct {
 
 	// Security
 	TLSVerify bool `json:"tls_verify"`
+
+	// Observability
+	EnableTracing   bool `json:"enable_tracing"`   // Enable distributed tracing (default: true)
+	EnableAuditLog  bool `json:"enable_audit_log"` // Enable audit logging (default: true)
+	MetricsEndpoint bool `json:"metrics_endpoint"` // Enable Prometheus metrics endpoint (default: false)
 
 	// Logging
 	LogLevel  string `json:"log_level"`
@@ -57,6 +67,14 @@ func Load() (*Config, error) {
 		TLSVerify:       true,
 		LogLevel:        "info",
 		LogFormat:       "json",
+		// Operation-specific timeouts
+		QueryTimeout:          60 * time.Second,
+		BackgroundPollTimeout: 10 * time.Second,
+		BulkOperationTimeout:  120 * time.Second,
+		// Observability defaults
+		EnableTracing:   true,
+		EnableAuditLog:  true,
+		MetricsEndpoint: false,
 	}
 
 	// Try to load from config file if specified
@@ -113,6 +131,21 @@ func loadFromEnv(cfg *Config) {
 			cfg.Timeout = d
 		}
 	}
+	if v := os.Getenv("LOGS_QUERY_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.QueryTimeout = d
+		}
+	}
+	if v := os.Getenv("LOGS_BACKGROUND_POLL_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.BackgroundPollTimeout = d
+		}
+	}
+	if v := os.Getenv("LOGS_BULK_OPERATION_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.BulkOperationTimeout = d
+		}
+	}
 	if v := os.Getenv("LOGS_MAX_RETRIES"); v != "" {
 		var retries int
 		if _, err := fmt.Sscanf(v, "%d", &retries); err == nil {
@@ -136,6 +169,15 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOGS_TLS_VERIFY"); v != "" {
 		cfg.TLSVerify = v == "true" || v == "1"
+	}
+	if v := os.Getenv("LOGS_ENABLE_TRACING"); v != "" {
+		cfg.EnableTracing = v == "true" || v == "1"
+	}
+	if v := os.Getenv("LOGS_ENABLE_AUDIT_LOG"); v != "" {
+		cfg.EnableAuditLog = v == "true" || v == "1"
+	}
+	if v := os.Getenv("LOGS_METRICS_ENDPOINT"); v != "" {
+		cfg.MetricsEndpoint = v == "true" || v == "1"
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
@@ -177,7 +219,23 @@ func (c *Config) Validate() error {
 func (c *Config) Redact() *Config {
 	redacted := *c
 	if redacted.APIKey != "" {
-		redacted.APIKey = "***REDACTED***"
+		// Show first 4 and last 4 characters for debugging, fully mask short keys
+		if len(redacted.APIKey) > 8 {
+			redacted.APIKey = redacted.APIKey[:4] + "..." + redacted.APIKey[len(redacted.APIKey)-4:]
+		} else {
+			redacted.APIKey = "***REDACTED***"
+		}
 	}
 	return &redacted
+}
+
+// MaskAPIKey returns a masked version of an API key for safe logging
+func MaskAPIKey(apiKey string) string {
+	if apiKey == "" {
+		return ""
+	}
+	if len(apiKey) <= 8 {
+		return "***"
+	}
+	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
 }

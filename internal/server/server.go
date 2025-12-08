@@ -180,6 +180,11 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewUpdateStreamTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewDeleteStreamTool(s.apiClient, s.logger))
 
+	// AI Helper tools
+	s.registerTool(tools.NewExplainQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSuggestAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetAuditLogTool(s.apiClient, s.logger))
+
 	s.logger.Info("Registered all MCP tools")
 	return nil
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/tareqmamari/logs-mcp-server/internal/auth"
 	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/tracing"
 )
 
 // Authenticator is the interface for adding authentication to requests
@@ -36,6 +37,15 @@ type Client struct {
 	rateLimiter   *rate.Limiter
 	authenticator Authenticator
 	version       string
+	enableTracing bool
+}
+
+// RateLimitInfo contains information about the current rate limit state
+type RateLimitInfo struct {
+	Limit     int     `json:"limit"`     // Requests per second limit
+	Burst     int     `json:"burst"`     // Burst size
+	Available float64 `json:"available"` // Currently available tokens
+	Enabled   bool    `json:"enabled"`   // Whether rate limiting is enabled
 }
 
 // New creates a new API client
@@ -89,7 +99,23 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error
 		rateLimiter:   rateLimiter,
 		authenticator: authenticator,
 		version:       version,
+		enableTracing: cfg.EnableTracing,
 	}, nil
+}
+
+// GetRateLimitInfo returns information about the current rate limit state
+func (c *Client) GetRateLimitInfo() RateLimitInfo {
+	info := RateLimitInfo{
+		Limit:   c.config.RateLimit,
+		Burst:   c.config.RateLimitBurst,
+		Enabled: c.config.EnableRateLimit,
+	}
+
+	if c.rateLimiter != nil {
+		info.Available = float64(c.rateLimiter.Tokens())
+	}
+
+	return info
 }
 
 // Request represents an HTTP request
@@ -211,7 +237,19 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	}
 	httpReq.Header.Set("User-Agent", fmt.Sprintf("logs-mcp-server/%s", c.version))
 
-	// Add idempotency key if provided
+	// Add tracing headers if enabled
+	if c.enableTracing {
+		traceInfo := tracing.FromContext(ctx)
+		if traceInfo.TraceID == "" {
+			// Generate new trace if not present
+			traceInfo = tracing.NewTraceInfo()
+		}
+		for k, v := range traceInfo.Headers() {
+			httpReq.Header.Set(k, v)
+		}
+	}
+
+	// Add idempotency key if provided (overrides trace-generated request ID)
 	if req.RequestID != "" {
 		httpReq.Header.Set("X-Request-ID", req.RequestID)
 		// Some APIs use Idempotency-Key header for POST/PUT operations
