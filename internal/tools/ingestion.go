@@ -37,12 +37,22 @@ func (t *IngestLogsTool) Name() string {
 
 // Description returns a human-readable description of the tool.
 func (t *IngestLogsTool) Description() string {
-	return "Ingest, push, or add log entries to IBM Cloud Logs for real-time log ingestion"
+	return `Ingest, push, or add log entries to IBM Cloud Logs for real-time log ingestion.
+
+**Related tools:** query_logs (verify ingested logs), list_policies (check routing), list_enrichments (see applied enrichments)
+
+**Severity Levels:**
+- 1: Debug - Detailed debugging information
+- 2: Verbose - Verbose output for troubleshooting
+- 3: Info - Informational messages (default)
+- 4: Warning - Warning conditions
+- 5: Error - Error conditions
+- 6: Critical - Critical/fatal conditions`
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
 // Required fields: logs (array of log entries)
-// Each log entry must have: applicationName, subsystemName, severity, text
+// Each log entry must have: applicationName (or namespace), subsystemName (or component), severity, text
 // Optional fields: timestamp, json
 func (t *IngestLogsTool) InputSchema() interface{} {
 	return map[string]interface{}{
@@ -56,11 +66,19 @@ func (t *IngestLogsTool) InputSchema() interface{} {
 					"properties": map[string]interface{}{
 						"applicationName": map[string]interface{}{
 							"type":        "string",
-							"description": "Name of the application generating the log",
+							"description": "Name of the application generating the log (aliases: namespace, app, application, service)",
+						},
+						"namespace": map[string]interface{}{
+							"type":        "string",
+							"description": "Alias for applicationName - the namespace/application generating the log",
 						},
 						"subsystemName": map[string]interface{}{
 							"type":        "string",
-							"description": "Name of the subsystem within the application",
+							"description": "Name of the subsystem within the application (aliases: component, resource, module)",
+						},
+						"component": map[string]interface{}{
+							"type":        "string",
+							"description": "Alias for subsystemName - the component/resource within the application",
 						},
 						"severity": map[string]interface{}{
 							"type":        "integer",
@@ -81,7 +99,7 @@ func (t *IngestLogsTool) InputSchema() interface{} {
 							"description": "Optional JSON object containing structured log data",
 						},
 					},
-					"required": []string{"applicationName", "subsystemName", "severity", "text"},
+					"required": []string{"severity", "text"},
 				},
 			},
 		},
@@ -113,12 +131,34 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 			return NewToolResultError("each log entry must be an object"), nil
 		}
 
-		// Validate required fields
+		// Resolve applicationName aliases (namespace, app, application, service)
 		if _, exists := logEntry["applicationName"]; !exists {
-			return NewToolResultError("log entry missing required field: applicationName"), nil
+			for _, alias := range []string{"namespace", "app", "application", "service", "app_name", "application_name"} {
+				if val, exists := logEntry[alias]; exists {
+					logEntry["applicationName"] = val
+					delete(logEntry, alias) // Remove alias to avoid sending duplicate fields
+					break
+				}
+			}
+		}
+
+		// Resolve subsystemName aliases (component, resource, module)
+		if _, exists := logEntry["subsystemName"]; !exists {
+			for _, alias := range []string{"component", "resource", "subsystem", "module", "component_name", "subsystem_name", "resource_name"} {
+				if val, exists := logEntry[alias]; exists {
+					logEntry["subsystemName"] = val
+					delete(logEntry, alias) // Remove alias to avoid sending duplicate fields
+					break
+				}
+			}
+		}
+
+		// Validate required fields after alias resolution
+		if _, exists := logEntry["applicationName"]; !exists {
+			return NewToolResultError("log entry missing required field: applicationName (or alias: namespace, app, application, service)"), nil
 		}
 		if _, exists := logEntry["subsystemName"]; !exists {
-			return NewToolResultError("log entry missing required field: subsystemName"), nil
+			return NewToolResultError("log entry missing required field: subsystemName (or alias: component, resource, module)"), nil
 		}
 		if _, exists := logEntry["severity"]; !exists {
 			return NewToolResultError("log entry missing required field: severity"), nil
@@ -157,5 +197,5 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "ingest_logs")
 }

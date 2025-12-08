@@ -59,10 +59,10 @@ func (t *GetAlertTool) Execute(ctx context.Context, arguments map[string]interfa
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Alert", id, "list_alerts"), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "get_alert")
 }
 
 // ListAlertsTool lists all alerts
@@ -84,7 +84,9 @@ func (t *ListAlertsTool) Name() string {
 
 // Description returns the tool description
 func (t *ListAlertsTool) Description() string {
-	return "List all alerts in IBM Cloud Logs"
+	return `List all alerts in IBM Cloud Logs.
+
+**Related tools:** get_alert, create_alert, update_alert, delete_alert, list_alert_definitions, list_outgoing_webhooks`
 }
 
 // InputSchema returns the input schema
@@ -127,7 +129,7 @@ func (t *ListAlertsTool) Execute(ctx context.Context, arguments map[string]inter
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "list_alerts")
 }
 
 // CreateAlertTool creates a new alert
@@ -149,7 +151,14 @@ func (t *CreateAlertTool) Name() string {
 
 // Description returns the tool description
 func (t *CreateAlertTool) Description() string {
-	return "Create a new alert in IBM Cloud Logs"
+	return `Create a new alert in IBM Cloud Logs linking an alert definition to notification webhooks.
+
+**Related tools:** list_alerts, get_alert, list_alert_definitions, create_alert_def, list_outgoing_webhooks, create_outgoing_webhook
+
+**Prerequisites:**
+1. Create an alert definition (create_alert_def) to define the trigger condition
+2. Create an outgoing webhook (create_outgoing_webhook) for notifications
+3. Use this tool to link them together`
 }
 
 // InputSchema returns the input schema
@@ -184,7 +193,7 @@ func (t *CreateAlertTool) Execute(ctx context.Context, arguments map[string]inte
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "create_alert")
 }
 
 // UpdateAlertTool updates an existing alert
@@ -250,7 +259,7 @@ func (t *UpdateAlertTool) Execute(ctx context.Context, arguments map[string]inte
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_alert")
 }
 
 // DeleteAlertTool deletes an alert
@@ -306,5 +315,5 @@ func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]inte
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "delete_alert")
 }

@@ -52,7 +52,7 @@ func (t *ListDashboardFoldersTool) Execute(ctx context.Context, _ map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "list_dashboard_folders")
 }
 
 // GetDashboardFolderTool gets a specific dashboard folder by ID.
@@ -105,10 +105,10 @@ func (t *GetDashboardFolderTool) Execute(ctx context.Context, arguments map[stri
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Dashboard folder", folderID, "list_dashboard_folders"), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "get_dashboard_folder")
 }
 
 // CreateDashboardFolderTool creates a new dashboard folder.
@@ -177,7 +177,7 @@ func (t *CreateDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "create_dashboard_folder")
 }
 
 // UpdateDashboardFolderTool updates a dashboard folder.
@@ -255,7 +255,7 @@ func (t *UpdateDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_dashboard_folder")
 }
 
 // DeleteDashboardFolderTool deletes a dashboard folder.
@@ -311,7 +311,7 @@ func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "delete_dashboard_folder")
 }
 
 // MoveDashboardToFolderTool moves a dashboard to a specific folder.
@@ -376,7 +376,7 @@ func (t *MoveDashboardToFolderTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "move_dashboard_to_folder")
 }
 
 // PinDashboardTool pins a dashboard for quick access.
@@ -432,7 +432,7 @@ func (t *PinDashboardTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "pin_dashboard")
 }
 
 // UnpinDashboardTool unpins a dashboard.
@@ -488,7 +488,7 @@ func (t *UnpinDashboardTool) Execute(ctx context.Context, arguments map[string]i
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "unpin_dashboard")
 }
 
 // SetDefaultDashboardTool sets a dashboard as the default.
@@ -544,5 +544,5 @@ func (t *SetDefaultDashboardTool) Execute(ctx context.Context, arguments map[str
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "set_default_dashboard")
 }

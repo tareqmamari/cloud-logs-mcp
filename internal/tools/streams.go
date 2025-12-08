@@ -52,7 +52,7 @@ func (t *ListStreamsTool) Execute(ctx context.Context, _ map[string]interface{})
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "list_streams")
 }
 
 // GetStreamTool gets a specific stream by ID
@@ -126,13 +126,13 @@ func (t *GetStreamTool) Execute(ctx context.Context, arguments map[string]interf
 				}
 
 				if id == streamID {
-					return t.FormatResponse(streamMap)
+					return t.FormatResponseWithSuggestions(streamMap, "get_stream")
 				}
 			}
 		}
 	}
 
-	return NewToolResultError("Stream not found with ID: " + streamID), nil
+	return NewResourceNotFoundError("Stream", streamID, "list_streams"), nil
 }
 
 // CreateStreamTool creates a new stream
@@ -239,7 +239,7 @@ func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "create_stream")
 }
 
 // UpdateStreamTool updates an existing stream
@@ -352,7 +352,7 @@ func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_stream")
 }
 
 // DeleteStreamTool deletes a stream
@@ -408,5 +408,5 @@ func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "delete_stream")
 }
