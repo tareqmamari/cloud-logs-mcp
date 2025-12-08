@@ -91,7 +91,7 @@ func NewTestContext(t *testing.T) *TestContext {
 	}
 
 	// Create client
-	apiClient, err := client.New(cfg, logger)
+	apiClient, err := client.New(cfg, logger, "test")
 	require.NoError(t, err, "Failed to create API client")
 
 	return &TestContext{
