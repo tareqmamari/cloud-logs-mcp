@@ -18,13 +18,13 @@ func TestNewAuthenticator(t *testing.T) {
 	}{
 		{
 			name:    "valid API key",
-			apiKey:  "test-api-key-12345",
+			apiKey:  "test-api-key-12345", //nolint:gosec // test value, not a real secret
 			iamURL:  "",
 			wantErr: false,
 		},
 		{
 			name:    "valid API key with custom IAM URL",
-			apiKey:  "test-api-key-12345",
+			apiKey:  "test-api-key-12345", //nolint:gosec // test value, not a real secret
 			iamURL:  "https://iam.test.cloud.ibm.com",
 			wantErr: false,
 		},
