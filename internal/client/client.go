@@ -6,10 +6,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -19,22 +23,29 @@ import (
 	"github.com/tareqmamari/logs-mcp-server/internal/config"
 )
 
+// Authenticator is the interface for adding authentication to requests
+type Authenticator interface {
+	Authenticate(req *http.Request) error
+}
+
 // Client is an HTTP client for the IBM Cloud Logs API
 type Client struct {
 	httpClient    *http.Client
 	config        *config.Config
 	logger        *zap.Logger
 	rateLimiter   *rate.Limiter
-	authenticator *auth.Authenticator
+	authenticator Authenticator
+	version       string
 }
 
 // New creates a new API client
-func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
+func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error) {
 	// Create IBM Cloud authenticator
 	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
+
 	// Configure TLS with secure defaults
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12, // Enforce minimum TLS 1.2
@@ -44,6 +55,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 	// By default, cfg.TLSVerify is true, so verification is enabled
 	if !cfg.TLSVerify {
 		tlsConfig.InsecureSkipVerify = true
+		logger.Warn("TLS certificate verification is DISABLED - this is insecure and should only be used for testing",
+			zap.String("service_url", cfg.ServiceURL),
+		)
 	}
 
 	transport := &http.Transport{
@@ -63,12 +77,18 @@ func New(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 		rateLimiter = rate.NewLimiter(rate.Limit(cfg.RateLimit), cfg.RateLimitBurst)
 	}
 
+	// Use provided version or default to "dev"
+	if version == "" {
+		version = "dev"
+	}
+
 	return &Client{
 		httpClient:    httpClient,
 		config:        cfg,
 		logger:        logger,
 		rateLimiter:   rateLimiter,
 		authenticator: authenticator,
+		version:       version,
 	}, nil
 }
 
@@ -81,6 +101,7 @@ type Request struct {
 	Headers        map[string]string
 	RequestID      string // Optional client-provided request ID for idempotency
 	UseIngressHost bool   // Use ingress endpoint instead of API endpoint for log ingestion
+	AcceptSSE      bool   // Use text/event-stream Accept header for streaming responses (e.g., sync queries)
 }
 
 // Response represents an HTTP response
@@ -155,17 +176,14 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		baseURL = convertToIngressURL(baseURL)
 	}
 
-	url := fmt.Sprintf("%s%s", baseURL, req.Path)
+	// Build URL with proper encoding
+	requestURL := fmt.Sprintf("%s%s", baseURL, req.Path)
 	if len(req.Query) > 0 {
-		url += "?"
-		first := true
+		params := url.Values{}
 		for k, v := range req.Query {
-			if !first {
-				url += "&"
-			}
-			url += fmt.Sprintf("%s=%s", k, v)
-			first = false
+			params.Add(k, v)
 		}
+		requestURL = fmt.Sprintf("%s?%s", requestURL, params.Encode())
 	}
 
 	// Prepare body
@@ -179,15 +197,19 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, req.Method, url, bodyReader)
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, requestURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("User-Agent", "logs-mcp-server/0.1.0")
+	if req.AcceptSSE {
+		httpReq.Header.Set("Accept", "text/event-stream")
+	} else {
+		httpReq.Header.Set("Accept", "application/json")
+	}
+	httpReq.Header.Set("User-Agent", fmt.Sprintf("logs-mcp-server/%s", c.version))
 
 	// Add idempotency key if provided
 	if req.RequestID != "" {
@@ -210,7 +232,7 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	// Execute request
 	c.logger.Debug("Executing HTTP request",
 		zap.String("method", req.Method),
-		zap.String("url", url),
+		zap.String("url", requestURL),
 	)
 
 	startTime := time.Now()
@@ -221,7 +243,7 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		c.logger.Error("HTTP request failed",
 			zap.Error(err),
 			zap.String("method", req.Method),
-			zap.String("url", url),
+			zap.String("url", requestURL),
 			zap.Duration("duration", duration),
 		)
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -240,7 +262,7 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 
 	c.logger.Debug("HTTP request completed",
 		zap.String("method", req.Method),
-		zap.String("url", url),
+		zap.String("url", requestURL),
 		zap.Int("status", httpResp.StatusCode),
 		zap.Duration("duration", duration),
 		zap.Int("response_size", len(body)),
@@ -260,10 +282,64 @@ func convertToIngressURL(apiURL string) string {
 	return strings.Replace(apiURL, ".api.", ".ingress.", 1)
 }
 
-// isRetryable determines if an error is retryable
-func isRetryable(_ error) bool {
-	// Network errors are retryable
-	return true
+// isRetryable determines if an error is retryable (transient network errors)
+func isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for context cancellation - not retryable
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	// Check for network-related errors that are typically transient
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		// Timeout errors are retryable
+		if netErr.Timeout() {
+			return true
+		}
+	}
+
+	// Check for specific syscall errors that indicate transient network issues
+	var syscallErr *net.OpError
+	if errors.As(err, &syscallErr) {
+		// Connection refused, reset, or network unreachable are retryable
+		if errors.Is(syscallErr.Err, syscall.ECONNREFUSED) ||
+			errors.Is(syscallErr.Err, syscall.ECONNRESET) ||
+			errors.Is(syscallErr.Err, syscall.ENETUNREACH) ||
+			errors.Is(syscallErr.Err, syscall.EHOSTUNREACH) ||
+			errors.Is(syscallErr.Err, syscall.ETIMEDOUT) {
+			return true
+		}
+	}
+
+	// Check for DNS errors - temporary DNS failures are retryable
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.Temporary()
+	}
+
+	// Check error message for common transient patterns
+	errStr := err.Error()
+	transientPatterns := []string{
+		"connection reset",
+		"connection refused",
+		"no such host",
+		"network is unreachable",
+		"i/o timeout",
+		"TLS handshake timeout",
+		"EOF",
+	}
+	for _, pattern := range transientPatterns {
+		if strings.Contains(strings.ToLower(errStr), strings.ToLower(pattern)) {
+			return true
+		}
+	}
+
+	// Default: don't retry unknown errors to avoid retrying permanent failures
+	return false
 }
 
 // shouldRetry determines if an HTTP status code should trigger a retry
