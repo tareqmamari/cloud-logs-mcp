@@ -111,7 +111,7 @@ func (t *QueryTool) Description() string {
 **Example queries:**
 - Filter by app: source logs | filter $l.applicationname == 'my-app'
 - Filter by severity: source logs | filter $m.severity >= 5
-- Search text: source logs | filter $d.text ~~ 'error'
+- Search text: source logs | filter $d.message.contains('error')
 - Combined: source logs | filter $l.applicationname == 'api' && $m.severity >= 4
 
 Use this tool for:

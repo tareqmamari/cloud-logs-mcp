@@ -306,7 +306,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "auth_failures",
 			Category:    "security",
 			Description: "Find authentication failures grouped by source",
-			Query:       "source logs | filter $d.event_type == 'auth_failure' || $d.message ~~ 'authentication failed' || $d.message ~~ 'invalid credentials' | groupby $d.source_ip, $d.username calculate count() as failures | filter failures > 3 | sortby -failures",
+			Query:       "source logs | filter $d.event_type == 'auth_failure' || $d.message.contains('authentication failed') || $d.message.contains('invalid credentials') | groupby $d.source_ip, $d.username calculate count() as failures | filter failures > 3 | sortby -failures",
 			UseCases: []string{
 				"Detect brute force attempts",
 				"Identify compromised accounts",
@@ -322,7 +322,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "privilege_escalation",
 			Category:    "security",
 			Description: "Detect privilege escalation attempts",
-			Query:       "source logs | filter $d.event_type ~~ 'privilege' || $d.message ~~ 'sudo' || $d.message ~~ 'root access' || $d.message ~~ 'admin' | select $m.timestamp, $l.applicationname, $d.username, $d.action, $d.message | sortby -$m.timestamp | limit 100",
+			Query:       "source logs | filter $d.event_type.contains('privilege') || $d.message.contains('sudo') || $d.message.contains('root access') || $d.message.contains('admin') | select $m.timestamp, $l.applicationname, $d.username, $d.action, $d.message | sortby -$m.timestamp | limit 100",
 			UseCases: []string{
 				"Detect unauthorized privilege changes",
 				"Audit admin actions",
@@ -338,7 +338,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "sensitive_data_access",
 			Category:    "security",
 			Description: "Track access to sensitive resources",
-			Query:       "source logs | filter $d.resource ~~ 'pii' || $d.resource ~~ 'secrets' || $d.resource ~~ 'credentials' || $d.endpoint ~~ '/admin' | select $m.timestamp, $d.username, $d.resource, $d.action, $d.source_ip | sortby -$m.timestamp | limit 100",
+			Query:       "source logs | filter $d.resource.contains('pii') || $d.resource.contains('secrets') || $d.resource.contains('credentials') || $d.endpoint.contains('/admin') | select $m.timestamp, $d.username, $d.resource, $d.action, $d.source_ip | sortby -$m.timestamp | limit 100",
 			UseCases: []string{
 				"PII access auditing",
 				"Secrets management monitoring",
@@ -388,7 +388,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "restart_detection",
 			Category:    "health",
 			Description: "Detect service restarts and crashes",
-			Query:       "source logs | filter $d.message ~~ 'starting' || $d.message ~~ 'started' || $d.message ~~ 'shutdown' || $d.message ~~ 'terminated' || $d.message ~~ 'OOMKilled' | select $m.timestamp, $l.applicationname, $l.pod, $d.message | sortby -$m.timestamp | limit 50",
+			Query:       "source logs | filter $d.message.contains('starting') || $d.message.contains('started') || $d.message.contains('shutdown') || $d.message.contains('terminated') || $d.message.contains('OOMKilled') | select $m.timestamp, $l.applicationname, $l.pod, $d.message | sortby -$m.timestamp | limit 50",
 			UseCases: []string{
 				"Detect crash loops",
 				"Track deployment rollouts",
@@ -456,7 +456,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "config_changes",
 			Category:    "audit",
 			Description: "Track configuration changes",
-			Query:       "source logs | filter $d.event_type ~~ 'config' || $d.message ~~ 'configuration changed' || $d.message ~~ 'settings updated' | select $m.timestamp, $d.username, $d.resource, $d.old_value, $d.new_value, $d.message | sortby -$m.timestamp | limit 100",
+			Query:       "source logs | filter $d.event_type.contains('config') || $d.message.contains('configuration changed') || $d.message.contains('settings updated') | select $m.timestamp, $d.username, $d.resource, $d.old_value, $d.new_value, $d.message | sortby -$m.timestamp | limit 100",
 			UseCases: []string{
 				"Change management audit",
 				"Troubleshoot config-related issues",
@@ -472,7 +472,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "data_exports",
 			Category:    "audit",
 			Description: "Track data export activities",
-			Query:       "source logs | filter $d.action ~~ 'export' || $d.action ~~ 'download' || $d.message ~~ 'exported' | select $m.timestamp, $d.username, $d.resource, $d.record_count, $d.destination | sortby -$m.timestamp | limit 100",
+			Query:       "source logs | filter $d.action.contains('export') || $d.action.contains('download') || $d.message.contains('exported') | select $m.timestamp, $d.username, $d.resource, $d.record_count, $d.destination | sortby -$m.timestamp | limit 100",
 			UseCases: []string{
 				"Data loss prevention",
 				"Compliance auditing",

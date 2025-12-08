@@ -32,7 +32,7 @@ func TestBuildQueryTool_Execute(t *testing.T) {
 				"text_search": "connection timeout",
 			},
 			wantInLucene: []string{`"connection timeout"`},
-			wantInDP:     []string{"$d.text ~~ 'connection timeout'"},
+			wantInDP:     []string{"$d.message.contains('connection timeout')"},
 		},
 		{
 			name: "single application filter",
@@ -100,7 +100,7 @@ func TestBuildQueryTool_Execute(t *testing.T) {
 				"exclude_text": "health check",
 			},
 			wantInLucene: []string{"error", `NOT "health check"`},
-			wantInDP:     []string{"$d.text ~~ 'error'", "$d.text !~~ 'health check'"},
+			wantInDP:     []string{"$d.message.contains('error')", "NOT $d.message.contains('health check')"},
 		},
 		{
 			name: "combined filters",
@@ -110,7 +110,7 @@ func TestBuildQueryTool_Execute(t *testing.T) {
 				"min_severity": "warning",
 			},
 			wantInLucene: []string{"failed", "applicationname:payment-service", "severity:>=4"},
-			wantInDP:     []string{"$d.text ~~ 'failed'", "$l.applicationname == 'payment-service'", "$m.severity >= 4"},
+			wantInDP:     []string{"$d.message.contains('failed')", "$l.applicationname == 'payment-service'", "$m.severity >= 4"},
 		},
 	}
 

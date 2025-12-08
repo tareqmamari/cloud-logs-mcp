@@ -334,14 +334,14 @@ func (t *BuildQueryTool) buildLuceneQuery(textSearch, excludeText string, applic
 func (t *BuildQueryTool) buildDataPrimeQuery(textSearch, excludeText string, applications, subsystems, severities []string, minSeverity string, fields []fieldFilter) string {
 	var filters []string
 
-	// Text search - DataPrime uses $d.text for log message content
+	// Text search - DataPrime uses contains() for substring matching
 	if textSearch != "" {
-		filters = append(filters, fmt.Sprintf(`$d.text ~~ '%s'`, escapeDataPrimeString(textSearch)))
+		filters = append(filters, fmt.Sprintf(`$d.message.contains('%s')`, escapeDataPrimeString(textSearch)))
 	}
 
-	// Exclude text
+	// Exclude text - use NOT contains()
 	if excludeText != "" {
-		filters = append(filters, fmt.Sprintf(`$d.text !~~ '%s'`, escapeDataPrimeString(excludeText)))
+		filters = append(filters, fmt.Sprintf(`NOT $d.message.contains('%s')`, escapeDataPrimeString(excludeText)))
 	}
 
 	// Applications filter
