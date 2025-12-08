@@ -51,7 +51,7 @@ func (t *GetEventStreamTargetsTool) Execute(ctx context.Context, _ map[string]in
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "get_event_stream_targets")
 }
 
 // CreateEventStreamTargetTool creates a new event stream target
@@ -158,7 +158,7 @@ func (t *CreateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "create_event_stream_target")
 }
 
 // UpdateEventStreamTargetTool updates an existing event stream target
@@ -264,7 +264,7 @@ func (t *UpdateEventStreamTargetTool) Execute(ctx context.Context, arguments map
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_event_stream_target")
 }
 
 // DeleteEventStreamTargetTool deletes an event stream target
@@ -320,5 +320,5 @@ func (t *DeleteEventStreamTargetTool) Execute(ctx context.Context, arguments map
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "delete_event_stream_target")
 }

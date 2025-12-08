@@ -51,7 +51,7 @@ func (t *ExportDataUsageTool) Execute(ctx context.Context, _ map[string]interfac
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "export_data_usage")
 }
 
 // UpdateDataUsageMetricsExportStatusTool updates the data usage metrics export status
@@ -110,5 +110,5 @@ func (t *UpdateDataUsageMetricsExportStatusTool) Execute(ctx context.Context, ar
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_data_usage_metrics_export_status")
 }

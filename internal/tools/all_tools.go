@@ -35,7 +35,7 @@ func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interfac
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/rule_groups/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Rule group", id, "list_rule_groups"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -52,7 +52,11 @@ func NewListRuleGroupsTool(c *client.Client, l *zap.Logger) *ListRuleGroupsTool 
 func (t *ListRuleGroupsTool) Name() string { return "list_rule_groups" }
 
 // Description returns the tool description
-func (t *ListRuleGroupsTool) Description() string { return "List all rule groups" }
+func (t *ListRuleGroupsTool) Description() string {
+	return `List all rule groups for parsing and transforming log data.
+
+**Related tools:** get_rule_group, create_rule_group, update_rule_group, delete_rule_group`
+}
 
 // InputSchema returns the input schema
 func (t *ListRuleGroupsTool) InputSchema() interface{} {
@@ -180,7 +184,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/outgoing_webhooks/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Outgoing webhook", id, "list_outgoing_webhooks"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -197,7 +201,11 @@ func NewListOutgoingWebhooksTool(c *client.Client, l *zap.Logger) *ListOutgoingW
 func (t *ListOutgoingWebhooksTool) Name() string { return "list_outgoing_webhooks" }
 
 // Description returns the tool description
-func (t *ListOutgoingWebhooksTool) Description() string { return "List all outgoing webhooks" }
+func (t *ListOutgoingWebhooksTool) Description() string {
+	return `List all outgoing webhooks configured for alert notifications.
+
+**Related tools:** get_outgoing_webhook, create_outgoing_webhook, update_outgoing_webhook, delete_outgoing_webhook, create_alert`
+}
 
 // InputSchema returns the input schema
 func (t *ListOutgoingWebhooksTool) InputSchema() interface{} {
@@ -225,11 +233,61 @@ func NewCreateOutgoingWebhookTool(c *client.Client, l *zap.Logger) *CreateOutgoi
 func (t *CreateOutgoingWebhookTool) Name() string { return "create_outgoing_webhook" }
 
 // Description returns the tool description
-func (t *CreateOutgoingWebhookTool) Description() string { return "Create a new outgoing webhook" }
+func (t *CreateOutgoingWebhookTool) Description() string {
+	return `Create an outgoing webhook to send notifications from IBM Cloud Logs to external services.
+
+**Related tools:** list_outgoing_webhooks, get_outgoing_webhook, create_alert (connect alerts to webhooks)
+
+**Webhook Types:**
+- generic: Custom HTTP webhook to any endpoint
+- slack: Slack incoming webhook integration
+- pagerduty: PagerDuty integration for incident management
+- ibm_event_notifications: IBM Cloud Event Notifications service`
+}
 
 // InputSchema returns the input schema
 func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"webhook": map[string]interface{}{"type": "object"}}, "required": []string{"webhook"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"webhook": map[string]interface{}{
+				"type":        "object",
+				"description": "Webhook configuration object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the webhook",
+					},
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Webhook type: generic, slack, pagerduty, ibm_event_notifications",
+						"enum":        []string{"generic", "slack", "pagerduty", "ibm_event_notifications"},
+					},
+					"url": map[string]interface{}{
+						"type":        "string",
+						"description": "Target URL for the webhook",
+					},
+				},
+			},
+		},
+		"required": []string{"webhook"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"webhook": map[string]interface{}{
+					"name": "Slack Alerts",
+					"type": "slack",
+					"url":  "https://hooks.slack.com/services/XXX/YYY/ZZZ",
+				},
+			},
+			map[string]interface{}{
+				"webhook": map[string]interface{}{
+					"name": "PagerDuty Critical",
+					"type": "pagerduty",
+					"url":  "https://events.pagerduty.com/v2/enqueue",
+				},
+			},
+		},
+	}
 }
 
 // Execute executes the tool
@@ -325,7 +383,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/policies/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Policy", id, "list_policies"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -342,7 +400,11 @@ func NewListPoliciesTool(c *client.Client, l *zap.Logger) *ListPoliciesTool {
 func (t *ListPoliciesTool) Name() string { return "list_policies" }
 
 // Description returns the tool description
-func (t *ListPoliciesTool) Description() string { return "List all policies" }
+func (t *ListPoliciesTool) Description() string {
+	return `List all log routing policies configured in IBM Cloud Logs.
+
+**Related tools:** get_policy, create_policy, update_policy, delete_policy`
+}
 
 // InputSchema returns the input schema
 func (t *ListPoliciesTool) InputSchema() interface{} {
@@ -370,21 +432,166 @@ func NewCreatePolicyTool(c *client.Client, l *zap.Logger) *CreatePolicyTool {
 func (t *CreatePolicyTool) Name() string { return "create_policy" }
 
 // Description returns the tool description
-func (t *CreatePolicyTool) Description() string { return "Create a new policy" }
+func (t *CreatePolicyTool) Description() string {
+	return `Create a log routing policy to control how logs are processed and stored.
+
+**Related tools:** list_policies, get_policy, update_policy, delete_policy
+
+**Policy Types:**
+- block: Block logs matching the filter
+- send_data: Route logs to specific pipelines or storage
+- quota: Apply rate limits to log ingestion
+
+**Priority Levels:**
+- type_low: Lowest priority (least important logs)
+- type_medium: Standard priority
+- type_high: High priority (important logs)
+- type_unspecified: Default priority`
+}
 
 // InputSchema returns the input schema
 func (t *CreatePolicyTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"policy": map[string]interface{}{"type": "object"}}, "required": []string{"policy"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"policy": map[string]interface{}{
+				"type":        "object",
+				"description": "Policy configuration object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the policy",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "Description of the policy purpose",
+					},
+					"priority": map[string]interface{}{
+						"type":        "string",
+						"description": "Priority level for the policy",
+						"enum":        []string{"type_low", "type_medium", "type_high", "type_unspecified"},
+					},
+					"application_rule": map[string]interface{}{
+						"type":        "object",
+						"description": "Rule to match logs by application name",
+						"properties": map[string]interface{}{
+							"name": map[string]interface{}{
+								"type":        "string",
+								"description": "Application name to match",
+							},
+							"rule_type_id": map[string]interface{}{
+								"type":        "string",
+								"description": "Matching rule type",
+								"enum":        []string{"is", "is_not", "includes", "starts_with"},
+							},
+						},
+					},
+					"subsystem_rule": map[string]interface{}{
+						"type":        "object",
+						"description": "Rule to match logs by subsystem name",
+					},
+					"archive_retention": map[string]interface{}{
+						"type":        "object",
+						"description": "Archive retention configuration",
+					},
+					"log_rules": map[string]interface{}{
+						"type":        "object",
+						"description": "Log filtering rules with severity",
+					},
+				},
+			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the configuration without creating the resource. Use this to preview what will be created.",
+				"default":     false,
+			},
+		},
+		"required": []string{"policy"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"policy": map[string]interface{}{
+					"name":        "Production Logs High Priority",
+					"description": "Keep production logs with high priority for longer retention",
+					"priority":    "type_high",
+					"application_rule": map[string]interface{}{
+						"name":         "production",
+						"rule_type_id": "starts_with",
+					},
+				},
+			},
+			map[string]interface{}{
+				"policy": map[string]interface{}{
+					"name":        "Block Debug Logs",
+					"description": "Block debug logs from ingestion to reduce costs",
+					"priority":    "type_low",
+					"log_rules": map[string]interface{}{
+						"severities": []string{"debug", "verbose"},
+					},
+				},
+				"dry_run": true,
+			},
+		},
+	}
 }
 
 // Execute executes the tool
 func (t *CreatePolicyTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	pol, _ := GetObjectParam(args, "policy", true)
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(args, "dry_run", false)
+	if dryRun {
+		return t.validatePolicy(pol)
+	}
+
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/policies", Body: pol})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponse(res)
+}
+
+// validatePolicy performs dry-run validation for policy creation
+func (t *CreatePolicyTool) validatePolicy(policy map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Check required fields
+	requiredErrors := ValidateRequiredFields(policy, []string{"name"})
+	if len(requiredErrors) > 0 {
+		result.Valid = false
+		result.Errors = append(result.Errors, requiredErrors...)
+	}
+
+	// Validate priority field if present
+	if errMsg := ValidateEnumField(policy, "priority", []string{"type_low", "type_medium", "type_high", "type_unspecified"}); errMsg != "" {
+		result.Valid = false
+		result.Errors = append(result.Errors, errMsg)
+	}
+
+	// Build summary
+	if name, ok := policy["name"].(string); ok {
+		result.Summary["name"] = name
+	}
+	if desc, ok := policy["description"].(string); ok {
+		result.Summary["description"] = desc
+	}
+	if priority, ok := policy["priority"].(string); ok {
+		result.Summary["priority"] = priority
+	}
+
+	// Add warnings and suggestions
+	if _, hasAppRule := policy["application_rule"]; !hasAppRule {
+		if _, hasSubRule := policy["subsystem_rule"]; !hasSubRule {
+			result.Warnings = append(result.Warnings, "No application_rule or subsystem_rule defined - policy will apply to all logs")
+		}
+	}
+
+	result.Suggestions = append(result.Suggestions, "Consider setting explicit retention policies to optimize costs")
+
+	return FormatDryRunResult(result, "Policy", policy), nil
 }
 
 // UpdatePolicyTool updates an existing policy.
@@ -470,7 +677,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Events-to-metrics configuration", id, "list_e2m"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -487,7 +694,11 @@ func NewListE2MTool(c *client.Client, l *zap.Logger) *ListE2MTool {
 func (t *ListE2MTool) Name() string { return "list_e2m" }
 
 // Description returns the tool description
-func (t *ListE2MTool) Description() string { return "List all events-to-metrics configurations" }
+func (t *ListE2MTool) Description() string {
+	return `List all Events-to-Metrics (E2M) configurations for converting logs to metrics.
+
+**Related tools:** get_e2m, create_e2m, replace_e2m, delete_e2m`
+}
 
 // InputSchema returns the input schema
 func (t *ListE2MTool) InputSchema() interface{} {
@@ -515,11 +726,114 @@ func NewCreateE2MTool(c *client.Client, l *zap.Logger) *CreateE2MTool {
 func (t *CreateE2MTool) Name() string { return "create_e2m" }
 
 // Description returns the tool description
-func (t *CreateE2MTool) Description() string { return "Create a new events-to-metrics configuration" }
+func (t *CreateE2MTool) Description() string {
+	return `Create an Events-to-Metrics (E2M) configuration to convert log data into metrics.
+
+**Related tools:** list_e2m, get_e2m, replace_e2m, delete_e2m
+
+**Use Cases:**
+- Convert error counts into metrics for dashboards
+- Create SLI/SLO metrics from log data
+- Reduce storage costs by summarizing logs as metrics
+- Build custom metrics from structured log fields
+
+**Metric Types:**
+- counter: Counts occurrences of matching events
+- gauge: Samples values from log fields
+- histogram: Creates distribution of values`
+}
 
 // InputSchema returns the input schema
 func (t *CreateE2MTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"e2m": map[string]interface{}{"type": "object"}}, "required": []string{"e2m"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"e2m": map[string]interface{}{
+				"type":        "object",
+				"description": "Events-to-Metrics configuration object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the E2M configuration",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "Description of what this metric measures",
+					},
+					"permutations_limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of unique label combinations (default: 30000)",
+					},
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Source data type: logs2metrics or spans2metrics",
+						"enum":        []string{"logs2metrics", "spans2metrics"},
+					},
+					"logs_query": map[string]interface{}{
+						"type":        "object",
+						"description": "Query to filter which logs to convert to metrics",
+						"properties": map[string]interface{}{
+							"lucene": map[string]interface{}{
+								"type":        "string",
+								"description": "Lucene query to filter logs",
+							},
+							"applicationname_filters": map[string]interface{}{
+								"type":        "array",
+								"description": "Application names to include",
+							},
+							"subsystemname_filters": map[string]interface{}{
+								"type":        "array",
+								"description": "Subsystem names to include",
+							},
+							"severity_filters": map[string]interface{}{
+								"type":        "array",
+								"description": "Severity levels to include",
+							},
+						},
+					},
+					"metric_fields": map[string]interface{}{
+						"type":        "array",
+						"description": "Fields to extract as metric values",
+					},
+					"metric_labels": map[string]interface{}{
+						"type":        "array",
+						"description": "Fields to use as metric labels",
+					},
+				},
+			},
+		},
+		"required": []string{"e2m"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"e2m": map[string]interface{}{
+					"name":        "error_count_by_service",
+					"description": "Count errors per service for SLO tracking",
+					"type":        "logs2metrics",
+					"logs_query": map[string]interface{}{
+						"lucene":           "level:error",
+						"severity_filters": []string{"error", "critical"},
+					},
+					"metric_labels": []map[string]interface{}{
+						{"target_label": "service", "source_field": "applicationName"},
+						{"target_label": "component", "source_field": "subsystemName"},
+					},
+				},
+			},
+			map[string]interface{}{
+				"e2m": map[string]interface{}{
+					"name":        "response_time_histogram",
+					"description": "Response time distribution from API logs",
+					"type":        "logs2metrics",
+					"logs_query": map[string]interface{}{
+						"lucene": "json.endpoint:* AND json.response_time:*",
+					},
+					"metric_fields": []map[string]interface{}{
+						{"target_base_metric_name": "response_time_ms", "source_field": "json.response_time"},
+					},
+				},
+			},
+		},
+	}
 }
 
 // Execute executes the tool
@@ -603,7 +917,11 @@ func NewListDataAccessRulesTool(c *client.Client, l *zap.Logger) *ListDataAccess
 func (t *ListDataAccessRulesTool) Name() string { return "list_data_access_rules" }
 
 // Description returns the tool description
-func (t *ListDataAccessRulesTool) Description() string { return "List all data access rules" }
+func (t *ListDataAccessRulesTool) Description() string {
+	return `List all data access rules controlling log visibility.
+
+**Related tools:** get_data_access_rule, create_data_access_rule, update_data_access_rule, delete_data_access_rule`
+}
 
 // InputSchema returns the input schema
 func (t *ListDataAccessRulesTool) InputSchema() interface{} {
@@ -643,7 +961,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Data access rule", id, "list_data_access_rules"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -660,11 +978,69 @@ func NewCreateDataAccessRuleTool(c *client.Client, l *zap.Logger) *CreateDataAcc
 func (t *CreateDataAccessRuleTool) Name() string { return "create_data_access_rule" }
 
 // Description returns the tool description
-func (t *CreateDataAccessRuleTool) Description() string { return "Create a new data access rule" }
+func (t *CreateDataAccessRuleTool) Description() string {
+	return `Create a data access rule to control which logs users can view based on filters.
+
+**Related tools:** list_data_access_rules, get_data_access_rule, update_data_access_rule, delete_data_access_rule
+
+**Use Cases:**
+- Restrict access to sensitive logs by team
+- Implement data isolation for multi-tenant environments
+- Control access based on application or subsystem
+- Enforce compliance with data visibility requirements`
+}
 
 // InputSchema returns the input schema
 func (t *CreateDataAccessRuleTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"rule": map[string]interface{}{"type": "object"}}, "required": []string{"rule"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"rule": map[string]interface{}{
+				"type":        "object",
+				"description": "Data access rule configuration object",
+				"properties": map[string]interface{}{
+					"display_name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the access rule",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "Description of the access rule purpose",
+					},
+					"default_expression": map[string]interface{}{
+						"type":        "string",
+						"description": "Default filter expression applied to all users",
+					},
+					"filters": map[string]interface{}{
+						"type":        "array",
+						"description": "Array of filter configurations",
+					},
+				},
+			},
+		},
+		"required": []string{"rule"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"rule": map[string]interface{}{
+					"display_name": "Production Team Access",
+					"description":  "Restrict access to production logs only",
+					"filters": []map[string]interface{}{
+						{
+							"entity_type": "logs",
+							"expression":  "applicationName.startsWith('production')",
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"rule": map[string]interface{}{
+					"display_name":       "Non-PII Access",
+					"description":        "Filter out logs containing PII data",
+					"default_expression": "NOT subsystemName:'pii-service'",
+				},
+			},
+		},
+	}
 }
 
 // Execute executes the tool
@@ -748,7 +1124,11 @@ func NewListEnrichmentsTool(c *client.Client, l *zap.Logger) *ListEnrichmentsToo
 func (t *ListEnrichmentsTool) Name() string { return "list_enrichments" }
 
 // Description returns the tool description
-func (t *ListEnrichmentsTool) Description() string { return "List all enrichments" }
+func (t *ListEnrichmentsTool) Description() string {
+	return `List all data enrichments that add context to incoming logs.
+
+**Related tools:** get_enrichments, create_enrichment, update_enrichment, delete_enrichment`
+}
 
 // InputSchema returns the input schema
 func (t *ListEnrichmentsTool) InputSchema() interface{} {
@@ -776,11 +1156,82 @@ func NewCreateEnrichmentTool(c *client.Client, l *zap.Logger) *CreateEnrichmentT
 func (t *CreateEnrichmentTool) Name() string { return "create_enrichment" }
 
 // Description returns the tool description
-func (t *CreateEnrichmentTool) Description() string { return "Create a new enrichment" }
+func (t *CreateEnrichmentTool) Description() string {
+	return `Create a data enrichment to add context to incoming logs.
+
+**Related tools:** list_enrichments, get_enrichments, update_enrichment, delete_enrichment
+
+**Enrichment Types:**
+- geo_ip: Add geographic information based on IP addresses
+- custom_enrichment: Add custom fields from lookup tables
+
+**Use Cases:**
+- Add geographic location from IP addresses
+- Enrich logs with user/customer metadata
+- Add environment or deployment context
+- Map error codes to descriptions`
+}
 
 // InputSchema returns the input schema
 func (t *CreateEnrichmentTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"enrichment": map[string]interface{}{"type": "object"}}, "required": []string{"enrichment"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"enrichment": map[string]interface{}{
+				"type":        "object",
+				"description": "Enrichment configuration object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the enrichment",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "Description of what this enrichment adds",
+					},
+					"field_name": map[string]interface{}{
+						"type":        "string",
+						"description": "Source field to use for enrichment lookup",
+					},
+					"enrichment_type": map[string]interface{}{
+						"type":        "string",
+						"description": "Type of enrichment: geo_ip or custom_enrichment",
+						"enum":        []string{"geo_ip", "custom_enrichment"},
+					},
+					"geo_ip_config": map[string]interface{}{
+						"type":        "object",
+						"description": "Configuration for geo_ip enrichment type",
+					},
+					"custom_enrichment_config": map[string]interface{}{
+						"type":        "object",
+						"description": "Configuration for custom_enrichment type",
+					},
+				},
+			},
+		},
+		"required": []string{"enrichment"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"enrichment": map[string]interface{}{
+					"name":            "Client IP Geolocation",
+					"description":     "Add geographic data from client IP addresses",
+					"field_name":      "json.client_ip",
+					"enrichment_type": "geo_ip",
+				},
+			},
+			map[string]interface{}{
+				"enrichment": map[string]interface{}{
+					"name":            "Customer Tier Lookup",
+					"description":     "Enrich logs with customer tier information",
+					"field_name":      "json.customer_id",
+					"enrichment_type": "custom_enrichment",
+					"custom_enrichment_config": map[string]interface{}{
+						"lookup_table_id": "customer-tiers-table",
+					},
+				},
+			},
+		},
+	}
 }
 
 // Execute executes the tool
@@ -894,7 +1345,11 @@ func NewListViewsTool(c *client.Client, l *zap.Logger) *ListViewsTool {
 func (t *ListViewsTool) Name() string { return "list_views" }
 
 // Description returns the tool description
-func (t *ListViewsTool) Description() string { return "List all views" }
+func (t *ListViewsTool) Description() string {
+	return `List all saved views with their filter and query configurations.
+
+**Related tools:** get_view, create_view, replace_view, delete_view, list_view_folders`
+}
 
 // InputSchema returns the input schema
 func (t *ListViewsTool) InputSchema() interface{} {
@@ -922,11 +1377,84 @@ func NewCreateViewTool(c *client.Client, l *zap.Logger) *CreateViewTool {
 func (t *CreateViewTool) Name() string { return "create_view" }
 
 // Description returns the tool description
-func (t *CreateViewTool) Description() string { return "Create a new view" }
+func (t *CreateViewTool) Description() string {
+	return `Create a saved view with predefined filters and query settings.
+
+**Related tools:** list_views, get_view, replace_view, delete_view, list_view_folders, create_view_folder
+
+**Use Cases:**
+- Save commonly used log queries for quick access
+- Create team-specific views for different services
+- Set up debugging views with specific filters
+- Share standardized views across the organization`
+}
 
 // InputSchema returns the input schema
 func (t *CreateViewTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"view": map[string]interface{}{"type": "object"}}, "required": []string{"view"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"view": map[string]interface{}{
+				"type":        "object",
+				"description": "View configuration object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Display name for the view",
+					},
+					"search_query": map[string]interface{}{
+						"type":        "object",
+						"description": "Query configuration for the view",
+						"properties": map[string]interface{}{
+							"query": map[string]interface{}{
+								"type":        "string",
+								"description": "Lucene or DataPrime query string",
+							},
+						},
+					},
+					"time_selection": map[string]interface{}{
+						"type":        "object",
+						"description": "Time range selection for the view",
+					},
+					"filters": map[string]interface{}{
+						"type":        "object",
+						"description": "Filter configuration",
+					},
+					"folder_id": map[string]interface{}{
+						"type":        "string",
+						"description": "ID of folder to place the view in (optional)",
+					},
+				},
+			},
+		},
+		"required": []string{"view"},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"view": map[string]interface{}{
+					"name": "Production Errors",
+					"search_query": map[string]interface{}{
+						"query": "application:production AND level:error",
+					},
+					"time_selection": map[string]interface{}{
+						"quick_selection": map[string]interface{}{
+							"seconds": 3600,
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"view": map[string]interface{}{
+					"name": "API Gateway Logs",
+					"search_query": map[string]interface{}{
+						"query": "subsystem:api-gateway",
+					},
+					"filters": map[string]interface{}{
+						"severity_filters": []string{"warning", "error", "critical"},
+					},
+				},
+			},
+		},
+	}
 }
 
 // Execute executes the tool
@@ -963,7 +1491,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/views/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "View", id, "list_views"), nil
 	}
 	return t.FormatResponse(res)
 }
@@ -1108,7 +1636,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 	id, _ := GetStringParam(args, "id", true)
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "View folder", id, "list_view_folders"), nil
 	}
 	return t.FormatResponse(res)
 }

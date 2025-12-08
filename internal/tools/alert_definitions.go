@@ -49,9 +49,9 @@ func (t *GetAlertDefinitionTool) Execute(ctx context.Context, arguments map[stri
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/alert_definitions/" + id})
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Alert definition", id, "list_alert_definitions"), nil
 	}
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "get_alert_definition")
 }
 
 // ListAlertDefinitionsTool lists all alert definitions
@@ -86,7 +86,7 @@ func (t *ListAlertDefinitionsTool) Execute(ctx context.Context, _ map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "list_alert_definitions")
 }
 
 // CreateAlertDefinitionTool creates a new alert definition
@@ -104,7 +104,16 @@ func (t *CreateAlertDefinitionTool) Name() string { return "create_alert_definit
 
 // Description returns the tool description
 func (t *CreateAlertDefinitionTool) Description() string {
-	return "Create a new alert definition"
+	return `Create a new alert definition to monitor log patterns and trigger notifications.
+
+**Related tools:** list_alert_definitions, get_alert_definition, create_alert, create_outgoing_webhook
+
+**Alert Types:**
+- logs_immediate: Triggered immediately when condition matches
+- logs_threshold: Triggered when count exceeds threshold over time window
+- logs_ratio: Triggered when ratio between two queries exceeds threshold
+- logs_anomaly: Triggered on anomaly detection
+- logs_new_value: Triggered when a new value appears in logs`
 }
 
 // InputSchema returns the input schema
@@ -113,7 +122,42 @@ func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"definition": map[string]interface{}{
-				"type": "object", "description": "Alert definition configuration",
+				"type":        "object",
+				"description": "Alert definition configuration",
+				"example": map[string]interface{}{
+					"name":        "High Error Rate Alert",
+					"description": "Triggers when error rate exceeds threshold",
+					"enabled":     true,
+					"priority":    "P2",
+					"type":        "logs_threshold",
+					"condition": map[string]interface{}{
+						"threshold": map[string]interface{}{
+							"condition":            "more_than",
+							"threshold":            100,
+							"time_window_seconds":  300,
+							"group_by_keys":        []string{},
+							"condition_match_type": "any",
+						},
+					},
+					"filter": map[string]interface{}{
+						"simple_filter": map[string]interface{}{
+							"query": "severity:>=5",
+						},
+					},
+					"notification_groups": []map[string]interface{}{
+						{
+							"notifications": []map[string]interface{}{
+								{
+									"webhook_id":                     "webhook-uuid-here",
+									"notify_on":                      "triggered_only",
+									"retriggering_period_seconds":    60,
+									"notify_on_resolved":             true,
+									"integration_connection_details": map[string]interface{}{},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		"required": []string{"definition"},
@@ -130,7 +174,7 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "create_alert_definition")
 }
 
 // UpdateAlertDefinitionTool updates an existing alert definition
@@ -177,7 +221,7 @@ func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "update_alert_definition")
 }
 
 // DeleteAlertDefinitionTool deletes an alert definition
@@ -219,5 +263,5 @@ func (t *DeleteAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "delete_alert_definition")
 }
