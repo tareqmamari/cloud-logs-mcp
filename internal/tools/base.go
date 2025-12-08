@@ -319,6 +319,261 @@ var ToolCapabilities = map[string]ToolCapability{
 		ResourceType: "event_stream",
 		RequiresID:   true,
 	},
+
+	// Rule group tools (for parsing and transforming log data)
+	"list_rule_groups": {
+		Category:     "list",
+		ResourceType: "rule_group",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_rule_group", "create_rule_group"},
+	},
+	"get_rule_group": {
+		Category:     "read",
+		ResourceType: "rule_group",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"update_rule_group", "delete_rule_group"},
+	},
+	"create_rule_group": {
+		Category:     "create",
+		ResourceType: "rule_group",
+		RelatedTools: []string{"list_rule_groups"},
+	},
+	"update_rule_group": {
+		Category:      "update",
+		ResourceType:  "rule_group",
+		RequiresID:    true,
+		Prerequisites: []string{"get_rule_group"},
+	},
+	"delete_rule_group": {
+		Category:      "delete",
+		ResourceType:  "rule_group",
+		RequiresID:    true,
+		Prerequisites: []string{"get_rule_group"},
+	},
+
+	// Outgoing webhook tools (for alert notifications)
+	"list_outgoing_webhooks": {
+		Category:     "list",
+		ResourceType: "outgoing_webhook",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_outgoing_webhook", "create_outgoing_webhook"},
+	},
+	"get_outgoing_webhook": {
+		Category:     "read",
+		ResourceType: "outgoing_webhook",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"update_outgoing_webhook", "delete_outgoing_webhook"},
+	},
+	"create_outgoing_webhook": {
+		Category:     "create",
+		ResourceType: "outgoing_webhook",
+		RelatedTools: []string{"list_outgoing_webhooks", "create_alert"},
+	},
+	"update_outgoing_webhook": {
+		Category:      "update",
+		ResourceType:  "outgoing_webhook",
+		RequiresID:    true,
+		Prerequisites: []string{"get_outgoing_webhook"},
+	},
+	"delete_outgoing_webhook": {
+		Category:      "delete",
+		ResourceType:  "outgoing_webhook",
+		RequiresID:    true,
+		Prerequisites: []string{"get_outgoing_webhook"},
+	},
+
+	// Policy tools (TCO policies for log management)
+	"list_policies": {
+		Category:     "list",
+		ResourceType: "policy",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_policy", "create_policy"},
+	},
+	"get_policy": {
+		Category:     "read",
+		ResourceType: "policy",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"update_policy", "delete_policy"},
+	},
+	"create_policy": {
+		Category:     "create",
+		ResourceType: "policy",
+		RelatedTools: []string{"list_policies"},
+	},
+	"update_policy": {
+		Category:      "update",
+		ResourceType:  "policy",
+		RequiresID:    true,
+		Prerequisites: []string{"get_policy"},
+	},
+	"delete_policy": {
+		Category:      "delete",
+		ResourceType:  "policy",
+		RequiresID:    true,
+		Prerequisites: []string{"get_policy"},
+	},
+
+	// E2M tools (Events to Metrics conversion)
+	"list_e2m": {
+		Category:     "list",
+		ResourceType: "e2m",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_e2m", "create_e2m"},
+	},
+	"get_e2m": {
+		Category:     "read",
+		ResourceType: "e2m",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"replace_e2m", "delete_e2m"},
+	},
+	"create_e2m": {
+		Category:     "create",
+		ResourceType: "e2m",
+		RelatedTools: []string{"list_e2m", "query_logs"},
+	},
+	"replace_e2m": {
+		Category:      "update",
+		ResourceType:  "e2m",
+		RequiresID:    true,
+		Prerequisites: []string{"get_e2m"},
+	},
+	"delete_e2m": {
+		Category:      "delete",
+		ResourceType:  "e2m",
+		RequiresID:    true,
+		Prerequisites: []string{"get_e2m"},
+	},
+
+	// Data access rule tools (for controlling data access)
+	"list_data_access_rules": {
+		Category:     "list",
+		ResourceType: "data_access_rule",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_data_access_rule", "create_data_access_rule"},
+	},
+	"get_data_access_rule": {
+		Category:     "read",
+		ResourceType: "data_access_rule",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"update_data_access_rule", "delete_data_access_rule"},
+	},
+	"create_data_access_rule": {
+		Category:     "create",
+		ResourceType: "data_access_rule",
+		RelatedTools: []string{"list_data_access_rules"},
+	},
+	"update_data_access_rule": {
+		Category:      "update",
+		ResourceType:  "data_access_rule",
+		RequiresID:    true,
+		Prerequisites: []string{"get_data_access_rule"},
+	},
+	"delete_data_access_rule": {
+		Category:      "delete",
+		ResourceType:  "data_access_rule",
+		RequiresID:    true,
+		Prerequisites: []string{"get_data_access_rule"},
+	},
+
+	// Enrichment tools (for enriching log data)
+	"list_enrichments": {
+		Category:     "list",
+		ResourceType: "enrichment",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_enrichments", "create_enrichment"},
+	},
+	"get_enrichments": {
+		Category:     "read",
+		ResourceType: "enrichment",
+		IsReadOnly:   true,
+		RelatedTools: []string{"update_enrichment", "delete_enrichment"},
+	},
+	"create_enrichment": {
+		Category:     "create",
+		ResourceType: "enrichment",
+		RelatedTools: []string{"list_enrichments"},
+	},
+	"update_enrichment": {
+		Category:      "update",
+		ResourceType:  "enrichment",
+		RequiresID:    true,
+		Prerequisites: []string{"get_enrichments"},
+	},
+	"delete_enrichment": {
+		Category:      "delete",
+		ResourceType:  "enrichment",
+		RequiresID:    true,
+		Prerequisites: []string{"get_enrichments"},
+	},
+
+	// View tools (saved log views)
+	"list_views": {
+		Category:     "list",
+		ResourceType: "view",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_view", "create_view"},
+	},
+	"get_view": {
+		Category:     "read",
+		ResourceType: "view",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"replace_view", "delete_view"},
+	},
+	"create_view": {
+		Category:     "create",
+		ResourceType: "view",
+		RelatedTools: []string{"list_views", "list_view_folders"},
+	},
+	"replace_view": {
+		Category:      "update",
+		ResourceType:  "view",
+		RequiresID:    true,
+		Prerequisites: []string{"get_view"},
+	},
+	"delete_view": {
+		Category:      "delete",
+		ResourceType:  "view",
+		RequiresID:    true,
+		Prerequisites: []string{"get_view"},
+	},
+
+	// View folder tools (for organizing views)
+	"list_view_folders": {
+		Category:     "list",
+		ResourceType: "view_folder",
+		IsReadOnly:   true,
+		RelatedTools: []string{"get_view_folder", "create_view_folder"},
+	},
+	"get_view_folder": {
+		Category:     "read",
+		ResourceType: "view_folder",
+		IsReadOnly:   true,
+		RequiresID:   true,
+		RelatedTools: []string{"replace_view_folder", "delete_view_folder"},
+	},
+	"create_view_folder": {
+		Category:     "create",
+		ResourceType: "view_folder",
+		RelatedTools: []string{"list_view_folders", "create_view"},
+	},
+	"replace_view_folder": {
+		Category:      "update",
+		ResourceType:  "view_folder",
+		RequiresID:    true,
+		Prerequisites: []string{"get_view_folder"},
+	},
+	"delete_view_folder": {
+		Category:      "delete",
+		ResourceType:  "view_folder",
+		RequiresID:    true,
+		Prerequisites: []string{"get_view_folder"},
+	},
 }
 
 // GetToolCapability returns the capability annotation for a tool, or nil if not found
