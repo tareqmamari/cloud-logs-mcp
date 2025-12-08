@@ -12,6 +12,331 @@ type ProactiveSuggestion struct {
 	Condition   string // When this suggestion applies (for documentation)
 }
 
+// SmartSuggestion represents an enhanced suggestion with pre-filled parameters and urgency
+type SmartSuggestion struct {
+	Tool          string                 `json:"tool"`           // Suggested tool to use
+	Description   string                 `json:"description"`    // Why this suggestion is relevant
+	Urgency       string                 `json:"urgency"`        // "info", "warning", "critical"
+	PrefilledArgs map[string]interface{} `json:"prefilled_args"` // Pre-populated parameters
+	Reason        string                 `json:"reason"`         // Detailed reason for this suggestion
+}
+
+// GetSmartSuggestions generates context-aware suggestions with pre-filled arguments
+func GetSmartSuggestions(toolName string, result map[string]interface{}, hasError bool) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	if hasError {
+		return getSmartErrorSuggestions(toolName, result)
+	}
+
+	switch toolName {
+	case "query_logs":
+		suggestions = append(suggestions, getQueryResultSuggestions(result)...)
+	case "list_alerts":
+		suggestions = append(suggestions, getAlertListSuggestions(result)...)
+	case "get_alert":
+		suggestions = append(suggestions, getAlertDetailSuggestions(result)...)
+	case "list_dashboards":
+		suggestions = append(suggestions, getDashboardListSuggestions(result)...)
+	case "investigate_incident":
+		suggestions = append(suggestions, getIncidentSuggestions(result)...)
+	case "health_check":
+		suggestions = append(suggestions, getHealthCheckSuggestions(result)...)
+	}
+
+	return suggestions
+}
+
+// getQueryResultSuggestions analyzes query results and provides smart suggestions
+func getQueryResultSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	events, ok := result["events"].([]interface{})
+	if !ok {
+		return suggestions
+	}
+
+	// Analyze severity distribution
+	errorCount := 0
+	criticalCount := 0
+	topApp := ""
+	appCounts := make(map[string]int)
+
+	for _, event := range events {
+		if eventMap, ok := event.(map[string]interface{}); ok {
+			// Count severities
+			if sev, ok := eventMap["severity"].(float64); ok {
+				if int(sev) == 5 {
+					errorCount++
+				} else if int(sev) == 6 {
+					criticalCount++
+				}
+			}
+			// Track applications
+			if app, ok := eventMap["applicationname"].(string); ok && app != "" {
+				appCounts[app]++
+				if topApp == "" || appCounts[app] > appCounts[topApp] {
+					topApp = app
+				}
+			}
+		}
+	}
+
+	// Critical errors - urgent
+	if criticalCount > 0 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "create_alert",
+			Description: fmt.Sprintf("Create alert for %d critical errors detected", criticalCount),
+			Urgency:     "critical",
+			PrefilledArgs: map[string]interface{}{
+				"severity_filter": "critical",
+			},
+			Reason: "Critical errors require immediate attention and monitoring",
+		})
+	}
+
+	// High error rate
+	if len(events) > 10 && errorCount > len(events)/5 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "investigate_incident",
+			Description: "High error rate detected - investigate root cause",
+			Urgency:     "warning",
+			PrefilledArgs: map[string]interface{}{
+				"application": topApp,
+			},
+			Reason: fmt.Sprintf("%.0f%% error rate detected", float64(errorCount)*100/float64(len(events))),
+		})
+	}
+
+	// Large result set
+	if len(events) >= MaxSSEEvents {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "create_dashboard",
+			Description: "Create dashboard to visualize high-volume data",
+			Urgency:     "info",
+			PrefilledArgs: map[string]interface{}{
+				"application_filter": topApp,
+			},
+			Reason: "Large result sets are better analyzed through dashboards",
+		})
+	}
+
+	return suggestions
+}
+
+// getAlertListSuggestions analyzes alerts and suggests actions
+func getAlertListSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	alerts, ok := result["alerts"].([]interface{})
+	if !ok {
+		if alertsMap, ok := result["alerts"].(map[string]interface{}); ok {
+			// Check if there are triggered alerts
+			if triggered, ok := alertsMap["triggered"].([]interface{}); ok && len(triggered) > 0 {
+				suggestions = append(suggestions, SmartSuggestion{
+					Tool:        "investigate_incident",
+					Description: fmt.Sprintf("%d triggered alerts require investigation", len(triggered)),
+					Urgency:     "critical",
+					Reason:      "Triggered alerts indicate active issues",
+				})
+			}
+		}
+		return suggestions
+	}
+
+	// No alerts configured
+	if len(alerts) == 0 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "suggest_alert",
+			Description: "Set up alerting - no alerts configured",
+			Urgency:     "warning",
+			Reason:      "Proactive monitoring requires alerting configuration",
+		})
+	}
+
+	return suggestions
+}
+
+// getAlertDetailSuggestions provides suggestions based on alert details
+func getAlertDetailSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	// Check alert status
+	if status, ok := result["status"].(string); ok {
+		if status == "triggered" || status == "firing" {
+			if alertID, ok := result["id"].(string); ok {
+				suggestions = append(suggestions, SmartSuggestion{
+					Tool:        "query_logs",
+					Description: "Query logs for triggered alert context",
+					Urgency:     "critical",
+					PrefilledArgs: map[string]interface{}{
+						"alert_id": alertID,
+					},
+					Reason: "Alert is currently firing - investigate immediately",
+				})
+			}
+		}
+	}
+
+	return suggestions
+}
+
+// getDashboardListSuggestions provides suggestions based on dashboard list
+func getDashboardListSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	dashboards, ok := result["dashboards"].([]interface{})
+	if !ok || len(dashboards) == 0 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "create_dashboard",
+			Description: "Create your first dashboard for log visualization",
+			Urgency:     "info",
+			Reason:      "Dashboards provide visual insights into log patterns",
+		})
+	}
+
+	return suggestions
+}
+
+// getIncidentSuggestions provides follow-up suggestions after incident investigation
+func getIncidentSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	// Check if root cause was identified
+	if hypothesis, ok := result["hypothesis"].([]interface{}); ok && len(hypothesis) > 0 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "create_alert",
+			Description: "Create alert for identified error pattern",
+			Urgency:     "warning",
+			Reason:      "Prevent similar incidents through proactive alerting",
+		})
+	}
+
+	// Check error patterns
+	if patterns, ok := result["error_patterns"].([]interface{}); ok && len(patterns) > 0 {
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "create_dashboard",
+			Description: "Create monitoring dashboard for error patterns",
+			Urgency:     "info",
+			Reason:      "Track error patterns over time",
+		})
+	}
+
+	return suggestions
+}
+
+// getHealthCheckSuggestions provides suggestions based on health check results
+func getHealthCheckSuggestions(result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	// Check overall health status
+	if status, ok := result["status"].(string); ok {
+		switch status {
+		case "critical", "unhealthy":
+			suggestions = append(suggestions, SmartSuggestion{
+				Tool:        "investigate_incident",
+				Description: "System health is critical - investigate immediately",
+				Urgency:     "critical",
+				Reason:      "Health check detected critical issues",
+			})
+		case "warning", "degraded":
+			suggestions = append(suggestions, SmartSuggestion{
+				Tool:        "query_logs",
+				Description: "Query recent errors to understand degraded state",
+				Urgency:     "warning",
+				PrefilledArgs: map[string]interface{}{
+					"severity": "error",
+				},
+				Reason: "System is showing warning signs",
+			})
+		}
+	}
+
+	return suggestions
+}
+
+// getSmartErrorSuggestions provides suggestions for error recovery
+func getSmartErrorSuggestions(toolName string, result map[string]interface{}) []SmartSuggestion {
+	suggestions := []SmartSuggestion{}
+
+	// Extract error message if available
+	errorMsg := ""
+	if err, ok := result["error"].(string); ok {
+		errorMsg = err
+	}
+
+	switch toolName {
+	case "query_logs":
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "validate_query",
+			Description: "Validate query syntax before retrying",
+			Urgency:     "info",
+			Reason:      "Query syntax errors are common - validation helps",
+		})
+		if strings.Contains(errorMsg, "timeout") {
+			suggestions = append(suggestions, SmartSuggestion{
+				Tool:        "submit_background_query",
+				Description: "Use background query for large/slow queries",
+				Urgency:     "info",
+				Reason:      "Query timeout suggests a large result set",
+			})
+		}
+	case "create_alert":
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "list_alert_definitions",
+			Description: "Check existing alert definitions for reference",
+			Urgency:     "info",
+			Reason:      "Understanding existing alerts helps configuration",
+		})
+	case "create_dashboard":
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "list_dashboards",
+			Description: "Review existing dashboards for examples",
+			Urgency:     "info",
+			Reason:      "Existing dashboards provide configuration examples",
+		})
+	}
+
+	return suggestions
+}
+
+// FormatSmartSuggestions formats smart suggestions as markdown with urgency indicators
+func FormatSmartSuggestions(suggestions []SmartSuggestion) string {
+	if len(suggestions) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("\n\n---\n💡 **Smart Suggestions:**\n")
+
+	for _, s := range suggestions {
+		urgencyIcon := "ℹ️"
+		switch s.Urgency {
+		case "warning":
+			urgencyIcon = "⚠️"
+		case "critical":
+			urgencyIcon = "🚨"
+		}
+
+		builder.WriteString(fmt.Sprintf("\n%s **%s** `%s`\n", urgencyIcon, s.Urgency, s.Tool))
+		builder.WriteString(fmt.Sprintf("   %s\n", s.Description))
+		if s.Reason != "" {
+			builder.WriteString(fmt.Sprintf("   _Reason: %s_\n", s.Reason))
+		}
+		if len(s.PrefilledArgs) > 0 {
+			builder.WriteString("   Pre-filled args: ")
+			args := []string{}
+			for k, v := range s.PrefilledArgs {
+				args = append(args, fmt.Sprintf("%s=%v", k, v))
+			}
+			builder.WriteString(strings.Join(args, ", "))
+			builder.WriteString("\n")
+		}
+	}
+
+	return builder.String()
+}
+
 // GetProactiveSuggestions returns contextual next-step suggestions based on tool results.
 // This helps LLMs understand logical next actions after using a tool.
 func GetProactiveSuggestions(toolName string, result map[string]interface{}, hasError bool) []ProactiveSuggestion {
