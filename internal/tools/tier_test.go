@@ -50,9 +50,9 @@ func TestNormalizeTier(t *testing.T) {
 		{"whitespace pi", "  pi  ", "frequent_search"},
 		{"whitespace archive", "  archive  ", "archive"},
 
-		// Unknown value (defaults to frequent_search)
-		{"unknown value", "unknown", "frequent_search"},
-		{"empty string", "", "frequent_search"},
+		// Unknown value (defaults to archive)
+		{"unknown value", "unknown", "archive"},
+		{"empty string", "", "archive"},
 	}
 
 	for _, tt := range tests {
