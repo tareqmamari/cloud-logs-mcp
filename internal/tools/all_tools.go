@@ -32,7 +32,10 @@ func (t *GetRuleGroupTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/rule_groups/" + id})
 	if err != nil {
 		return HandleGetError(err, "Rule group", id, "list_rule_groups"), nil
@@ -93,7 +96,10 @@ func (t *CreateRuleGroupTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateRuleGroupTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	rg, _ := GetObjectParam(args, "rule_group", true)
+	rg, err := GetObjectParam(args, "rule_group", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/rule_groups", Body: rg})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -122,8 +128,14 @@ func (t *UpdateRuleGroupTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateRuleGroupTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	rg, _ := GetObjectParam(args, "rule_group", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	rg, err := GetObjectParam(args, "rule_group", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/rule_groups/" + id, Body: rg})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -152,7 +164,10 @@ func (t *DeleteRuleGroupTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/rule_groups/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -181,7 +196,10 @@ func (t *GetOutgoingWebhookTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/outgoing_webhooks/" + id})
 	if err != nil {
 		return HandleGetError(err, "Outgoing webhook", id, "list_outgoing_webhooks"), nil
@@ -292,7 +310,10 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateOutgoingWebhookTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	wh, _ := GetObjectParam(args, "webhook", true)
+	wh, err := GetObjectParam(args, "webhook", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/outgoing_webhooks", Body: wh})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -321,8 +342,14 @@ func (t *UpdateOutgoingWebhookTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	wh, _ := GetObjectParam(args, "webhook", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	wh, err := GetObjectParam(args, "webhook", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/outgoing_webhooks/" + id, Body: wh})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -351,7 +378,10 @@ func (t *DeleteOutgoingWebhookTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/outgoing_webhooks/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -380,7 +410,10 @@ func (t *GetPolicyTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/policies/" + id})
 	if err != nil {
 		return HandleGetError(err, "Policy", id, "list_policies"), nil
@@ -536,7 +569,10 @@ func (t *CreatePolicyTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreatePolicyTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	pol, _ := GetObjectParam(args, "policy", true)
+	pol, err := GetObjectParam(args, "policy", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 
 	// Check for dry-run mode
 	dryRun, _ := GetBoolParam(args, "dry_run", false)
@@ -615,8 +651,14 @@ func (t *UpdatePolicyTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	pol, _ := GetObjectParam(args, "policy", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	pol, err := GetObjectParam(args, "policy", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/policies/" + id, Body: pol})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -645,7 +687,10 @@ func (t *DeletePolicyTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/policies/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -674,7 +719,10 @@ func (t *GetE2MTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics/" + id})
 	if err != nil {
 		return HandleGetError(err, "Events-to-metrics configuration", id, "list_e2m"), nil
@@ -838,7 +886,10 @@ func (t *CreateE2MTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateE2MTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	e2m, _ := GetObjectParam(args, "e2m", true)
+	e2m, err := GetObjectParam(args, "e2m", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/events2metrics", Body: e2m})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -867,8 +918,14 @@ func (t *ReplaceE2MTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	e2m, _ := GetObjectParam(args, "e2m", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	e2m, err := GetObjectParam(args, "e2m", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/events2metrics/" + id, Body: e2m})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -897,7 +954,10 @@ func (t *DeleteE2MTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/events2metrics/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -958,7 +1018,10 @@ func (t *GetDataAccessRuleTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules/" + id})
 	if err != nil {
 		return HandleGetError(err, "Data access rule", id, "list_data_access_rules"), nil
@@ -1045,7 +1108,10 @@ func (t *CreateDataAccessRuleTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateDataAccessRuleTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	rule, _ := GetObjectParam(args, "rule", true)
+	rule, err := GetObjectParam(args, "rule", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/data_access_rules", Body: rule})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1074,8 +1140,14 @@ func (t *UpdateDataAccessRuleTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	rule, _ := GetObjectParam(args, "rule", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	rule, err := GetObjectParam(args, "rule", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/data_access_rules/" + id, Body: rule})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1104,7 +1176,10 @@ func (t *DeleteDataAccessRuleTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/data_access_rules/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1236,7 +1311,10 @@ func (t *CreateEnrichmentTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateEnrichmentTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	enr, _ := GetObjectParam(args, "enrichment", true)
+	enr, err := GetObjectParam(args, "enrichment", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/enrichments", Body: enr})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1265,8 +1343,14 @@ func (t *UpdateEnrichmentTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	enr, _ := GetObjectParam(args, "enrichment", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	enr, err := GetObjectParam(args, "enrichment", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/enrichments/" + id, Body: enr})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1295,7 +1379,10 @@ func (t *DeleteEnrichmentTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/enrichments/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1459,7 +1546,10 @@ func (t *CreateViewTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateViewTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	view, _ := GetObjectParam(args, "view", true)
+	view, err := GetObjectParam(args, "view", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/views", Body: view})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1488,7 +1578,10 @@ func (t *GetViewTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/views/" + id})
 	if err != nil {
 		return HandleGetError(err, "View", id, "list_views"), nil
@@ -1517,8 +1610,14 @@ func (t *ReplaceViewTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	view, _ := GetObjectParam(args, "view", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	view, err := GetObjectParam(args, "view", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/views/" + id, Body: view})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1547,7 +1646,10 @@ func (t *DeleteViewTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/views/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1604,7 +1706,10 @@ func (t *CreateViewFolderTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	folder, _ := GetObjectParam(args, "folder", true)
+	folder, err := GetObjectParam(args, "folder", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/view_folders", Body: folder})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1633,7 +1738,10 @@ func (t *GetViewFolderTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders/" + id})
 	if err != nil {
 		return HandleGetError(err, "View folder", id, "list_view_folders"), nil
@@ -1662,8 +1770,14 @@ func (t *ReplaceViewFolderTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
-	folder, _ := GetObjectParam(args, "folder", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	folder, err := GetObjectParam(args, "folder", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/view_folders/" + id, Body: folder})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -1692,7 +1806,10 @@ func (t *DeleteViewFolderTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	id, _ := GetStringParam(args, "id", true)
+	id, err := GetStringParam(args, "id", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
