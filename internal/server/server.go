@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/metrics"
 	"github.com/tareqmamari/logs-mcp-server/internal/prompts"
 	"github.com/tareqmamari/logs-mcp-server/internal/tools"
 )
@@ -21,6 +23,7 @@ type Server struct {
 	apiClient *client.Client
 	config    *config.Config
 	logger    *zap.Logger
+	metrics   *metrics.Metrics
 }
 
 // New creates a new MCP server instance.
@@ -45,6 +48,7 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 		apiClient: apiClient,
 		config:    cfg,
 		logger:    logger,
+		metrics:   metrics.New(logger),
 	}
 
 	// Register all tools
@@ -183,22 +187,32 @@ func (s *Server) registerTools() error {
 // registerTool is a helper to register a tool with proper error handling.
 // It accepts any type that implements the tools.Tool interface.
 func (s *Server) registerTool(t tools.Tool) {
+	toolName := t.Name()
+
 	// Create tool definition
 	mcpTool := &mcp.Tool{
-		Name:        t.Name(),
+		Name:        toolName,
 		Description: t.Description(),
 		InputSchema: t.InputSchema(),
 	}
 
-	// Create handler that calls the tool's Execute method
+	// Create handler that calls the tool's Execute method with metrics tracking
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		start := time.Now()
+
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
 			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+				s.metrics.RecordToolExecution(toolName, false, time.Since(start))
 				return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
 			}
 		}
-		return t.Execute(ctx, args)
+
+		result, err := t.Execute(ctx, args)
+		success := err == nil && (result == nil || !result.IsError)
+		s.metrics.RecordToolExecution(toolName, success, time.Since(start))
+
+		return result, err
 	}
 
 	// Register tool with MCP server
@@ -223,6 +237,9 @@ func (s *Server) Start(ctx context.Context) error {
 	s.logger.Info("Starting MCP server")
 
 	defer func() {
+		// Log final metrics on shutdown
+		s.metrics.LogStats()
+
 		if err := s.apiClient.Close(); err != nil {
 			s.logger.Error("Failed to close API client", zap.Error(err))
 		}
@@ -230,4 +247,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start serving using stdio transport
 	return s.mcpServer.Run(ctx, &mcp.StdioTransport{})
+}
+
+// GetMetrics returns the server's metrics tracker for external access
+func (s *Server) GetMetrics() *metrics.Metrics {
+	return s.metrics
 }
