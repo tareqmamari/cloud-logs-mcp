@@ -187,10 +187,11 @@ func detectQuerySyntax(query string) string {
 		"|top",
 		"| count",
 		"|count",
-		"$d.",  // DataPrime data field reference
-		"$l.",  // DataPrime label field reference
-		"$m.",  // DataPrime metadata field reference
-		" ~~ ", // DataPrime regex match operator
+		"$d.",        // DataPrime data field reference
+		"$l.",        // DataPrime label field reference
+		"$m.",        // DataPrime metadata field reference
+		".contains(", // DataPrime string contains method
+		".matches(",  // DataPrime regex match method
 	}
 
 	queryLower := query

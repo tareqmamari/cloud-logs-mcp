@@ -113,7 +113,7 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 
 	// Add keyword filter if specified
 	if keyword != "" {
-		queryParts = append(queryParts, fmt.Sprintf("filter $d.text ~~ '%s' || $d.message ~~ '%s'", keyword, keyword))
+		queryParts = append(queryParts, fmt.Sprintf("filter $d.text.contains('%s') || $d.message.contains('%s')", keyword, keyword))
 	}
 
 	// Build final query

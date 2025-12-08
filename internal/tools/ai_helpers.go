@@ -269,7 +269,7 @@ func describeCondition(condition string) string {
 	condition = strings.ReplaceAll(condition, "<", " is less than ")
 	condition = strings.ReplaceAll(condition, "&&", " AND ")
 	condition = strings.ReplaceAll(condition, "||", " OR ")
-	condition = strings.ReplaceAll(condition, "~~", " contains ")
+	condition = strings.ReplaceAll(condition, ".contains(", " contains ")
 
 	return condition
 }
@@ -406,9 +406,9 @@ func generateQuerySuggestions(query string, components []QueryComponent) []strin
 		suggestions = append(suggestions, "Query has no filters - consider adding filters to narrow results")
 	}
 
-	// Check for ~~ operator
+	// Check for ~~ operator (invalid DataPrime syntax)
 	if strings.Contains(query, "~~") {
-		suggestions = append(suggestions, "The ~~ operator performs text search - for exact matches use == instead")
+		suggestions = append(suggestions, "The ~~ operator is not valid DataPrime - use .contains() for substring matching or .matches(/regex/) for patterns")
 	}
 
 	return suggestions

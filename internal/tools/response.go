@@ -89,7 +89,7 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 			"   - By application: applicationName='your-app' or query='source logs | filter $l.applicationname == \"your-app\"'\n"+
 			"   - By subsystem: subsystemName='your-subsystem' or query='source logs | filter $l.subsystemname == \"your-subsystem\"'\n"+
 			"   - By severity: query='source logs | filter $m.severity >= 5' (5=error, 6=critical)\n"+
-			"   - By keyword: query='source logs | filter $d.text ~~ \"error\"'",
+			"   - By keyword: query='source logs | filter $d.message.contains(\"error\")'",
 			shownItems, totalItems, len(jsonBytes))
 		responseText += warningMsg
 
