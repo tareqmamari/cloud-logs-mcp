@@ -41,9 +41,7 @@ import (
 var (
 	version = "dev"     // e.g., "v0.4.0" or "dev"
 	commit  = "unknown" // Git commit SHA
-	//nolint:unused // Build date (reserved for --version flag)
-	_date   = "unknown"
-	builtBy = "manual" // "goreleaser" or "manual"
+	builtBy = "manual"  // "goreleaser" or "manual"
 )
 
 // main is the entry point for the IBM Cloud Logs MCP server.

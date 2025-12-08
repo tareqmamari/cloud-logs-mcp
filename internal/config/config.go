@@ -34,8 +34,7 @@ type Config struct {
 	EnableRateLimit bool `json:"enable_rate_limit"`
 
 	// Security
-	TLSVerify       bool     `json:"tls_verify"`
-	AllowedIPRanges []string `json:"allowed_ip_ranges,omitempty"`
+	TLSVerify bool `json:"tls_verify"`
 
 	// Logging
 	LogLevel  string `json:"log_level"`
@@ -143,9 +142,6 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		cfg.LogFormat = v
-	}
-	if v := os.Getenv("LOGS_ALLOWED_IP_RANGES"); v != "" {
-		cfg.AllowedIPRanges = strings.Split(v, ",")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -863,14 +864,10 @@ func extractTopValues(events []interface{}, fieldName string, limit int) []Value
 		result = append(result, ValueCount{Value: val, Count: count})
 	}
 
-	// Simple sort by count (descending)
-	for i := 0; i < len(result); i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[j].Count > result[i].Count {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
+	// Sort by count (descending) - O(n log n)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Count > result[j].Count
+	})
 
 	if len(result) > limit {
 		result = result[:limit]
@@ -1228,19 +1225,6 @@ func ensureResponseLimit(text string, logger *zap.Logger) string {
 	return truncated
 }
 
-// EnsureValidContent ensures the Content slice is never empty or nil.
-// This is critical for MCP protocol compliance - empty Content causes client errors.
-func EnsureValidContent(content []mcp.Content) []mcp.Content {
-	if len(content) == 0 {
-		return []mcp.Content{
-			&mcp.TextContent{
-				Text: "(empty result)",
-			},
-		}
-	}
-	return content
-}
-
 // NewToolResultError creates a new tool result with an error message
 func NewToolResultError(message string) *mcp.CallToolResult {
 	// Ensure message is never empty
@@ -1282,12 +1266,6 @@ func NewTimeoutErrorWithFallback(operation, fallbackTool, fallbackReason string)
 	message := fmt.Sprintf("Operation '%s' timed out", operation)
 	suggestion := fmt.Sprintf("For large operations, use '%s' which %s.", fallbackTool, fallbackReason)
 	return NewToolResultErrorWithSuggestion(message, suggestion)
-}
-
-// NewValidationError creates a validation error with specific guidance
-func NewValidationError(field, issue, guidance string) *mcp.CallToolResult {
-	message := fmt.Sprintf("Invalid %s: %s", field, issue)
-	return NewToolResultErrorWithSuggestion(message, guidance)
 }
 
 // HandleGetError handles errors from get_* tools with appropriate suggestions
