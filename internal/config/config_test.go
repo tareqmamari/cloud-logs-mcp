@@ -15,7 +15,7 @@ func TestLoadConfiguration(t *testing.T) {
 		{
 			name: "valid configuration",
 			envVars: map[string]string{
-				"LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				"LOGS_SERVICE_URL": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 				"LOGS_API_KEY":     "test-api-key", // pragma: allowlist secret
 				"LOGS_REGION":      "us-south",
 			},
@@ -31,7 +31,7 @@ func TestLoadConfiguration(t *testing.T) {
 		{
 			name: "missing API key",
 			envVars: map[string]string{
-				"LOGS_SERVICE_URL": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				"LOGS_SERVICE_URL": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 			},
 			wantErr: true,
 		},
@@ -62,7 +62,7 @@ func TestLoadConfiguration(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	os.Clearenv()
-	_ = os.Setenv("LOGS_SERVICE_URL", "https://your-instance-id.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://[your-instance-id].api.us-south.logs.cloud.ibm.com")
 	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret)
 
 	cfg, err := Load()
@@ -93,7 +93,7 @@ func TestConfigDefaults(t *testing.T) {
 
 func TestConfigRedact(t *testing.T) {
 	cfg := &Config{
-		ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+		ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 		APIKey:     "secret-key-12345", // pragma: allowlist secret
 	}
 
@@ -103,12 +103,48 @@ func TestConfigRedact(t *testing.T) {
 		t.Error("API key should be redacted")
 	}
 
-	if redacted.APIKey != "***REDACTED***" {
-		t.Errorf("Expected ***REDACTED***, got %s", redacted.APIKey)
+	// For keys longer than 8 chars, we show first 4 and last 4 characters
+	expectedMasked := "secr...2345"        // pragma: allowlist secret
+	if redacted.APIKey != expectedMasked { // pragma: allowlist secret
+		t.Errorf("Expected %s, got %s", expectedMasked, redacted.APIKey)
 	}
 
 	if redacted.ServiceURL != cfg.ServiceURL {
 		t.Error("ServiceURL should not be changed")
+	}
+}
+
+func TestConfigRedactShortKey(t *testing.T) {
+	cfg := &Config{
+		ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+		APIKey:     "short", // pragma: allowlist secret
+	}
+
+	redacted := cfg.Redact()
+
+	// Short keys should be fully redacted
+	if redacted.APIKey != "***REDACTED***" {
+		t.Errorf("Expected ***REDACTED***, got %s", redacted.APIKey)
+	}
+}
+
+func TestMaskAPIKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"short", "***"},
+		{"exactly8", "***"},
+		{"secret-key-12345", "secr...2345"}, // pragma: allowlist secret
+		{"abcdefghijklmnopqrstuvwxyz", "abcd...wxyz"},
+	}
+
+	for _, tt := range tests {
+		result := MaskAPIKey(tt.input)
+		if result != tt.expected {
+			t.Errorf("MaskAPIKey(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
 	}
 }
 
@@ -122,7 +158,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				ServiceURL:      "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				ServiceURL:      "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 				APIKey:          "test-key", // pragma: allowlist secret
 				Timeout:         30 * time.Second,
 				MaxRetries:      3,
@@ -135,7 +171,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid timeout",
 			config: Config{
-				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 				APIKey:     "test-key", // pragma: allowlist secret
 				Timeout:    0,
 			},
@@ -145,7 +181,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid log level",
 			config: Config{
-				ServiceURL: "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
+				ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
 				APIKey:     "test-key", // pragma: allowlist secret
 				Timeout:    30 * time.Second,
 				LogLevel:   "invalid",
