@@ -760,17 +760,35 @@ func parseSSEResponse(body []byte) map[string]interface{} {
 	return nil
 }
 
-// MaxResultSize is the maximum size of tool results in bytes (500KB to leave significant headroom under 1MB MCP limit)
-// This is reduced to account for JSON formatting, summaries, pagination info, suggestions, and other metadata overhead
-const MaxResultSize = 500 * 1024
+// Response size limits
+const (
+	// MaxResultSize is the maximum size of tool results in bytes (500KB to leave significant headroom under 1MB MCP limit)
+	// This is reduced to account for JSON formatting, summaries, pagination info, suggestions, and other metadata overhead
+	MaxResultSize = 500 * 1024
 
-// FinalResponseLimit is the absolute maximum size for the final response text before sending to MCP
-// This ensures we never exceed the 1MB limit even with all metadata added
-const FinalResponseLimit = 950 * 1024
+	// FinalResponseLimit is the absolute maximum size for the final response text before sending to MCP
+	// This ensures we never exceed the 1MB limit even with all metadata added
+	FinalResponseLimit = 950 * 1024
 
-// MaxSSEEvents is the maximum number of SSE events to parse from a query response
-// This prevents memory issues when queries return very large result sets
-const MaxSSEEvents = 200
+	// MaxSSEEvents is the maximum number of SSE events to parse from a query response
+	// This prevents memory issues when queries return very large result sets
+	MaxSSEEvents = 200
+
+	// TruncationBufferSize is the buffer size reserved for warning messages when truncating results
+	TruncationBufferSize = 500
+
+	// WarningMessageBuffer is the buffer reserved for warning/metadata in truncated results
+	WarningMessageBuffer = 1000
+
+	// MinArraySizeForTruncation is the minimum array size before truncation is attempted
+	MinArraySizeForTruncation = 10
+
+	// MaxSummaryItems is the maximum number of items to show in result summaries
+	MaxSummaryItems = 10
+
+	// MaxTopValues is the maximum number of top values to extract from query results
+	MaxTopValues = 5
+)
 
 // FormatResponse formats the response as a text/content for MCP
 // If the result exceeds MaxResultSize, it will be truncated with pagination hints
@@ -802,7 +820,7 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 			responseText = string(truncatedBytes)
 		} else {
 			// Fallback: hard truncate the JSON string
-			responseText = string(jsonBytes[:MaxResultSize-500])
+			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
 		}
 
 		totalItems := countItems(result)
@@ -855,10 +873,10 @@ func truncateResult(result map[string]interface{}, maxSize int) (map[string]inte
 
 	// Find arrays and truncate them
 	for key, val := range truncated {
-		if arr, ok := val.([]interface{}); ok && len(arr) > 10 {
+		if arr, ok := val.([]interface{}); ok && len(arr) > MinArraySizeForTruncation {
 			// Binary search for the right size
-			low, high := 10, len(arr)
-			bestSize := 10
+			low, high := MinArraySizeForTruncation, len(arr)
+			bestSize := MinArraySizeForTruncation
 
 			for low <= high {
 				mid := (low + high) / 2
@@ -868,7 +886,7 @@ func truncateResult(result map[string]interface{}, maxSize int) (map[string]inte
 					break
 				}
 
-				if len(testBytes) <= maxSize-1000 { // Leave room for warning message
+				if len(testBytes) <= maxSize-WarningMessageBuffer {
 					bestSize = mid
 					low = mid + 1
 				} else {
@@ -886,9 +904,9 @@ func truncateResult(result map[string]interface{}, maxSize int) (map[string]inte
 	}
 
 	// Also handle nested "events" array (common in query results)
-	if events, ok := truncated["events"].([]interface{}); ok && len(events) > 10 {
-		low, high := 10, len(events)
-		bestSize := 10
+	if events, ok := truncated["events"].([]interface{}); ok && len(events) > MinArraySizeForTruncation {
+		low, high := MinArraySizeForTruncation, len(events)
+		bestSize := MinArraySizeForTruncation
 
 		for low <= high {
 			mid := (low + high) / 2
@@ -898,7 +916,7 @@ func truncateResult(result map[string]interface{}, maxSize int) (map[string]inte
 				break
 			}
 
-			if len(testBytes) <= maxSize-1000 {
+			if len(testBytes) <= maxSize-WarningMessageBuffer {
 				bestSize = mid
 				low = mid + 1
 			} else {
@@ -985,7 +1003,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			}
 
 			// Extract top applications
-			topApps := extractTopValues(events, "applicationname", 5)
+			topApps := extractTopValues(events, "applicationname", MaxTopValues)
 			if len(topApps) > 0 {
 				summary.WriteString("### Top Applications\n")
 				for _, app := range topApps {
@@ -995,7 +1013,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			}
 
 			// Extract top subsystems
-			topSubs := extractTopValues(events, "subsystemname", 5)
+			topSubs := extractTopValues(events, "subsystemname", MaxTopValues)
 			if len(topSubs) > 0 {
 				summary.WriteString("### Top Subsystems\n")
 				for _, sub := range topSubs {
@@ -1021,14 +1039,14 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			summary.WriteString(fmt.Sprintf("**Total Items:** %d\n\n", len(arr)))
 
 			// Extract names/IDs for quick reference
-			names := extractFieldValues(arr, []string{"name", "title", "id"}, 10)
+			names := extractFieldValues(arr, []string{"name", "title", "id"}, MaxSummaryItems)
 			if len(names) > 0 {
 				summary.WriteString("### Items\n")
 				for i, name := range names {
 					summary.WriteString(fmt.Sprintf("%d. %s\n", i+1, name))
 				}
-				if len(arr) > 10 {
-					summary.WriteString(fmt.Sprintf("... and %d more\n", len(arr)-10))
+				if len(arr) > MaxSummaryItems {
+					summary.WriteString(fmt.Sprintf("... and %d more\n", len(arr)-MaxSummaryItems))
 				}
 				summary.WriteString("\n")
 			}
@@ -1322,7 +1340,7 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 		if truncatedBytes != nil {
 			responseText = string(truncatedBytes)
 		} else {
-			responseText = string(jsonBytes[:MaxResultSize-500])
+			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
 		}
 
 		totalItems := countItems(result)
@@ -1402,7 +1420,7 @@ func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]int
 	if len(responseText) > MaxResultSize {
 		truncatedBySize = true
 		// Truncate the JSON but keep the summary
-		_, truncatedBytes := truncateResult(result, MaxResultSize-len(summary)-500)
+		_, truncatedBytes := truncateResult(result, MaxResultSize-len(summary)-TruncationBufferSize)
 		if truncatedBytes != nil {
 			if summary != "" {
 				responseText = summary + "---\n\n### Raw Data (truncated)\n\n" + string(truncatedBytes)
@@ -1475,7 +1493,7 @@ func ensureResponseLimit(text string, logger *zap.Logger) string {
 	}
 
 	// Hard truncate and add warning
-	truncated := text[:FinalResponseLimit-200]
+	truncated := text[:FinalResponseLimit-TruncationBufferSize]
 	truncated += "\n\n---\n⚠️ **Response truncated** due to size limits. Use filters or pagination to get complete results."
 	return truncated
 }
