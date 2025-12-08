@@ -185,6 +185,14 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewSuggestAlertTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetAuditLogTool(s.apiClient, s.logger))
 
+	// Query Intelligence tools
+	s.registerTool(tools.NewQueryTemplatesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewValidateQueryTool(s.apiClient, s.logger))
+
+	// Workflow Automation tools
+	s.registerTool(tools.NewInvestigateIncidentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewHealthCheckTool(s.apiClient, s.logger))
+
 	s.logger.Info("Registered all MCP tools")
 	return nil
 }
