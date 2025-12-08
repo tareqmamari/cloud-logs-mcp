@@ -1992,6 +1992,223 @@ func getSuccessSuggestions(toolName string, result map[string]interface{}) []Pro
 			{Tool: "update_data_usage_metrics_export_status", Description: "Enable/disable data usage metrics export"},
 		}
 
+	// Rule group tools
+	case "list_rule_groups":
+		return []ProactiveSuggestion{
+			{Tool: "get_rule_group", Description: "Get details of a specific rule group"},
+			{Tool: "create_rule_group", Description: "Create a new rule group"},
+		}
+
+	case "get_rule_group":
+		return []ProactiveSuggestion{
+			{Tool: "update_rule_group", Description: "Modify this rule group"},
+			{Tool: "delete_rule_group", Description: "Remove this rule group"},
+		}
+
+	case "create_rule_group":
+		return []ProactiveSuggestion{
+			{Tool: "list_rule_groups", Description: "View all rule groups including the new one"},
+		}
+
+	case "update_rule_group":
+		return []ProactiveSuggestion{
+			{Tool: "get_rule_group", Description: "View the updated rule group"},
+		}
+
+	case "delete_rule_group":
+		return []ProactiveSuggestion{
+			{Tool: "list_rule_groups", Description: "View remaining rule groups"},
+		}
+
+	// Outgoing webhook tools
+	case "list_outgoing_webhooks":
+		return []ProactiveSuggestion{
+			{Tool: "get_outgoing_webhook", Description: "Get details of a specific webhook"},
+			{Tool: "create_outgoing_webhook", Description: "Create a new outgoing webhook"},
+		}
+
+	case "get_outgoing_webhook":
+		return []ProactiveSuggestion{
+			{Tool: "update_outgoing_webhook", Description: "Modify this webhook"},
+			{Tool: "delete_outgoing_webhook", Description: "Remove this webhook"},
+		}
+
+	case "create_outgoing_webhook":
+		return []ProactiveSuggestion{
+			{Tool: "list_outgoing_webhooks", Description: "View all webhooks including the new one"},
+		}
+
+	case "update_outgoing_webhook":
+		return []ProactiveSuggestion{
+			{Tool: "get_outgoing_webhook", Description: "View the updated webhook"},
+		}
+
+	case "delete_outgoing_webhook":
+		return []ProactiveSuggestion{
+			{Tool: "list_outgoing_webhooks", Description: "View remaining webhooks"},
+		}
+
+	// Policy tools
+	case "list_policies":
+		return []ProactiveSuggestion{
+			{Tool: "get_policy", Description: "Get details of a specific policy"},
+			{Tool: "create_policy", Description: "Create a new policy"},
+		}
+
+	case "get_policy":
+		return []ProactiveSuggestion{
+			{Tool: "update_policy", Description: "Modify this policy"},
+			{Tool: "delete_policy", Description: "Remove this policy"},
+		}
+
+	case "create_policy":
+		return []ProactiveSuggestion{
+			{Tool: "list_policies", Description: "View all policies including the new one"},
+		}
+
+	case "update_policy":
+		return []ProactiveSuggestion{
+			{Tool: "get_policy", Description: "View the updated policy"},
+		}
+
+	case "delete_policy":
+		return []ProactiveSuggestion{
+			{Tool: "list_policies", Description: "View remaining policies"},
+		}
+
+	// E2M (Events to Metrics) tools
+	case "list_e2m":
+		return []ProactiveSuggestion{
+			{Tool: "get_e2m", Description: "Get details of a specific E2M mapping"},
+			{Tool: "create_e2m", Description: "Create a new E2M mapping"},
+		}
+
+	case "get_e2m":
+		return []ProactiveSuggestion{
+			{Tool: "replace_e2m", Description: "Replace this E2M mapping"},
+			{Tool: "delete_e2m", Description: "Remove this E2M mapping"},
+		}
+
+	case "create_e2m":
+		return []ProactiveSuggestion{
+			{Tool: "list_e2m", Description: "View all E2M mappings including the new one"},
+		}
+
+	case "replace_e2m":
+		return []ProactiveSuggestion{
+			{Tool: "get_e2m", Description: "View the replaced E2M mapping"},
+		}
+
+	case "delete_e2m":
+		return []ProactiveSuggestion{
+			{Tool: "list_e2m", Description: "View remaining E2M mappings"},
+		}
+
+	// Data access rule tools
+	case "list_data_access_rules":
+		return []ProactiveSuggestion{
+			{Tool: "get_data_access_rule", Description: "Get details of a specific data access rule"},
+			{Tool: "create_data_access_rule", Description: "Create a new data access rule"},
+		}
+
+	case "get_data_access_rule":
+		return []ProactiveSuggestion{
+			{Tool: "update_data_access_rule", Description: "Modify this data access rule"},
+			{Tool: "delete_data_access_rule", Description: "Remove this data access rule"},
+		}
+
+	case "create_data_access_rule":
+		return []ProactiveSuggestion{
+			{Tool: "list_data_access_rules", Description: "View all data access rules including the new one"},
+		}
+
+	case "update_data_access_rule":
+		return []ProactiveSuggestion{
+			{Tool: "get_data_access_rule", Description: "View the updated data access rule"},
+		}
+
+	case "delete_data_access_rule":
+		return []ProactiveSuggestion{
+			{Tool: "list_data_access_rules", Description: "View remaining data access rules"},
+		}
+
+	// Enrichment tools
+	case "list_enrichments", "get_enrichments":
+		return []ProactiveSuggestion{
+			{Tool: "create_enrichment", Description: "Create a new enrichment"},
+		}
+
+	case "create_enrichment":
+		return []ProactiveSuggestion{
+			{Tool: "list_enrichments", Description: "View all enrichments including the new one"},
+		}
+
+	case "update_enrichment":
+		return []ProactiveSuggestion{
+			{Tool: "list_enrichments", Description: "View all enrichments"},
+		}
+
+	case "delete_enrichment":
+		return []ProactiveSuggestion{
+			{Tool: "list_enrichments", Description: "View remaining enrichments"},
+		}
+
+	// View tools
+	case "list_views":
+		return []ProactiveSuggestion{
+			{Tool: "get_view", Description: "Get details of a specific view"},
+			{Tool: "create_view", Description: "Create a new view"},
+		}
+
+	case "get_view":
+		return []ProactiveSuggestion{
+			{Tool: "replace_view", Description: "Replace this view"},
+			{Tool: "delete_view", Description: "Remove this view"},
+		}
+
+	case "create_view":
+		return []ProactiveSuggestion{
+			{Tool: "list_views", Description: "View all views including the new one"},
+		}
+
+	case "replace_view":
+		return []ProactiveSuggestion{
+			{Tool: "get_view", Description: "View the replaced view"},
+		}
+
+	case "delete_view":
+		return []ProactiveSuggestion{
+			{Tool: "list_views", Description: "View remaining views"},
+		}
+
+	// View folder tools
+	case "list_view_folders":
+		return []ProactiveSuggestion{
+			{Tool: "get_view_folder", Description: "Get details of a specific view folder"},
+			{Tool: "create_view_folder", Description: "Create a new view folder"},
+		}
+
+	case "get_view_folder":
+		return []ProactiveSuggestion{
+			{Tool: "replace_view_folder", Description: "Replace this view folder"},
+			{Tool: "delete_view_folder", Description: "Remove this view folder"},
+		}
+
+	case "create_view_folder":
+		return []ProactiveSuggestion{
+			{Tool: "list_view_folders", Description: "View all view folders including the new one"},
+		}
+
+	case "replace_view_folder":
+		return []ProactiveSuggestion{
+			{Tool: "get_view_folder", Description: "View the replaced view folder"},
+		}
+
+	case "delete_view_folder":
+		return []ProactiveSuggestion{
+			{Tool: "list_view_folders", Description: "View remaining view folders"},
+		}
+
 	default:
 		return nil
 	}

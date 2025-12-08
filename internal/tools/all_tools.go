@@ -40,7 +40,7 @@ func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return HandleGetError(err, "Rule group", id, "list_rule_groups"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_rule_group")
 }
 
 // ListRuleGroupsTool lists all rule groups.
@@ -72,7 +72,7 @@ func (t *ListRuleGroupsTool) Execute(ctx context.Context, _ map[string]interface
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_rule_groups")
 }
 
 // CreateRuleGroupTool creates a new rule group.
@@ -104,7 +104,7 @@ func (t *CreateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_rule_group")
 }
 
 // UpdateRuleGroupTool updates an existing rule group.
@@ -140,7 +140,7 @@ func (t *UpdateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "update_rule_group")
 }
 
 // DeleteRuleGroupTool deletes a rule group.
@@ -172,7 +172,7 @@ func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_rule_group")
 }
 
 // GetOutgoingWebhookTool retrieves a specific outgoing webhook by ID.
@@ -204,7 +204,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 	if err != nil {
 		return HandleGetError(err, "Outgoing webhook", id, "list_outgoing_webhooks"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_outgoing_webhook")
 }
 
 // ListOutgoingWebhooksTool lists all outgoing webhooks.
@@ -236,7 +236,7 @@ func (t *ListOutgoingWebhooksTool) Execute(ctx context.Context, _ map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_outgoing_webhooks")
 }
 
 // CreateOutgoingWebhookTool creates a new outgoing webhook.
@@ -318,7 +318,7 @@ func (t *CreateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_outgoing_webhook")
 }
 
 // UpdateOutgoingWebhookTool updates an existing outgoing webhook.
@@ -354,7 +354,7 @@ func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "update_outgoing_webhook")
 }
 
 // DeleteOutgoingWebhookTool deletes an outgoing webhook.
@@ -386,7 +386,7 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_outgoing_webhook")
 }
 
 // GetPolicyTool retrieves a specific policy by ID.
@@ -418,7 +418,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return HandleGetError(err, "Policy", id, "list_policies"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_policy")
 }
 
 // ListPoliciesTool lists all policies.
@@ -450,7 +450,7 @@ func (t *ListPoliciesTool) Execute(ctx context.Context, _ map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_policies")
 }
 
 // CreatePolicyTool creates a new policy.
@@ -584,7 +584,7 @@ func (t *CreatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_policy")
 }
 
 // validatePolicy performs dry-run validation for policy creation
@@ -663,7 +663,7 @@ func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "update_policy")
 }
 
 // DeletePolicyTool deletes a policy.
@@ -695,7 +695,7 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_policy")
 }
 
 // GetE2MTool retrieves a specific events-to-metrics configuration by ID.
@@ -727,7 +727,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 	if err != nil {
 		return HandleGetError(err, "Events-to-metrics configuration", id, "list_e2m"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_e2m")
 }
 
 // ListE2MTool lists all events-to-metrics configurations.
@@ -759,7 +759,7 @@ func (t *ListE2MTool) Execute(ctx context.Context, _ map[string]interface{}) (*m
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_e2m")
 }
 
 // CreateE2MTool creates a new events-to-metrics configuration.
@@ -894,7 +894,7 @@ func (t *CreateE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_e2m")
 }
 
 // ReplaceE2MTool replaces an events-to-metrics configuration.
@@ -930,7 +930,7 @@ func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "replace_e2m")
 }
 
 // DeleteE2MTool deletes an events-to-metrics configuration.
@@ -962,7 +962,7 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_e2m")
 }
 
 // ListDataAccessRulesTool lists all data access rules.
@@ -994,7 +994,7 @@ func (t *ListDataAccessRulesTool) Execute(ctx context.Context, _ map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_data_access_rules")
 }
 
 // GetDataAccessRuleTool retrieves a specific data access rule by ID.
@@ -1026,7 +1026,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return HandleGetError(err, "Data access rule", id, "list_data_access_rules"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_data_access_rule")
 }
 
 // CreateDataAccessRuleTool creates a new data access rule.
@@ -1116,7 +1116,7 @@ func (t *CreateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_data_access_rule")
 }
 
 // UpdateDataAccessRuleTool updates an existing data access rule.
@@ -1152,7 +1152,7 @@ func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "update_data_access_rule")
 }
 
 // DeleteDataAccessRuleTool deletes a data access rule.
@@ -1184,7 +1184,7 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_data_access_rule")
 }
 
 // ListEnrichmentsTool lists all enrichments.
@@ -1216,7 +1216,7 @@ func (t *ListEnrichmentsTool) Execute(ctx context.Context, _ map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_enrichments")
 }
 
 // CreateEnrichmentTool creates a new enrichment.
@@ -1319,7 +1319,7 @@ func (t *CreateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_enrichment")
 }
 
 // UpdateEnrichmentTool updates an existing enrichment.
@@ -1355,7 +1355,7 @@ func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "update_enrichment")
 }
 
 // DeleteEnrichmentTool deletes an enrichment.
@@ -1387,7 +1387,7 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_enrichment")
 }
 
 // GetEnrichmentsTool retrieves all enrichments (alias for list_enrichments).
@@ -1417,7 +1417,7 @@ func (t *GetEnrichmentsTool) Execute(ctx context.Context, _ map[string]interface
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_enrichments")
 }
 
 // ListViewsTool lists all views.
@@ -1449,7 +1449,7 @@ func (t *ListViewsTool) Execute(ctx context.Context, _ map[string]interface{}) (
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_views")
 }
 
 // CreateViewTool creates a new view.
@@ -1554,7 +1554,7 @@ func (t *CreateViewTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_view")
 }
 
 // GetViewTool retrieves a specific view by ID.
@@ -1586,7 +1586,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 	if err != nil {
 		return HandleGetError(err, "View", id, "list_views"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_view")
 }
 
 // ReplaceViewTool replaces a view.
@@ -1622,7 +1622,7 @@ func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "replace_view")
 }
 
 // DeleteViewTool deletes a view.
@@ -1654,7 +1654,7 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_view")
 }
 
 // ListViewFoldersTool lists all view folders.
@@ -1682,7 +1682,7 @@ func (t *ListViewFoldersTool) Execute(ctx context.Context, _ map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "list_view_folders")
 }
 
 // CreateViewFolderTool creates a new view folder.
@@ -1714,7 +1714,7 @@ func (t *CreateViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "create_view_folder")
 }
 
 // GetViewFolderTool retrieves a specific view folder by ID.
@@ -1746,7 +1746,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 	if err != nil {
 		return HandleGetError(err, "View folder", id, "list_view_folders"), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "get_view_folder")
 }
 
 // ReplaceViewFolderTool replaces a view folder.
@@ -1782,7 +1782,7 @@ func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "replace_view_folder")
 }
 
 // DeleteViewFolderTool deletes a view folder.
@@ -1814,5 +1814,5 @@ func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	return t.FormatResponse(res)
+	return t.FormatResponseWithSuggestions(res, "delete_view_folder")
 }
