@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,6 +10,34 @@ import (
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
+
+// Parameter aliases for IBM Cloud Logs terminology mapping
+// Users may use familiar terms like "namespace", "application", "component", "resource", "subsystem"
+// These map to IBM Cloud Logs concepts:
+//   - namespace/application -> applicationName (the app generating logs)
+//   - component/resource/subsystem -> subsystemName (the component within the app)
+var (
+	// applicationAliases maps user-friendly terms to "applicationName"
+	applicationAliases = []string{"namespace", "app", "application", "service", "app_name", "application_name"}
+	// subsystemAliases maps user-friendly terms to "subsystemName"
+	subsystemAliases = []string{"component", "resource", "subsystem", "module", "component_name", "subsystem_name", "resource_name"}
+)
+
+// resolveAliasedParam checks for a parameter value using the canonical name first,
+// then falls back to checking aliases. Returns the value and whether it was found.
+func resolveAliasedParam(arguments map[string]interface{}, canonicalName string, aliases []string) (string, bool) {
+	// First check canonical name
+	if val, _ := GetStringParam(arguments, canonicalName, false); val != "" {
+		return val, true
+	}
+	// Then check aliases
+	for _, alias := range aliases {
+		if val, _ := GetStringParam(arguments, alias, false); val != "" {
+			return val, true
+		}
+	}
+	return "", false
+}
 
 // normalizeTier maps user-friendly tier names to API values
 func normalizeTier(tier string) string {
@@ -47,8 +76,8 @@ func normalizeTier(tier string) string {
 		return tier
 	}
 
-	// Default to frequent_search if unrecognized
-	return "frequent_search"
+	// Default to archive if unrecognized
+	return "archive"
 }
 
 // QueryTool executes a synchronous query
@@ -70,7 +99,71 @@ func (t *QueryTool) Name() string {
 
 // Description returns the tool description
 func (t *QueryTool) Description() string {
-	return "Execute a synchronous query against IBM Cloud Logs to search and analyze log data"
+	return `Execute a synchronous streaming query against IBM Cloud Logs (also known as ICL or Cloud Logs). This is the DEFAULT and PREFERRED method for querying logs.
+
+**Related tools:** submit_background_query (for large/slow queries), build_query (construct queries without knowing syntax), list_alerts (check triggered alerts)
+
+**DataPrime Query Syntax - Field Prefixes:**
+- $l. (labels): applicationname, subsystemname, namespace, pod, container, hostname, environment, region, cluster
+- $m. (metadata): severity (1-6: debug, verbose, info, warning, error, critical), timestamp, priority
+- $d. (data): JSON fields from log content (e.g., $d.status_code, $d.user_id, $d.message)
+
+**Example queries:**
+- Filter by app: source logs | filter $l.applicationname == 'my-app'
+- Filter by severity: source logs | filter $m.severity >= 5
+- Search text: source logs | filter $d.text ~~ 'error'
+- Combined: source logs | filter $l.applicationname == 'api' && $m.severity >= 4
+
+Use this tool for:
+- Interactive log searches and analysis
+- Debugging and troubleshooting
+- Real-time log inspection
+
+**Pagination for large results:**
+When results exceed limits, the response includes pagination info with the last timestamp. To fetch more:
+1. Copy the 'last_timestamp' from the pagination info
+2. Use it as 'start_date' in your next query (keep the same 'end_date')
+3. Repeat until no more results
+
+Example pagination flow:
+- First call: start_date='2024-01-01T00:00:00Z', end_date='2024-01-02T00:00:00Z'
+- Response shows last_timestamp='2024-01-01T12:30:00Z' with more available
+- Next call: start_date='2024-01-01T12:30:00Z', end_date='2024-01-02T00:00:00Z'
+
+Only use background queries (submit_background_query) when explicitly requested or for very large historical queries that may timeout.
+
+Note: A 'keypath does not exist' error may indicate either an invalid field name OR that no data with that field exists in the specified time range - try expanding the time range or verifying the field name exists in your logs.`
+}
+
+// validQueryFields defines all valid fields for the query_logs tool
+// This includes API fields and convenience aliases for filtering
+var validQueryFields = map[string]bool{
+	// API fields (from OpenAPI spec)
+	"query":                    true,
+	"tier":                     true,
+	"syntax":                   true,
+	"start_date":               true,
+	"end_date":                 true,
+	"limit":                    true,
+	"default_source":           true,
+	"strict_fields_validation": true,
+	"now_date":                 true,
+	// Convenience filter aliases (resolved to query filters)
+	"applicationName":  true,
+	"namespace":        true,
+	"app":              true,
+	"application":      true,
+	"service":          true,
+	"app_name":         true,
+	"application_name": true,
+	"subsystemName":    true,
+	"component":        true,
+	"resource":         true,
+	"subsystem":        true,
+	"module":           true,
+	"component_name":   true,
+	"subsystem_name":   true,
+	"resource_name":    true,
 }
 
 // InputSchema returns the input schema
@@ -80,42 +173,123 @@ func (t *QueryTool) InputSchema() interface{} {
 		"properties": map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
-				"description": "The query string to execute (DataPrime or Lucene syntax)",
+				"description": "The query string to execute (DataPrime or Lucene syntax). Max 4096 characters.",
+				"minLength":   1,
+				"maxLength":   4096,
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
-				"description": "Log tier to query. frequent_search (default, aliases: PI, priority, insights, quick), archive (aliases: COS, storage, cold), or unspecified",
+				"description": "Log tier to query. archive (default, aliases: COS, storage, cold), frequent_search (aliases: PI, priority, insights, quick), or unspecified",
 				"enum":        []string{"unspecified", "archive", "frequent_search"},
-				"default":     "frequent_search",
+				"default":     "archive",
 			},
 			"syntax": map[string]interface{}{
 				"type":        "string",
-				"description": "Query syntax: dataprime (default), lucene, or unspecified",
-				"enum":        []string{"unspecified", "lucene", "dataprime"},
+				"description": "Query syntax: dataprime (default), lucene, dataprime_utf8_base64, lucene_utf8_base64, or unspecified",
+				"enum":        []string{"unspecified", "lucene", "dataprime", "lucene_utf8_base64", "dataprime_utf8_base64"},
 				"default":     "dataprime",
 			},
 			"start_date": map[string]interface{}{
 				"type":        "string",
-				"description": "Start date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"format":      "date-time",
+				"description": "Start date for the query (required, ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Always specify a time range for efficient queries.",
 			},
 			"end_date": map[string]interface{}{
 				"type":        "string",
-				"description": "End date for the query (ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z)",
+				"format":      "date-time",
+				"description": "End date for the query (required, ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Always specify a time range for efficient queries.",
 			},
 			"limit": map[string]interface{}{
 				"type":        "integer",
-				"description": "Maximum number of results to return (default: 2000, max: 50000)",
+				"description": "Maximum number of results to return (default: 200 to prevent hitting response size limits). Increase if needed, max for frequent_search: 12000, max for archive: 50000.",
+				"minimum":     0,
+				"maximum":     50000,
+			},
+			"default_source": map[string]interface{}{
+				"type":        "string",
+				"description": "Default source when omitted in query (e.g., 'logs'). If not specified, 'source logs' must be in the query.",
+			},
+			"strict_fields_validation": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, reject queries using unknown fields not detected in ingested data. Default: false.",
+				"default":     false,
+			},
+			"now_date": map[string]interface{}{
+				"type":        "string",
+				"format":      "date-time",
+				"description": "Override current time for time-based functions like now() in DataPrime. Defaults to system time.",
+			},
+			// Application filter with aliases
+			"applicationName": map[string]interface{}{
+				"type":        "string",
+				"description": "Filter by application name (aliases: namespace, app, application, service). Maps to the applicationName label in IBM Cloud Logs.",
+			},
+			"namespace": map[string]interface{}{
+				"type":        "string",
+				"description": "Alias for applicationName - filter by namespace/application name",
+			},
+			// Subsystem filter with aliases
+			"subsystemName": map[string]interface{}{
+				"type":        "string",
+				"description": "Filter by subsystem name (aliases: component, resource, module). Maps to the subsystemName label in IBM Cloud Logs.",
+			},
+			"component": map[string]interface{}{
+				"type":        "string",
+				"description": "Alias for subsystemName - filter by component/resource name",
 			},
 		},
-		"required": []string{"query"},
+		"required":             []string{"query", "start_date", "end_date"},
+		"additionalProperties": false,
 	}
 }
 
 // Execute executes the tool
 func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	// Validate that all provided fields are recognized
+	var unknownFields []string
+	for field := range arguments {
+		if !validQueryFields[field] {
+			unknownFields = append(unknownFields, field)
+		}
+	}
+	if len(unknownFields) > 0 {
+		return NewToolResultError(fmt.Sprintf("Unknown field(s): %s. Valid fields are: query, tier, syntax, start_date, end_date, limit, default_source, strict_fields_validation, now_date, applicationName (or aliases: namespace, app, application, service), subsystemName (or aliases: component, resource, module)",
+			strings.Join(unknownFields, ", "))), nil
+	}
+
 	query, err := GetStringParam(arguments, "query", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+
+	// Validate query length per API spec
+	if len(query) > 4096 {
+		return NewToolResultError(fmt.Sprintf("Query too long: %d characters (max 4096)", len(query))), nil
+	}
+
+	// Resolve aliased filter parameters and append to query
+	// This allows users to use namespace/component instead of applicationName/subsystemName
+	var filters []string
+
+	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); found {
+		filters = append(filters, `$l.applicationname == '`+appName+`'`)
+	}
+
+	if subsysName, found := resolveAliasedParam(arguments, "subsystemName", subsystemAliases); found {
+		filters = append(filters, `$l.subsystemname == '`+subsysName+`'`)
+	}
+
+	// Append filters to query if any were specified
+	if len(filters) > 0 {
+		filterExpr := strings.Join(filters, " && ")
+		// Check if query already has a filter clause
+		if strings.Contains(strings.ToLower(query), "| filter") {
+			// Append to existing filter
+			query = query + " && " + filterExpr
+		} else {
+			// Add new filter clause
+			query = query + " | filter " + filterExpr
+		}
 	}
 
 	// Build metadata object with all optional parameters
@@ -124,7 +298,7 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	// Apply defaults for tier and syntax with intelligent alias mapping
 	tier, _ := GetStringParam(arguments, "tier", false)
 	if tier == "" {
-		tier = "frequent_search"
+		tier = "archive" // Default to archive tier
 	} else {
 		// Normalize user-friendly aliases (PI, archive, COS, etc.)
 		tier = normalizeTier(tier)
@@ -135,22 +309,65 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	if syntax == "" {
 		syntax = "dataprime"
 	}
+	// Validate syntax value
+	validSyntax := map[string]bool{
+		"unspecified": true, "lucene": true, "dataprime": true,
+		"lucene_utf8_base64": true, "dataprime_utf8_base64": true,
+	}
+	if !validSyntax[syntax] {
+		return NewToolResultError(fmt.Sprintf("Invalid syntax '%s'. Valid values: unspecified, lucene, dataprime, lucene_utf8_base64, dataprime_utf8_base64", syntax)), nil
+	}
 	metadata["syntax"] = syntax
 
-	// Add date range if provided
-	if startDate, _ := GetStringParam(arguments, "start_date", false); startDate != "" {
-		metadata["start_date"] = startDate
+	// Add date range (required for efficient queries)
+	startDate, err := GetStringParam(arguments, "start_date", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
 	}
-	if endDate, _ := GetStringParam(arguments, "end_date", false); endDate != "" {
-		metadata["end_date"] = endDate
-	}
+	metadata["start_date"] = startDate
 
-	// Add limit with proper default
+	endDate, err := GetStringParam(arguments, "end_date", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	metadata["end_date"] = endDate
+
+	// Add limit with proper default and validation
+	// Default to 500 to prevent hitting MCP's 1MB response limit
+	// Users can increase up to API max if needed
 	limit, _ := GetIntParam(arguments, "limit", false)
 	if limit > 0 {
+		// Validate limit based on tier
+		maxLimit := 50000
+		if tier == "frequent_search" {
+			maxLimit = 12000
+		}
+		if limit > maxLimit {
+			return NewToolResultError(fmt.Sprintf("Limit %d exceeds maximum for tier '%s' (max: %d)", limit, tier, maxLimit)), nil
+		}
 		metadata["limit"] = limit
 	} else {
-		metadata["limit"] = 2000 // Default limit per API spec
+		metadata["limit"] = 200 // Conservative default to prevent 1MB limit issues
+	}
+
+	// Add optional API fields if provided
+	if defaultSource, _ := GetStringParam(arguments, "default_source", false); defaultSource != "" {
+		metadata["default_source"] = defaultSource
+	}
+
+	if strictValidation, err := GetBoolParam(arguments, "strict_fields_validation", false); err == nil && strictValidation {
+		metadata["strict_fields_validation"] = strictValidation
+	}
+
+	if nowDate, _ := GetStringParam(arguments, "now_date", false); nowDate != "" {
+		metadata["now_date"] = nowDate
+	}
+
+	// Validate DataPrime query before sending to API (if using dataprime syntax)
+	if syntax == "dataprime" || syntax == "dataprime_utf8_base64" {
+		if validationErr := ValidateDataPrimeQuery(query); validationErr != nil {
+			return NewToolResultError(validationErr.Error()), nil
+		}
 	}
 
 	// Build request body with query at top level and metadata nested
@@ -160,17 +377,20 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	}
 
 	req := &client.Request{
-		Method: "POST",
-		Path:   "/v1/query",
-		Body:   body,
+		Method:    "POST",
+		Path:      "/v1/query",
+		Body:      body,
+		AcceptSSE: true, // Sync query returns Server-Sent Events stream
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		// Enhance error with query-specific suggestions
+		errorMsg := FormatQueryError(query, err.Error())
+		return NewToolResultError(errorMsg), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSummaryAndSuggestions(result, "query results", "query_logs")
 }
 
 // SubmitBackgroundQueryTool submits an asynchronous background query
@@ -192,7 +412,16 @@ func (t *SubmitBackgroundQueryTool) Name() string {
 
 // Description returns the tool description
 func (t *SubmitBackgroundQueryTool) Description() string {
-	return "Submit an asynchronous background query for large-scale log analysis"
+	return `Submit an asynchronous background query for large-scale log analysis. This is a fire-and-forget operation.
+
+WARNING: Do NOT use this for normal queries. Use query_logs instead, which is the default and preferred method.
+
+Only use background queries when:
+- The user explicitly requests a background/async query
+- Querying very large time ranges that may timeout with sync queries
+- Running queries that don't need immediate results
+
+After submitting, use get_background_query_status to check progress and get_background_query_data to retrieve results when complete.`
 }
 
 // InputSchema returns the input schema
@@ -260,7 +489,7 @@ func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "submit_background_query")
 }
 
 // GetBackgroundQueryStatusTool checks the status of a background query
@@ -313,10 +542,10 @@ func (t *GetBackgroundQueryStatusTool) Execute(ctx context.Context, arguments ma
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Background query", queryID, "submit_background_query"), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "get_background_query_status")
 }
 
 // GetBackgroundQueryDataTool retrieves the results of a background query
@@ -369,10 +598,10 @@ func (t *GetBackgroundQueryDataTool) Execute(ctx context.Context, arguments map[
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		return NewToolResultError(err.Error()), nil
+		return HandleGetError(err, "Background query data", queryID, "get_background_query_status"), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSummary(result, "query results")
 }
 
 // CancelBackgroundQueryTool cancels a running background query
@@ -428,5 +657,5 @@ func (t *CancelBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	return t.FormatResponse(result)
+	return t.FormatResponseWithSuggestions(result, "cancel_background_query")
 }
