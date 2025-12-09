@@ -30,7 +30,12 @@
         "api",
         "deps",
         "release",
-        "docs"
+        "docs",
+        "session",
+        "metrics",
+        "observability",
+        "validator",
+        "query"
       ]
     ],
     "subject-case": [0],
