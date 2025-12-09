@@ -40,24 +40,29 @@ type TraceInfo struct {
 	ParentSpanID string `json:"parent_span_id,omitempty"`
 }
 
+// idBuffer wraps a byte slice for use with sync.Pool
+type idBuffer struct {
+	b []byte
+}
+
 // idPool is a pool for reusing byte slices for ID generation
 var idPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 16)
+		return &idBuffer{b: make([]byte, 16)}
 	},
 }
 
 // GenerateID generates a random 32-character hex ID (128 bits)
 func GenerateID() string {
-	b := idPool.Get().([]byte)
-	defer idPool.Put(b)
+	buf := idPool.Get().(*idBuffer)
+	defer idPool.Put(buf)
 
-	_, err := rand.Read(b)
+	_, err := rand.Read(buf.b)
 	if err != nil {
 		// Fallback to a simpler ID if crypto/rand fails (should never happen)
 		return "00000000000000000000000000000000"
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(buf.b)
 }
 
 // GenerateShortID generates a random 16-character hex ID (64 bits) for span IDs

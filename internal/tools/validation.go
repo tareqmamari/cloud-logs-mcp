@@ -66,7 +66,7 @@ func ValidateStringLength(config map[string]interface{}, field string, minLen, m
 }
 
 // ValidateIntRange validates that an integer field is within range
-func ValidateIntRange(config map[string]interface{}, field string, min, max int) string {
+func ValidateIntRange(config map[string]interface{}, field string, minVal, maxVal int) string {
 	val, ok := config[field]
 	if !ok {
 		return ""
@@ -82,11 +82,11 @@ func ValidateIntRange(config map[string]interface{}, field string, min, max int)
 	default:
 		return fmt.Sprintf("Field '%s' must be a number", field)
 	}
-	if intVal < min {
-		return fmt.Sprintf("Field '%s' must be at least %d", field, min)
+	if intVal < minVal {
+		return fmt.Sprintf("Field '%s' must be at least %d", field, minVal)
 	}
-	if max > 0 && intVal > max {
-		return fmt.Sprintf("Field '%s' must be at most %d", field, max)
+	if maxVal > 0 && intVal > maxVal {
+		return fmt.Sprintf("Field '%s' must be at most %d", field, maxVal)
 	}
 	return ""
 }

@@ -181,16 +181,16 @@ func TestLargeResultTruncation(t *testing.T) {
 		t.Errorf("FormatResponse(large) returned error: %v", err)
 	}
 	if result == nil {
-		t.Error("FormatResponse(large) returned nil result")
+		t.Fatal("FormatResponse(large) returned nil result")
 	}
 
 	// Check that result is truncated
 	if len(result.Content) == 0 {
-		t.Error("Result has no content")
+		t.Fatal("Result has no content")
 	}
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	if !ok {
-		t.Error("Result content is not TextContent")
+		t.Fatal("Result content is not TextContent")
 	}
 	if len(textContent.Text) > FinalResponseLimit {
 		t.Errorf("Result exceeds FinalResponseLimit: %d > %d", len(textContent.Text), FinalResponseLimit)

@@ -131,8 +131,8 @@ func (c *Context) GetLastQuery() *QueryInfo {
 		return nil
 	}
 	// Return a copy to avoid race conditions
-	copy := *c.LastQuery
-	return &copy
+	queryCopy := *c.LastQuery
+	return &queryCopy
 }
 
 // GetLastResource returns the last resource of a given type
@@ -142,8 +142,8 @@ func (c *Context) GetLastResource(resourceType string) *ResourceInfo {
 
 	if info, ok := c.LastResources[resourceType]; ok {
 		// Return a copy
-		copy := *info
-		return &copy
+		infoCopy := *info
+		return &infoCopy
 	}
 	return nil
 }

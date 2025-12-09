@@ -5,7 +5,6 @@ package tools
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 // ResultAnalysis provides intelligent analysis of query/list results
@@ -119,7 +118,7 @@ func buildStatistics(events []interface{}) *Statistics {
 	topApps := extractTopValues(events, "applicationname", 5)
 	if len(topApps) > 0 {
 		for _, vc := range topApps {
-			stats.TopValues["applications"] = append(stats.TopValues["applications"], TopValue{Value: vc.Value, Count: vc.Count})
+			stats.TopValues["applications"] = append(stats.TopValues["applications"], TopValue(vc))
 		}
 	}
 
@@ -127,7 +126,7 @@ func buildStatistics(events []interface{}) *Statistics {
 	topSubs := extractTopValues(events, "subsystemname", 5)
 	if len(topSubs) > 0 {
 		for _, vc := range topSubs {
-			stats.TopValues["subsystems"] = append(stats.TopValues["subsystems"], TopValue{Value: vc.Value, Count: vc.Count})
+			stats.TopValues["subsystems"] = append(stats.TopValues["subsystems"], TopValue(vc))
 		}
 	}
 
@@ -405,9 +404,10 @@ func FormatAnalysisAsMarkdown(analysis *ResultAnalysis) string {
 		var anomalyParts []string
 		for _, a := range analysis.Anomalies {
 			icon := "ℹ️"
-			if a.Severity == "warning" {
+			switch a.Severity {
+			case "warning":
 				icon = "⚠️"
-			} else if a.Severity == "critical" {
+			case "critical":
 				icon = "🚨"
 			}
 			anomalyParts = append(anomalyParts, fmt.Sprintf("- %s **%s:** %s", icon, a.Type, a.Description))
@@ -447,30 +447,4 @@ func FormatAnalysisAsMarkdown(analysis *ResultAnalysis) string {
 	}
 
 	return strings.Join(parts, "\n\n")
-}
-
-// Helper to parse timestamp from various formats
-func parseTimestamp(ts interface{}) (time.Time, error) {
-	switch v := ts.(type) {
-	case string:
-		// Try common formats
-		formats := []string{
-			time.RFC3339,
-			time.RFC3339Nano,
-			"2006-01-02T15:04:05Z",
-			"2006-01-02T15:04:05.000Z",
-		}
-		for _, format := range formats {
-			if t, err := time.Parse(format, v); err == nil {
-				return t, nil
-			}
-		}
-	case float64:
-		// Unix timestamp in seconds or milliseconds
-		if v > 1e12 {
-			return time.UnixMilli(int64(v)), nil
-		}
-		return time.Unix(int64(v), 0), nil
-	}
-	return time.Time{}, fmt.Errorf("unable to parse timestamp")
 }
