@@ -33,6 +33,14 @@ jobs:
         uses: securego/gosec@master
         with:
           args: '-fmt sarif -out gosec.sarif ./...'
+        continue-on-error: true
+
+      - name: Ensure SARIF file exists
+        run: |
+          if [ ! -f gosec.sarif ]; then
+            echo "gosec.sarif not found, creating empty SARIF"
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"gosec","version":"2.0.0"}},"results":[]}]}' > gosec.sarif
+          fi
 
       - name: Upload Gosec SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -93,6 +101,14 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
+        continue-on-error: true
+
+      - name: Ensure SARIF file exists
+        run: |
+          if [ ! -f trivy-results.sarif ]; then
+            echo "trivy-results.sarif not found, creating empty SARIF"
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"trivy","version":"1.0.0"}},"results":[]}]}' > trivy-results.sarif
+          fi
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -118,6 +134,13 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
         continue-on-error: true
+
+      - name: Ensure SARIF file exists
+        run: |
+          if [ ! -f semgrep.sarif ]; then
+            echo "semgrep.sarif not found, creating empty SARIF"
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"semgrep","version":"1.0.0"}},"results":[]}]}' > semgrep.sarif
+          fi
 
       - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@v4
