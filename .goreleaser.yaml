@@ -99,8 +99,13 @@ changelog:
 #     signature: '${artifact}.sig'
 
 # Generate SBOM (Software Bill of Materials) for security and compliance
-# Disabled: requires syft which is not available in GitHub Actions by default
-# To enable locally: brew install syft
+# Explicitly disabled: requires syft which is not available in GitHub Actions by default
+# GoReleaser v2 enables SBOMs by default, so we must explicitly disable them
+# To enable locally: brew install syft, then uncomment the sboms section below
+sboms:
+  - artifacts: none
+
+# Uncomment below to enable SBOM generation (requires syft):
 # sboms:
 #   - id: archive
 #     artifacts: archive
