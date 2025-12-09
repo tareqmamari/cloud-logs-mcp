@@ -95,7 +95,7 @@ type QueryExample struct {
 }
 
 // Execute executes the tool
-func (t *ExplainQueryTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ExplainQueryTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(args, "query", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -577,7 +577,7 @@ type AlertSchedule struct {
 }
 
 // Execute executes the tool
-func (t *SuggestAlertTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *SuggestAlertTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, _ := GetStringParam(args, "query", false)
 	useCase, _ := GetStringParam(args, "use_case", false)
 	severity, _ := GetStringParam(args, "severity", false)
@@ -623,7 +623,7 @@ func (t *SuggestAlertTool) Execute(ctx context.Context, args map[string]interfac
 }
 
 // suggestAlertFromUseCase generates alert suggestions based on common use cases
-func suggestAlertFromUseCase(useCase string, severity string) []AlertSuggestion {
+func suggestAlertFromUseCase(useCase string, _ string) []AlertSuggestion {
 	useCaseLower := strings.ToLower(useCase)
 	var suggestions []AlertSuggestion
 
@@ -794,7 +794,7 @@ func suggestAlertFromUseCase(useCase string, severity string) []AlertSuggestion 
 }
 
 // suggestAlertFromQuery generates an alert suggestion from an existing query
-func suggestAlertFromQuery(query string, severity string) AlertSuggestion {
+func suggestAlertFromQuery(query string, _ string) AlertSuggestion {
 	// Analyze the query to suggest appropriate thresholds
 	threshold := 10
 	timeWindow := "5m"
@@ -889,7 +889,7 @@ func (t *GetAuditLogTool) InputSchema() interface{} {
 }
 
 // Execute executes the tool - note: this requires integration with the audit logger
-func (t *GetAuditLogTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *GetAuditLogTool) Execute(_ context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
 	// This tool requires access to the audit logger which is initialized at server level
 	// For now, return a placeholder message explaining how to access audit logs
 	return &mcp.CallToolResult{

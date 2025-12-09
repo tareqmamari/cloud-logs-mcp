@@ -190,11 +190,11 @@ func (l *Logger) GetEntriesByTraceID(traceID string) []Entry {
 }
 
 // GetStats returns statistics about audit entries
-func (l *Logger) GetStats() AuditStats {
+func (l *Logger) GetStats() Stats {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	stats := AuditStats{
+	stats := Stats{
 		TotalEntries:    len(l.entries),
 		ToolUsage:       make(map[string]int),
 		OperationCounts: make(map[string]int),
@@ -225,8 +225,8 @@ func (l *Logger) GetStats() AuditStats {
 	return stats
 }
 
-// AuditStats contains aggregated audit statistics
-type AuditStats struct {
+// Stats contains aggregated audit statistics
+type Stats struct {
 	TotalEntries    int            `json:"total_entries"`
 	SuccessRate     float64        `json:"success_rate_pct"`
 	AverageDuration time.Duration  `json:"average_duration"`
@@ -236,7 +236,7 @@ type AuditStats struct {
 }
 
 // ToJSON returns the stats as JSON
-func (s AuditStats) ToJSON() string {
+func (s Stats) ToJSON() string {
 	data, _ := json.MarshalIndent(s, "", "  ")
 	return string(data)
 }

@@ -96,7 +96,7 @@ func (t *QueryTemplatesTool) InputSchema() interface{} {
 }
 
 // Execute returns query templates based on filters
-func (t *QueryTemplatesTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *QueryTemplatesTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	category, _ := GetStringParam(args, "category", false)
 	name, _ := GetStringParam(args, "name", false)
 	application, _ := GetStringParam(args, "application", false)

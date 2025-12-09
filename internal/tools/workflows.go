@@ -99,9 +99,10 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 
 	// Add severity filter
 	severityValue := 5 // error
-	if severity == "warning" {
+	switch severity {
+	case "warning":
 		severityValue = 4
-	} else if severity == "critical" {
+	case "critical":
 		severityValue = 6
 	}
 	queryParts = append(queryParts, fmt.Sprintf("filter $m.severity >= %d", severityValue))
@@ -158,7 +159,7 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 }
 
 // formatInvestigationError formats an error response with helpful suggestions
-func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, application string) (*mcp.CallToolResult, error) {
+func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, _ string) (*mcp.CallToolResult, error) {
 	var response strings.Builder
 	response.WriteString("## ❌ Investigation Query Failed\n\n")
 	response.WriteString(fmt.Sprintf("**Error:** %s\n\n", err.Error()))
@@ -623,7 +624,7 @@ func (t *ValidateQueryTool) InputSchema() interface{} {
 }
 
 // Execute validates the query
-func (t *ValidateQueryTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ValidateQueryTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	query, err := GetStringParam(args, "query", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil

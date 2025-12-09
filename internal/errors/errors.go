@@ -1,5 +1,5 @@
-// Package errors provides structured error handling for the IBM Cloud Logs MCP server.
-package errors
+// Package mcperrors provides structured error handling for the IBM Cloud Logs MCP server.
+package mcperrors
 
 import (
 	"encoding/json"
