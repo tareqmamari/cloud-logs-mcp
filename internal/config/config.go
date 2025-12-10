@@ -248,9 +248,11 @@ func MaskAPIKey(apiKey string) string {
 }
 
 // ExtractRegionFromURL extracts the IBM Cloud region from a service URL.
-// Supports formats like:
-//   - https://[instance-id].api.us-south.logs.cloud.ibm.com
-//   - https://[instance-id].api.private.us-south.logs.cloud.ibm.com
+// Supports formats:
+//   - Production: [instance-id].api.[region].logs.cloud.ibm.com
+//   - Production Private: [instance-id].api.private.[region].logs.cloud.ibm.com
+//   - Dev: [instance-id].api.[env-name].[region].logs.dev.cloud.ibm.com (region = env-name.region)
+//   - Stage: [instance-id].api.[region].logs.test.cloud.ibm.com
 //
 // Returns empty string if the region cannot be extracted.
 func ExtractRegionFromURL(serviceURL string) string {
@@ -268,12 +270,50 @@ func ExtractRegionFromURL(serviceURL string) string {
 		return ""
 	}
 
-	// Pattern matches: [instance-id].api.[private.]<region>.logs.cloud.ibm.com
-	// The region is captured in the named group
-	pattern := regexp.MustCompile(`\.api\.(?:private\.)?([a-z]{2}-[a-z]+)\.logs\.cloud\.ibm\.com$`)
-	matches := pattern.FindStringSubmatch(host)
-	if len(matches) >= 2 {
+	// Production: [instance-id].api.[private.]<region>.logs.cloud.ibm.com
+	prodPattern := regexp.MustCompile(`\.api\.(?:private\.)?([a-z]{2}-[a-z]+)\.logs\.cloud\.ibm\.com$`)
+	if matches := prodPattern.FindStringSubmatch(host); len(matches) >= 2 {
 		return matches[1]
+	}
+
+	// Dev: [instance-id].api.<env-name>.<region>.logs.dev.cloud.ibm.com
+	// Region is "env-name.region" (e.g., "preprod.us-south")
+	devPattern := regexp.MustCompile(`\.api\.([a-z0-9-]+)\.([a-z]{2}-[a-z]+)\.logs\.dev\.cloud\.ibm\.com$`)
+	if matches := devPattern.FindStringSubmatch(host); len(matches) >= 3 {
+		return matches[1] + "." + matches[2]
+	}
+
+	// Stage: [instance-id].api.<region>.logs.test.cloud.ibm.com
+	stagePattern := regexp.MustCompile(`\.api\.([a-z]{2}-[a-z]+)\.logs\.test\.cloud\.ibm\.com$`)
+	if matches := stagePattern.FindStringSubmatch(host); len(matches) >= 2 {
+		return matches[1]
+	}
+
+	return ""
+}
+
+// ExtractInstanceIDFromURL extracts the service instance ID from a service URL.
+// The instance ID is the first component of the hostname.
+// Returns empty string if the instance ID cannot be extracted.
+func ExtractInstanceIDFromURL(serviceURL string) string {
+	if serviceURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(serviceURL)
+	if err != nil {
+		return ""
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return ""
+	}
+
+	// Instance ID is the first part before ".api."
+	idx := strings.Index(host, ".api.")
+	if idx > 0 {
+		return host[:idx]
 	}
 
 	return ""
