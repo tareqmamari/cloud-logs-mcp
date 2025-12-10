@@ -29,6 +29,7 @@
         "config",
         "deps",
         "docs",
+        "main",
         "metrics",
         "observability",
         "query",
