@@ -4,6 +4,15 @@
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
   "packages": {
-    ".": {}
+    ".": {
+      "exclude-paths": [
+        ".github/",
+        ".goreleaser.yaml",
+        ".pre-commit-config.yaml",
+        ".release-please-manifest.json",
+        "release-please-config.json",
+        "commitlint.config.js"
+      ]
+    }
   }
 }
