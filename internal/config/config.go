@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -86,6 +88,11 @@ func Load() (*Config, error) {
 
 	// Override with environment variables (these take precedence)
 	loadFromEnv(cfg)
+
+	// Auto-extract region from service URL if not explicitly provided
+	if cfg.Region == "" && cfg.ServiceURL != "" {
+		cfg.Region = ExtractRegionFromURL(cfg.ServiceURL)
+	}
 
 	return cfg, nil
 }
@@ -238,4 +245,36 @@ func MaskAPIKey(apiKey string) string {
 		return "***"
 	}
 	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
+}
+
+// ExtractRegionFromURL extracts the IBM Cloud region from a service URL.
+// Supports formats like:
+//   - https://[instance-id].api.us-south.logs.cloud.ibm.com
+//   - https://[instance-id].api.private.us-south.logs.cloud.ibm.com
+//
+// Returns empty string if the region cannot be extracted.
+func ExtractRegionFromURL(serviceURL string) string {
+	if serviceURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(serviceURL)
+	if err != nil {
+		return ""
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return ""
+	}
+
+	// Pattern matches: [instance-id].api.[private.]<region>.logs.cloud.ibm.com
+	// The region is captured in the named group
+	pattern := regexp.MustCompile(`\.api\.(?:private\.)?([a-z]{2}-[a-z]+)\.logs\.cloud\.ibm\.com$`)
+	matches := pattern.FindStringSubmatch(host)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+
+	return ""
 }

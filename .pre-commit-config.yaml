@@ -18,11 +18,15 @@ repos:
       - id: go-vet
       - id: go-mod-tidy
 
-  # Go linting with golangci-lint
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.7.2
+  # Go linting with golangci-lint (using system binary for Go version compatibility)
+  - repo: local
     hooks:
       - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run
+        language: system
+        types: [go]
+        pass_filenames: false
 
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
