@@ -6,6 +6,14 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.6.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.5.1...v0.6.0) (2025-12-10)
+
+
+### Features
+
+* **config:** extract region and instance ID from dev/stage service URLs ([a315caf](https://github.com/tareqmamari/cloud-logs-mcp/commit/a315cafb20877402700c6114436e40ec6bd454c2))
+* **config:** support service URL construction from region and instance ID ([f1b1adf](https://github.com/tareqmamari/cloud-logs-mcp/commit/f1b1adf8970e93fd8c0788508e13780913751338))
+
 ## [0.5.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.5.0...v0.5.1) (2025-12-10)
 
 
