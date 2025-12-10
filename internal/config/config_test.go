@@ -148,6 +148,107 @@ func TestMaskAPIKey(t *testing.T) {
 	}
 }
 
+func TestExtractRegionFromURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "standard public URL",
+			url:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+			expected: "us-south",
+		},
+		{
+			name:     "private endpoint URL",
+			url:      "https://abc123.api.private.us-south.logs.cloud.ibm.com",
+			expected: "us-south",
+		},
+		{
+			name:     "eu-de region",
+			url:      "https://instance-id.api.eu-de.logs.cloud.ibm.com",
+			expected: "eu-de",
+		},
+		{
+			name:     "au-syd region",
+			url:      "https://instance-id.api.au-syd.logs.cloud.ibm.com",
+			expected: "au-syd",
+		},
+		{
+			name:     "br-sao region private",
+			url:      "https://instance-id.api.private.br-sao.logs.cloud.ibm.com",
+			expected: "br-sao",
+		},
+		{
+			name:     "jp-tok region",
+			url:      "https://instance-id.api.jp-tok.logs.cloud.ibm.com",
+			expected: "jp-tok",
+		},
+		{
+			name:     "empty URL",
+			url:      "",
+			expected: "",
+		},
+		{
+			name:     "invalid URL",
+			url:      "not-a-url",
+			expected: "",
+		},
+		{
+			name:     "non-IBM URL",
+			url:      "https://api.example.com",
+			expected: "",
+		},
+		{
+			name:     "URL with placeholder brackets",
+			url:      "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+			expected: "", // Brackets in URL make it unparseable - expected behavior
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ExtractRegionFromURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ExtractRegionFromURL(%q) = %q, want %q", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRegionAutoExtraction(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://instance-id.api.eu-de.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+	// Note: LOGS_REGION is NOT set
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if cfg.Region != "eu-de" {
+		t.Errorf("Expected region to be auto-extracted as 'eu-de', got %q", cfg.Region)
+	}
+}
+
+func TestRegionExplicitOverride(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://instance-id.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key")     // pragma: allowlist secret
+	_ = os.Setenv("LOGS_REGION", "custom-region") // Explicit override
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	// Explicit LOGS_REGION should take precedence
+	if cfg.Region != "custom-region" {
+		t.Errorf("Expected explicit region 'custom-region', got %q", cfg.Region)
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string

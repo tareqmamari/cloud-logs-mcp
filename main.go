@@ -7,9 +7,9 @@
 // with Claude Desktop and other MCP clients.
 //
 // Configuration is provided through environment variables:
-//   - LOGS_SERVICE_URL: The IBM Cloud Logs service endpoint URL
-//   - LOGS_API_KEY: IBM Cloud API key for authentication  // pragma: allowlist secret
-//   - LOGS_REGION: IBM Cloud region (e.g., au-syd, br-sao)
+//   - LOGS_SERVICE_URL: The IBM Cloud Logs service endpoint URL (required)
+//   - LOGS_API_KEY: IBM Cloud API key for authentication (required)  // pragma: allowlist secret
+//   - LOGS_REGION: IBM Cloud region (optional - auto-extracted from service URL)
 //   - LOGS_INSTANCE_NAME: (Optional) Friendly name for the instance
 //   - ENVIRONMENT: (Optional) Set to "production" for production logging
 //
@@ -17,7 +17,6 @@
 //
 //	export LOGS_SERVICE_URL="https://<instance-id>.api.<region>.logs.cloud.ibm.com"
 //	export LOGS_API_KEY="<your-api-key>"
-//	export LOGS_REGION="au-syd"
 //	./logs-mcp-server
 package main
 
