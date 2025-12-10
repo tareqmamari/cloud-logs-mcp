@@ -15,6 +15,15 @@ jobs:
     name: GoReleaser
     runs-on: ubuntu-latest
     steps:
+      - name: Generate Homebrew Tap Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.HOMEBREW_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: tareqmamari
+          repositories: homebrew-tap
+
       - name: Checkout code
         uses: actions/checkout@v6
         with:
@@ -34,6 +43,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Summary
         run: |
