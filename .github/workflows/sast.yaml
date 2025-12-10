@@ -120,6 +120,7 @@ jobs:
     name: Semgrep Security Scanner
     runs-on: ubuntu-latest
     container:
+      # renovate: datasource=docker depName=semgrep/semgrep
       image: semgrep/semgrep@sha256:da5057ac7eea5374f4ceeaef09383d816c302e90a909ec7624a328a22b0aa4d7 # latest
     steps:
       - name: Checkout code
