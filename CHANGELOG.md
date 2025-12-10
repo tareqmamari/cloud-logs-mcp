@@ -6,6 +6,13 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.5.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.4.3...v0.5.0) (2025-12-10)
+
+
+### Features
+
+* **release:** add cryptographic signing for release artifacts ([7e6601b](https://github.com/tareqmamari/cloud-logs-mcp/commit/7e6601b0117a0801b72dc3453a8624336948d4cc))
+
 ## [0.4.3](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.4.2...v0.4.3) (2025-12-10)
 
 
