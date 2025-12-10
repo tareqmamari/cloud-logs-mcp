@@ -1,0 +1,73 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    ":gitSignOff",
+    "group:allNonMajor"
+  ],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "timezone": "UTC",
+  "schedule": ["before 9am on monday"],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "packageRules": [
+    {
+      "description": "Group Go module updates",
+      "matchManagers": ["gomod"],
+      "groupName": "Go dependencies",
+      "labels": ["dependencies", "go"]
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "labels": ["dependencies", "github-actions"]
+    },
+    {
+      "description": "Group Docker updates",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "Docker images",
+      "labels": ["dependencies", "docker"]
+    },
+    {
+      "description": "Group pre-commit hook updates",
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit hooks",
+      "labels": ["dependencies", "pre-commit"]
+    },
+    {
+      "description": "Automerge patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Security updates - high priority",
+      "matchDepTypes": ["security"],
+      "labels": ["security", "dependencies"],
+      "prPriority": 10
+    }
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "dockerfile": {
+    "fileMatch": ["(^|/)Dockerfile[^/]*$"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Docker ARG versions in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\nARG\\s+[A-Z_]+=(?<currentValue>[^\\s]+)"
+      ],
+      "versioningTemplate": "docker"
+    }
+  ]
+}

@@ -1,35 +1,60 @@
-# Multi-stage Dockerfile for production-ready deployment
+# Multi-stage Dockerfile for IBM Cloud Logs MCP Server
+# Uses Red Hat Universal Base Image (UBI) for enterprise-grade security
+# Best practices: multi-stage build, non-root user, minimal runtime image
 
-# Stage 1: Build
-FROM golang:1.22-alpine@sha256:1699c10032ca2582ec89a24a1312d986a3f094aed3d5c1147b19880afe40e052 AS builder
+# ==============================================================================
+# Build Arguments - centralized for easy version management and automation
+# Renovate/Dependabot can automatically update these values
+# ==============================================================================
+# renovate: datasource=docker depName=registry.access.redhat.com/ubi9/go-toolset
+ARG GO_TOOLSET_VERSION=1.25
+# renovate: datasource=docker depName=registry.access.redhat.com/ubi9/ubi-micro
+ARG UBI_MICRO_VERSION=9.5
 
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+# ==============================================================================
+# Stage 1: Build environment using Red Hat UBI Go Toolset
+# ==============================================================================
+FROM registry.access.redhat.com/ubi9/go-toolset:${GO_TOOLSET_VERSION} AS builder
+
+# Switch to root for build operations (go-toolset runs as user 1001 by default)
+USER root
 
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files
+# Copy dependency files first for better layer caching
 COPY go.mod go.sum ./
 
-# Download dependencies
+# Download and verify dependencies
 RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
-# Build the binary with optimizations
+# Build the binary with security and optimization flags
+# -trimpath: Remove file system paths from the binary
+# -ldflags: Strip debug info (-s -w) and set version
+# CGO_ENABLED=0: Static binary, no C dependencies
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-s -w -X main.version=0.1.0" \
     -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION}" \
     -o logs-mcp-server \
     .
 
-# Stage 2: Runtime
-FROM scratch
+# Verify the binary is statically linked
+RUN file logs-mcp-server | grep -q "statically linked" || \
+    (echo "Binary is not statically linked" && exit 1)
 
-# Copy CA certificates for HTTPS
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# ==============================================================================
+# Stage 2: Minimal runtime using UBI Micro
+# UBI Micro is the smallest UBI image (~26MB), ideal for static Go binaries
+# ==============================================================================
+FROM registry.access.redhat.com/ubi9/ubi-micro:${UBI_MICRO_VERSION}
+
+# Copy CA certificates for HTTPS connections (UBI uses pki path)
+COPY --from=builder /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+COPY --from=builder /etc/pki/tls/certs/ca-bundle.crt /etc/pki/tls/certs/ca-bundle.crt
 
 # Copy timezone data
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
@@ -37,19 +62,29 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 # Copy the binary
 COPY --from=builder /build/logs-mcp-server /logs-mcp-server
 
-# Set environment
-ENV TZ=UTC
-ENV ENVIRONMENT=production
-ENV LOG_FORMAT=json
-ENV LOG_LEVEL=info
+# Environment configuration
+ENV TZ=UTC \
+    ENVIRONMENT=production \
+    LOG_FORMAT=json \
+    LOG_LEVEL=info
 
-# Run as non-root user (nobody)
-USER 65534:65534
+# Use non-root user for security (CIS Docker Benchmark 4.1)
+# UBI images use UID 1001 as the default non-root user
+USER 1001:0
+
+# Expose no ports - MCP uses stdio transport
+# EXPOSE is documentation only, not functional
 
 # Set entrypoint
 ENTRYPOINT ["/logs-mcp-server"]
 
-# Metadata
-LABEL maintainer="IBM Cloud Logs Team" \
-      description="MCP Server for IBM Cloud Logs" \
-      version="0.1.0"
+# ==============================================================================
+# OCI Image Labels (following OCI Image Spec)
+# https://github.com/opencontainers/image-spec/blob/main/annotations.md
+# ==============================================================================
+LABEL org.opencontainers.image.title="IBM Cloud Logs MCP Server" \
+      org.opencontainers.image.description="Model Context Protocol server for IBM Cloud Logs service" \
+      org.opencontainers.image.vendor="IBM" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/tareqmamari/cloud-logs-mcp" \
+      org.opencontainers.image.base.name="registry.access.redhat.com/ubi9/ubi-micro"
