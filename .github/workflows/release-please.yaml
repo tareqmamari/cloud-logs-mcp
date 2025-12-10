@@ -19,7 +19,17 @@ jobs:
     # Only run if CI workflow succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      # Generate token to trigger downstream workflows (GoReleaser)
+      # Releases created with GITHUB_TOKEN don't trigger other workflows
+      - name: Generate Release Token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.HOMEBREW_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+
       - name: Run Release Please
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4
         with:
           release-type: go
+          token: ${{ steps.app-token.outputs.token }}
