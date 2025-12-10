@@ -21,16 +21,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
           go-version-file: 'go.mod'
           cache: true
 
       - name: Run Gosec
-        uses: securego/gosec@master
+        uses: securego/gosec@41f28e209a74be7102c923314ab604db2b1adb62 # master
         with:
           args: '-fmt sarif -out gosec.sarif ./...'
         continue-on-error: true
@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Upload Gosec SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@36a9c375704a9813bd709881c97694bcd24e1cb1 # v4
         with:
           sarif_file: gosec.sarif
         if: always()
@@ -53,16 +53,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
           go-version-file: 'go.mod'
           cache: true
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
+        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1
         with:
           go-version-file: go.mod
           output-format: sarif
@@ -81,7 +81,7 @@ jobs:
           fi
 
       - name: Upload govulncheck SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@36a9c375704a9813bd709881c97694bcd24e1cb1 # v4
         with:
           sarif_file: govulncheck.sarif
         if: always()
@@ -91,10 +91,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -111,7 +111,7 @@ jobs:
           fi
 
       - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@36a9c375704a9813bd709881c97694bcd24e1cb1 # v4
         with:
           sarif_file: 'trivy-results.sarif'
         if: always()
@@ -123,7 +123,7 @@ jobs:
       image: semgrep/semgrep
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Run Semgrep
         run: |
@@ -143,7 +143,7 @@ jobs:
           fi
 
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@36a9c375704a9813bd709881c97694bcd24e1cb1 # v4
         with:
           sarif_file: semgrep.sarif
         if: always()
