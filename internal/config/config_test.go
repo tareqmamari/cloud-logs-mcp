@@ -278,6 +278,93 @@ func TestRegionExplicitOverride(t *testing.T) {
 	}
 }
 
+func TestBuildServiceURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		instanceID string
+		region     string
+		expected   string
+	}{
+		{
+			name:       "us-south region",
+			instanceID: "abc123",
+			region:     "us-south",
+			expected:   "https://abc123.api.us-south.logs.cloud.ibm.com",
+		},
+		{
+			name:       "eu-de region",
+			instanceID: "my-instance",
+			region:     "eu-de",
+			expected:   "https://my-instance.api.eu-de.logs.cloud.ibm.com",
+		},
+		{
+			name:       "empty instance ID",
+			instanceID: "",
+			region:     "us-south",
+			expected:   "",
+		},
+		{
+			name:       "empty region",
+			instanceID: "abc123",
+			region:     "",
+			expected:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := BuildServiceURL(tt.instanceID, tt.region)
+			if result != tt.expected {
+				t.Errorf("BuildServiceURL(%q, %q) = %q, want %q", tt.instanceID, tt.region, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLoadFromRegionAndInstanceID(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_REGION", "eu-de")
+	_ = os.Setenv("LOGS_INSTANCE_ID", "my-instance-id")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	expectedURL := "https://my-instance-id.api.eu-de.logs.cloud.ibm.com"
+	if cfg.ServiceURL != expectedURL {
+		t.Errorf("Expected ServiceURL %q, got %q", expectedURL, cfg.ServiceURL)
+	}
+
+	if cfg.Region != "eu-de" {
+		t.Errorf("Expected Region 'eu-de', got %q", cfg.Region)
+	}
+
+	if cfg.InstanceID != "my-instance-id" {
+		t.Errorf("Expected InstanceID 'my-instance-id', got %q", cfg.InstanceID)
+	}
+}
+
+func TestInstanceIDAutoExtraction(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://extracted-instance.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if cfg.InstanceID != "extracted-instance" {
+		t.Errorf("Expected InstanceID to be auto-extracted as 'extracted-instance', got %q", cfg.InstanceID)
+	}
+
+	if cfg.Region != "us-south" {
+		t.Errorf("Expected Region to be auto-extracted as 'us-south', got %q", cfg.Region)
+	}
+}
+
 func TestExtractInstanceIDFromURL(t *testing.T) {
 	tests := []struct {
 		name     string

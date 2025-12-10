@@ -19,6 +19,7 @@ type Config struct {
 	ServiceURL   string `json:"service_url"`
 	APIKey       string `json:"api_key,omitempty"` // Not stored in files, from env only
 	Region       string `json:"region"`
+	InstanceID   string `json:"instance_id,omitempty"`   // Service instance ID (alternative to service_url)
 	InstanceName string `json:"instance_name,omitempty"` // Optional friendly name for this instance
 	IAMURL       string `json:"iam_url,omitempty"`       // Optional IAM endpoint (default: production, or iam.test.cloud.ibm.com for staging)
 
@@ -89,9 +90,19 @@ func Load() (*Config, error) {
 	// Override with environment variables (these take precedence)
 	loadFromEnv(cfg)
 
-	// Auto-extract region from service URL if not explicitly provided
-	if cfg.Region == "" && cfg.ServiceURL != "" {
-		cfg.Region = ExtractRegionFromURL(cfg.ServiceURL)
+	// If ServiceURL is provided, extract region and instance ID from it
+	if cfg.ServiceURL != "" {
+		if cfg.Region == "" {
+			cfg.Region = ExtractRegionFromURL(cfg.ServiceURL)
+		}
+		if cfg.InstanceID == "" {
+			cfg.InstanceID = ExtractInstanceIDFromURL(cfg.ServiceURL)
+		}
+	}
+
+	// If ServiceURL is not provided but Region and InstanceID are, construct the URL
+	if cfg.ServiceURL == "" && cfg.Region != "" && cfg.InstanceID != "" {
+		cfg.ServiceURL = BuildServiceURL(cfg.InstanceID, cfg.Region)
 	}
 
 	return cfg, nil
@@ -126,6 +137,9 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOGS_REGION"); v != "" {
 		cfg.Region = v
+	}
+	if v := os.Getenv("LOGS_INSTANCE_ID"); v != "" {
+		cfg.InstanceID = v
 	}
 	if v := os.Getenv("LOGS_INSTANCE_NAME"); v != "" {
 		cfg.InstanceName = v
@@ -249,10 +263,8 @@ func MaskAPIKey(apiKey string) string {
 
 // ExtractRegionFromURL extracts the IBM Cloud region from a service URL.
 // Supports formats:
-//   - Production: [instance-id].api.[region].logs.cloud.ibm.com
-//   - Production Private: [instance-id].api.private.[region].logs.cloud.ibm.com
-//   - Dev: [instance-id].api.[env-name].[region].logs.dev.cloud.ibm.com (region = env-name.region)
-//   - Stage: [instance-id].api.[region].logs.test.cloud.ibm.com
+//   - [instance-id].api.[region].logs.cloud.ibm.com
+//   - [instance-id].api.private.[region].logs.cloud.ibm.com
 //
 // Returns empty string if the region cannot be extracted.
 func ExtractRegionFromURL(serviceURL string) string {
@@ -290,6 +302,15 @@ func ExtractRegionFromURL(serviceURL string) string {
 	}
 
 	return ""
+}
+
+// BuildServiceURL constructs an IBM Cloud Logs service URL from instance ID and region.
+// Returns the production API endpoint URL.
+func BuildServiceURL(instanceID, region string) string {
+	if instanceID == "" || region == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://%s.api.%s.logs.cloud.ibm.com", instanceID, region)
 }
 
 // ExtractInstanceIDFromURL extracts the service instance ID from a service URL.
