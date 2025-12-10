@@ -6,6 +6,13 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.5.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.5.0...v0.5.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* **release:** update cosign signing for v4 bundle format ([a02bbd2](https://github.com/tareqmamari/cloud-logs-mcp/commit/a02bbd2c0ac03db0cdfbdb1d1e676ac7ae0679af))
+
 ## [0.5.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.4.3...v0.5.0) (2025-12-10)
 
 
