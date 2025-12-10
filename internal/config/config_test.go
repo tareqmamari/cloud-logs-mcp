@@ -154,6 +154,7 @@ func TestExtractRegionFromURL(t *testing.T) {
 		url      string
 		expected string
 	}{
+		// Production endpoints
 		{
 			name:     "standard public URL",
 			url:      "https://abc123.api.us-south.logs.cloud.ibm.com",
@@ -184,6 +185,34 @@ func TestExtractRegionFromURL(t *testing.T) {
 			url:      "https://instance-id.api.jp-tok.logs.cloud.ibm.com",
 			expected: "jp-tok",
 		},
+		// Dev endpoints (logs.dev.cloud.ibm.com)
+		{
+			name:     "dev endpoint with env name",
+			url:      "https://instance-id.api.preprod.us-south.logs.dev.cloud.ibm.com",
+			expected: "preprod.us-south",
+		},
+		{
+			name:     "dev endpoint eu-de",
+			url:      "https://abc123.api.dev1.eu-de.logs.dev.cloud.ibm.com",
+			expected: "dev1.eu-de",
+		},
+		{
+			name:     "dev ingest endpoint",
+			url:      "https://instance-id.ingest.preprod.us-south.logs.dev.cloud.ibm.com",
+			expected: "", // ingest endpoints not matched by api pattern
+		},
+		// Stage endpoints (logs.test.cloud.ibm.com)
+		{
+			name:     "stage endpoint us-south",
+			url:      "https://instance-id.api.us-south.logs.test.cloud.ibm.com",
+			expected: "us-south",
+		},
+		{
+			name:     "stage endpoint eu-de",
+			url:      "https://abc123.api.eu-de.logs.test.cloud.ibm.com",
+			expected: "eu-de",
+		},
+		// Edge cases
 		{
 			name:     "empty URL",
 			url:      "",
@@ -246,6 +275,73 @@ func TestRegionExplicitOverride(t *testing.T) {
 	// Explicit LOGS_REGION should take precedence
 	if cfg.Region != "custom-region" {
 		t.Errorf("Expected explicit region 'custom-region', got %q", cfg.Region)
+	}
+}
+
+func TestExtractInstanceIDFromURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		// Production endpoints
+		{
+			name:     "standard public URL",
+			url:      "https://abc123-def456.api.us-south.logs.cloud.ibm.com",
+			expected: "abc123-def456",
+		},
+		{
+			name:     "private endpoint URL",
+			url:      "https://my-instance-id.api.private.us-south.logs.cloud.ibm.com",
+			expected: "my-instance-id",
+		},
+		{
+			name:     "UUID-style instance ID",
+			url:      "https://a1b2c3d4-e5f6-7890-abcd-ef1234567890.api.eu-de.logs.cloud.ibm.com",
+			expected: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		},
+		// Dev endpoints
+		{
+			name:     "dev endpoint",
+			url:      "https://instance-id.api.preprod.us-south.logs.dev.cloud.ibm.com",
+			expected: "instance-id",
+		},
+		// Stage endpoints
+		{
+			name:     "stage endpoint",
+			url:      "https://test-instance.api.us-south.logs.test.cloud.ibm.com",
+			expected: "test-instance",
+		},
+		// Edge cases
+		{
+			name:     "empty URL",
+			url:      "",
+			expected: "",
+		},
+		{
+			name:     "invalid URL",
+			url:      "not-a-url",
+			expected: "",
+		},
+		{
+			name:     "URL without .api. segment",
+			url:      "https://example.com",
+			expected: "",
+		},
+		{
+			name:     "URL with placeholder brackets",
+			url:      "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+			expected: "", // Brackets make URL unparseable
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ExtractInstanceIDFromURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ExtractInstanceIDFromURL(%q) = %q, want %q", tt.url, result, tt.expected)
+			}
+		})
 	}
 }
 
