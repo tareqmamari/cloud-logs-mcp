@@ -62,8 +62,7 @@ make deps && make build
       "command": "logs-mcp-server",
       "env": {
         "LOGS_SERVICE_URL": "https://[your-instance-id].api.[region].logs.cloud.ibm.com",
-        "LOGS_API_KEY": "your-ibm-cloud-api-key",
-        "LOGS_REGION": "us-south"
+        "LOGS_API_KEY": "your-ibm-cloud-api-key"
       }
     }
   }
@@ -87,7 +86,6 @@ make deps && make build
 # PowerShell (Windows)
 $env:LOGS_SERVICE_URL = "https://[your-instance-id].api.[region].logs.cloud.ibm.com"
 $env:LOGS_API_KEY = "your-ibm-cloud-api-key"
-$env:LOGS_REGION = "us-south"
 
 # Run the server
 logs-mcp-server
@@ -104,7 +102,6 @@ For organization-wide deployment, configure through Microsoft 365 Admin Center:
    - **Environment Variables**:
      - `LOGS_SERVICE_URL`: Your IBM Cloud Logs endpoint
      - `LOGS_API_KEY`: Service ID API key (recommended for enterprise)
-     - `LOGS_REGION`: Your IBM Cloud region
 
 **After setup**:
 - In Microsoft 365 Copilot, ask "Query my IBM Cloud Logs for errors"
@@ -205,9 +202,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 #### Required
 | Variable | Description |
 |----------|-------------|
-| `LOGS_SERVICE_URL` | IBM Cloud Logs endpoint |
 | `LOGS_API_KEY` | IBM Cloud API key |
-| `LOGS_REGION` | IBM Cloud region |
+
+**Plus one of the following:**
+- `LOGS_SERVICE_URL` - Full service endpoint URL (region and instance ID are auto-extracted), OR
+- `LOGS_REGION` + `LOGS_INSTANCE_ID` - Region and instance ID (service URL is constructed)
 
 #### Optional
 | Variable | Default | Description |
