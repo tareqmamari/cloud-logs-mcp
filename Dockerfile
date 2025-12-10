@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for production-ready deployment
 
 # Stage 1: Build
-FROM golang:1.22-alpine@sha256:1699c10032ca2582ec89a24a1312d986a3f094aed3d5c1147b19880afe40e052 AS builder
+FROM golang:1.25-alpine@sha256:26111811bc967321e7b6f852e914d14bede324cd1accb7f81811929a6a57fea9 AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
