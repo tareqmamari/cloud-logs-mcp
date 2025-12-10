@@ -84,13 +84,12 @@ changelog:
 # https://docs.sigstore.dev/signing/quickstart/
 signs:
   - cmd: cosign
-    certificate: '${artifact}.pem'
+    signature: '${artifact}.bundle'
     args:
       - sign-blob
-      - '--output-certificate=${certificate}'
-      - '--output-signature=${signature}'
-      - '${artifact}'
+      - '--bundle=${signature}'
       - '--yes'
+      - '${artifact}'
     artifacts: checksum
     output: true
 
