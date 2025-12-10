@@ -51,6 +51,12 @@
       "matchDepTypes": ["security"],
       "labels": ["security", "dependencies"],
       "prPriority": 10
+    },
+    {
+      "description": "Red Hat UBI images - use redhat versioning",
+      "matchPackagePatterns": ["^registry\\.access\\.redhat\\.com/"],
+      "versioning": "redhat",
+      "labels": ["dependencies", "docker"]
     }
   ],
   "pre-commit": {
