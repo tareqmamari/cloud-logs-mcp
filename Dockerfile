@@ -7,9 +7,9 @@
 # Renovate/Dependabot can automatically update these values
 # ==============================================================================
 # renovate: datasource=docker depName=registry.access.redhat.com/ubi9/go-toolset
-ARG GO_TOOLSET_VERSION=1.25
+ARG GO_TOOLSET_VERSION=1.25.3-1765311584
 # renovate: datasource=docker depName=registry.access.redhat.com/ubi9/ubi-micro
-ARG UBI_MICRO_VERSION=9.5
+ARG UBI_MICRO_VERSION=9.7-1762965531
 
 # ==============================================================================
 # Stage 1: Build environment using Red Hat UBI Go Toolset
