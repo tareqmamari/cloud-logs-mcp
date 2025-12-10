@@ -6,6 +6,15 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.4.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.4.0...v0.4.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* **config:** use redhat versioning for Red Hat registry images ([31d4564](https://github.com/tareqmamari/cloud-logs-mcp/commit/31d45642304c93448251a08221fd27d68d6510a0))
+* **deps:** update codeql-action SHA to valid v4.31.7 commit ([e6779c4](https://github.com/tareqmamari/cloud-logs-mcp/commit/e6779c4ca3bee4bf486e4bc80ac040ee071a062a))
+* **deps:** update codeql-action SHA to valid v4.31.7 commit ([f819fc7](https://github.com/tareqmamari/cloud-logs-mcp/commit/f819fc717114489e48dfbcb3a4770e6ba18fc143))
+
 ## [0.4.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.3.0...v0.4.0) (2025-12-09)
 
 
