@@ -2,12 +2,28 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/IBM/go-sdk-core/v5/core"
 	"go.uber.org/zap"
 )
+
+// JWTClaims represents the claims from an IBM Cloud IAM JWT token
+type JWTClaims struct {
+	Subject    string `json:"sub"`        // User/Service ID (e.g., "iam-ServiceId-...")
+	IAMId      string `json:"iam_id"`     // IAM ID
+	AccountID  string `json:"account"`    // IBM Cloud account ID
+	RealmID    string `json:"realmid"`    // Realm ID
+	Identifier string `json:"identifier"` // Service ID or user identifier
+	Name       string `json:"name"`       // Human-readable name
+	Email      string `json:"email"`      // User email (if applicable)
+	IssuedAt   int64  `json:"iat"`        // Issued at timestamp
+	ExpiresAt  int64  `json:"exp"`        // Expiration timestamp
+}
 
 // Authenticator handles IBM Cloud authentication
 type Authenticator struct {
@@ -57,9 +73,21 @@ func (a *Authenticator) Authenticate(req *http.Request) error {
 	// This automatically handles bearer token generation and refresh
 	err := a.authenticator.Authenticate(req)
 	if err != nil {
-		a.logger.Error("Authentication failed", zap.Error(err))
+		// Log authentication failure with sanitized context (no sensitive data)
+		a.logger.Warn("Authentication failed",
+			zap.Error(err),
+			zap.String("target_host", req.URL.Host),
+			zap.String("method", req.Method),
+			zap.String("path", req.URL.Path),
+		)
 		return fmt.Errorf("authentication failed: %w", err)
 	}
+
+	// Log successful authentication at debug level (no sensitive data)
+	a.logger.Debug("Request authenticated successfully",
+		zap.String("target_host", req.URL.Host),
+		zap.String("method", req.Method),
+	)
 
 	return nil
 }
@@ -80,5 +108,68 @@ func (a *Authenticator) GetToken() (string, error) {
 // ValidateToken validates that we can obtain a valid token
 func (a *Authenticator) ValidateToken() error {
 	_, err := a.GetToken()
-	return err
+	if err != nil {
+		a.logger.Warn("Token validation failed", zap.Error(err))
+		return err
+	}
+	a.logger.Debug("Token validation successful")
+	return nil
+}
+
+// GetUserIdentity extracts user identity from the JWT token
+// Returns the subject claim which uniquely identifies the user/service
+func (a *Authenticator) GetUserIdentity() (string, error) {
+	claims, err := a.GetTokenClaims()
+	if err != nil {
+		return "", err
+	}
+	if claims.Subject == "" {
+		return "", fmt.Errorf("token has no subject claim")
+	}
+	return claims.Subject, nil
+}
+
+// GetTokenClaims extracts all claims from the current JWT token
+func (a *Authenticator) GetTokenClaims() (*JWTClaims, error) {
+	token, err := a.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	return parseJWTClaims(token)
+}
+
+// parseJWTClaims parses the claims from a JWT token without validation
+// (validation is handled by IBM IAM)
+func parseJWTClaims(token string) (*JWTClaims, error) {
+	// JWT format: header.payload.signature
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part)
+	payload := parts[1]
+	// Add padding if needed for base64 decoding
+	switch len(payload) % 4 {
+	case 2:
+		payload += "=="
+	case 3:
+		payload += "="
+	}
+
+	decoded, err := base64.URLEncoding.DecodeString(payload)
+	if err != nil {
+		// Try standard base64 if URL encoding fails
+		decoded, err = base64.StdEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode token payload: %w", err)
+		}
+	}
+
+	var claims JWTClaims
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return nil, fmt.Errorf("failed to parse token claims: %w", err)
+	}
+
+	return &claims, nil
 }

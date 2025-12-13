@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -35,6 +36,11 @@ func (t *IngestLogsTool) Name() string {
 	return "ingest_logs"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *IngestLogsTool) Annotations() *mcp.ToolAnnotations {
+	return IngestionAnnotations("Ingest Logs")
+}
+
 // Description returns a human-readable description of the tool.
 func (t *IngestLogsTool) Description() string {
 	return `Ingest, push, or add log entries to IBM Cloud Logs for real-time log ingestion.
@@ -61,6 +67,21 @@ func (t *IngestLogsTool) InputSchema() interface{} {
 			"logs": map[string]interface{}{
 				"type":        "array",
 				"description": "Array of log entries to ingest",
+				"examples": []interface{}{
+					[]map[string]interface{}{
+						{
+							"applicationName": "api-gateway",
+							"subsystemName":   "auth",
+							"severity":        5,
+							"text":            "Authentication failed for user john@example.com",
+							"json": map[string]interface{}{
+								"user_id":    "12345",
+								"ip_address": "192.168.1.100",
+								"error_code": "AUTH_FAILED",
+							},
+						},
+					},
+				},
 				"items": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -107,6 +128,10 @@ func (t *IngestLogsTool) InputSchema() interface{} {
 	}
 }
 
+// MaxIngestionBatchSize is the maximum number of log entries allowed per ingestion request.
+// This prevents DoS attacks and ensures reasonable request sizes.
+const MaxIngestionBatchSize = 1000
+
 // Execute ingests log entries to IBM Cloud Logs.
 // It validates input, adds timestamps where missing, and sends logs to the
 // ingestion endpoint (.ingress. subdomain).
@@ -121,6 +146,11 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 
 	if len(logsRaw) == 0 {
 		return NewToolResultError("logs array cannot be empty"), nil
+	}
+
+	// Enforce batch size limit to prevent DoS and ensure reasonable request sizes
+	if len(logsRaw) > MaxIngestionBatchSize {
+		return NewToolResultError(fmt.Sprintf("batch size %d exceeds maximum allowed (%d). Please split into smaller batches", len(logsRaw), MaxIngestionBatchSize)), nil
 	}
 
 	// Process each log entry and add timestamp if missing

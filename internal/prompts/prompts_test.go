@@ -29,8 +29,8 @@ func TestGetPrompts(t *testing.T) {
 
 	prompts := registry.GetPrompts()
 
-	// Verify expected number of prompts
-	expectedCount := 7
+	// Verify expected number of prompts (11 original + 2 context-aware)
+	expectedCount := 13
 	if len(prompts) != expectedCount {
 		t.Errorf("Expected %d prompts, got %d", expectedCount, len(prompts))
 	}
@@ -65,6 +65,12 @@ func TestPromptNames(t *testing.T) {
 		"optimize_retention":        true,
 		"test_log_ingestion":        true,
 		"create_dashboard_workflow": true,
+		"continue_investigation":    true,
+		"dataprime_tutorial":        true,
+		"quick_start":               true,
+		"security_audit":            true,
+		"context_aware_assist":      true,
+		"smart_suggest":             true,
 	}
 
 	prompts := registry.GetPrompts()
@@ -573,6 +579,12 @@ func TestPromptArgumentsDefinition(t *testing.T) {
 		"optimize_retention":        {},
 		"test_log_ingestion":        {"application_name"},
 		"create_dashboard_workflow": {"dashboard_name"},
+		"continue_investigation":    {},
+		"dataprime_tutorial":        {"skill_level"},
+		"quick_start":               {},
+		"security_audit":            {"focus_area"},
+		"context_aware_assist":      {},
+		"smart_suggest":             {"goal"},
 	}
 
 	for _, p := range registry.GetPrompts() {
@@ -610,4 +622,375 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestContextAwarePromptWithoutProvider(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	var prompt *PromptDefinition
+	for _, p := range registry.GetPrompts() {
+		if p.Prompt.Name == "context_aware_assist" {
+			prompt = p
+			break
+		}
+	}
+
+	if prompt == nil {
+		t.Fatal("context_aware_assist prompt not found")
+	}
+
+	req := &mcp.GetPromptRequest{
+		Params: &mcp.GetPromptParams{
+			Arguments: nil,
+		},
+	}
+
+	result, err := prompt.Handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatal("Message content is not TextContent")
+	}
+
+	// Without a provider, should show general guidance
+	expectedStrings := []string{"Context-Aware Assistance", "health_check", "discover_tools"}
+	for _, s := range expectedStrings {
+		if !containsString(content.Text, s) {
+			t.Errorf("Content does not contain expected string %q", s)
+		}
+	}
+}
+
+// MockContextProvider is a mock implementation of SessionContextProvider for testing
+type MockContextProvider struct {
+	LastQuery          string
+	Filters            map[string]string
+	RecentToolsList    []RecentToolInfo
+	Investigation      *InvestigationInfo
+	Preferences        *UserPreferencesInfo
+	SuggestedNextTools []string
+}
+
+func (m *MockContextProvider) GetLastQuery() string {
+	return m.LastQuery
+}
+
+func (m *MockContextProvider) GetAllFilters() map[string]string {
+	return m.Filters
+}
+
+func (m *MockContextProvider) GetRecentTools(limit int) []RecentToolInfo {
+	if limit > len(m.RecentToolsList) {
+		return m.RecentToolsList
+	}
+	return m.RecentToolsList[:limit]
+}
+
+func (m *MockContextProvider) GetInvestigation() *InvestigationInfo {
+	return m.Investigation
+}
+
+func (m *MockContextProvider) GetPreferences() *UserPreferencesInfo {
+	return m.Preferences
+}
+
+func (m *MockContextProvider) GetSuggestedNextTools() []string {
+	return m.SuggestedNextTools
+}
+
+func TestContextAwarePromptWithProvider(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	// Set up mock context provider
+	mockProvider := &MockContextProvider{
+		LastQuery: "source logs | filter $d.severity >= 4",
+		Filters: map[string]string{
+			"application": "my-app",
+			"environment": "production",
+		},
+		Preferences: &UserPreferencesInfo{
+			PreferredTimeRange:   "1h",
+			FrequentApplications: []string{"my-app", "other-app"},
+		},
+		SuggestedNextTools: []string{"create_alert", "create_dashboard"},
+	}
+	registry.SetContextProvider(mockProvider)
+
+	var prompt *PromptDefinition
+	for _, p := range registry.GetPrompts() {
+		if p.Prompt.Name == "context_aware_assist" {
+			prompt = p
+			break
+		}
+	}
+
+	if prompt == nil {
+		t.Fatal("context_aware_assist prompt not found")
+	}
+
+	req := &mcp.GetPromptRequest{
+		Params: &mcp.GetPromptParams{
+			Arguments: nil,
+		},
+	}
+
+	result, err := prompt.Handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatal("Message content is not TextContent")
+	}
+
+	// Should show context-aware content
+	expectedStrings := []string{
+		"Context-Aware Assistance",
+		"Active Filters",
+		"my-app",
+		"production",
+		"Last Query",
+		"source logs",
+		"Learned Preferences",
+		"1h",
+	}
+	for _, s := range expectedStrings {
+		if !containsString(content.Text, s) {
+			t.Errorf("Content does not contain expected string %q", s)
+		}
+	}
+}
+
+func TestContextAwarePromptWithActiveInvestigation(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	// Set up mock context provider with active investigation
+	mockProvider := &MockContextProvider{
+		Investigation: &InvestigationInfo{
+			ID:            "20231215-120000",
+			Application:   "payment-service",
+			Hypothesis:    "Database connection timeout",
+			FindingsCount: 3,
+			ToolsUsed:     []string{"query_logs", "health_check"},
+		},
+	}
+	registry.SetContextProvider(mockProvider)
+
+	var prompt *PromptDefinition
+	for _, p := range registry.GetPrompts() {
+		if p.Prompt.Name == "context_aware_assist" {
+			prompt = p
+			break
+		}
+	}
+
+	req := &mcp.GetPromptRequest{
+		Params: &mcp.GetPromptParams{
+			Arguments: nil,
+		},
+	}
+
+	result, err := prompt.Handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatal("Message content is not TextContent")
+	}
+
+	// Should show investigation context
+	expectedStrings := []string{
+		"Active Investigation",
+		"20231215-120000",
+		"payment-service",
+		"Database connection timeout",
+		"3 recorded",
+	}
+	for _, s := range expectedStrings {
+		if !containsString(content.Text, s) {
+			t.Errorf("Content does not contain expected string %q", s)
+		}
+	}
+}
+
+func TestSmartSuggestPrompt(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	var prompt *PromptDefinition
+	for _, p := range registry.GetPrompts() {
+		if p.Prompt.Name == "smart_suggest" {
+			prompt = p
+			break
+		}
+	}
+
+	if prompt == nil {
+		t.Fatal("smart_suggest prompt not found")
+	}
+
+	tests := []struct {
+		name         string
+		goal         string
+		wantTools    []string
+		wantWorkflow string
+	}{
+		{
+			name:         "error debugging goal",
+			goal:         "debug production errors",
+			wantTools:    []string{"investigate_incident", "query_logs"},
+			wantWorkflow: "error_investigation",
+		},
+		{
+			name:         "alerting goal",
+			goal:         "set up alert notifications",
+			wantTools:    []string{"suggest_alert", "create_alert"},
+			wantWorkflow: "monitoring_setup",
+		},
+		{
+			name:         "dashboard goal",
+			goal:         "create visualizations",
+			wantTools:    []string{"create_dashboard", "list_dashboards"},
+			wantWorkflow: "dashboard_creation",
+		},
+		{
+			name:         "cost optimization goal",
+			goal:         "reduce logging costs",
+			wantTools:    []string{"list_policies", "list_e2m"},
+			wantWorkflow: "cost_optimization",
+		},
+		{
+			name:         "learning goal",
+			goal:         "learn dataprime query syntax",
+			wantTools:    []string{"query_templates", "build_query"},
+			wantWorkflow: "query_learning",
+		},
+		{
+			name:         "security goal",
+			goal:         "audit access permissions",
+			wantTools:    []string{"list_data_access_rules"},
+			wantWorkflow: "security_investigation",
+		},
+		{
+			name:         "unknown goal",
+			goal:         "something random",
+			wantTools:    []string{"discover_tools", "health_check"},
+			wantWorkflow: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &mcp.GetPromptRequest{
+				Params: &mcp.GetPromptParams{
+					Arguments: map[string]string{"goal": tt.goal},
+				},
+			}
+
+			result, err := prompt.Handler(context.Background(), req)
+			if err != nil {
+				t.Fatalf("Handler returned error: %v", err)
+			}
+
+			content, ok := result.Messages[0].Content.(*mcp.TextContent)
+			if !ok {
+				t.Fatal("Message content is not TextContent")
+			}
+
+			// Check for expected tools
+			for _, tool := range tt.wantTools {
+				if !containsString(content.Text, tool) {
+					t.Errorf("Content does not contain expected tool %q", tool)
+				}
+			}
+
+			// Check for expected workflow
+			if tt.wantWorkflow != "" {
+				if !containsString(content.Text, tt.wantWorkflow) {
+					t.Errorf("Content does not contain expected workflow %q", tt.wantWorkflow)
+				}
+			}
+		})
+	}
+}
+
+func TestSmartSuggestNoGoal(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	var prompt *PromptDefinition
+	for _, p := range registry.GetPrompts() {
+		if p.Prompt.Name == "smart_suggest" {
+			prompt = p
+			break
+		}
+	}
+
+	req := &mcp.GetPromptRequest{
+		Params: &mcp.GetPromptParams{
+			Arguments: map[string]string{},
+		},
+	}
+
+	result, err := prompt.Handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatal("Message content is not TextContent")
+	}
+
+	if !containsString(content.Text, "provide a goal") {
+		t.Error("Expected message about providing a goal")
+	}
+}
+
+func TestSetContextProvider(t *testing.T) {
+	logger := zap.NewNop()
+	registry := NewRegistry(logger)
+
+	// Initially nil
+	if registry.contextProvider != nil {
+		t.Error("Expected nil context provider initially")
+	}
+
+	// Set a provider
+	mockProvider := &MockContextProvider{}
+	registry.SetContextProvider(mockProvider)
+
+	if registry.contextProvider == nil {
+		t.Error("Expected non-nil context provider after setting")
+	}
+}
+
+func TestContainsAny(t *testing.T) {
+	tests := []struct {
+		s          string
+		substrings []string
+		want       bool
+	}{
+		{"debug production errors", []string{"error", "fail"}, true},
+		{"setup monitoring", []string{"monitor", "alert"}, true},
+		{"something else", []string{"error", "alert"}, false},
+		{"", []string{"error"}, false},
+		{"error handling", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		got := containsAny(tt.s, tt.substrings...)
+		if got != tt.want {
+			t.Errorf("containsAny(%q, %v) = %v, want %v", tt.s, tt.substrings, got, tt.want)
+		}
+	}
 }

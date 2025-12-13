@@ -599,6 +599,18 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 		responseText += FormatProactiveSuggestions(suggestions)
 	}
 
+	// Add cost hints for follow-up tools
+	if toolName != "" {
+		hints := GetCostHints(toolName)
+		if len(hints.SuggestedFollowup) > 0 {
+			responseText += "\n\n---\n**Suggested next tools:**"
+			for _, followup := range hints.SuggestedFollowup {
+				followupHints := GetCostHints(followup)
+				responseText += fmt.Sprintf("\n- `%s` (%s, %s)", followup, followupHints.ExecutionSpeed, followupHints.APICost)
+			}
+		}
+	}
+
 	// Final safety check
 	responseText = ensureResponseLimit(responseText, t.logger)
 
@@ -712,6 +724,169 @@ func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]int
 			},
 		},
 	}, nil
+}
+
+// AddRateLimitMetadata adds rate limit information to a result map.
+// This helps LLMs understand API limits and pace requests appropriately.
+func AddRateLimitMetadata(result map[string]interface{}, available float64, limit int, enabled bool) {
+	if !enabled {
+		return
+	}
+
+	result["_rate_limit"] = map[string]interface{}{
+		"available":        int(available),
+		"limit_per_second": limit,
+		"status":           getRateLimitStatus(available, limit),
+	}
+}
+
+// getRateLimitStatus returns a human-readable rate limit status
+func getRateLimitStatus(available float64, limit int) string {
+	ratio := available / float64(limit)
+	switch {
+	case ratio < 0.1:
+		return "critical" // Less than 10% remaining
+	case ratio < 0.25:
+		return "low" // Less than 25% remaining
+	case ratio < 0.5:
+		return "moderate" // Less than 50% remaining
+	default:
+		return "healthy" // More than 50% remaining
+	}
+}
+
+// FormatCompactSummary returns only statistical summary without raw events.
+// This dramatically reduces token usage (~90% reduction) while preserving key insights.
+// Use this for initial exploration before drilling down with full results.
+func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string) (*mcp.CallToolResult, error) {
+	if len(result) == 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "(no data returned)"},
+			},
+		}, nil
+	}
+
+	var summary strings.Builder
+	summary.WriteString("## Query Results Summary (compact mode)\n\n")
+
+	// Extract events for analysis
+	events, hasEvents := result["events"].([]interface{})
+	if hasEvents && len(events) > 0 {
+		summary.WriteString(fmt.Sprintf("**Total Results:** %d log entries\n\n", len(events)))
+
+		// Severity distribution
+		severityDist := analyzeSeverityDistribution(events)
+		if len(severityDist) > 0 {
+			summary.WriteString("### Severity Distribution\n")
+			// Sort by severity level for consistent output
+			severityOrder := []string{"Critical", "Error", "Warning", "Info", "Verbose", "Debug"}
+			for _, sev := range severityOrder {
+				if count, ok := severityDist[sev]; ok {
+					summary.WriteString(fmt.Sprintf("- **%s**: %d\n", sev, count))
+				}
+			}
+			summary.WriteString("\n")
+		}
+
+		// Top applications
+		topApps := extractTopValues(events, "applicationname", 5)
+		if len(topApps) > 0 {
+			summary.WriteString("### Top Applications\n")
+			for _, app := range topApps {
+				summary.WriteString(fmt.Sprintf("- %s: %d entries\n", app.Value, app.Count))
+			}
+			summary.WriteString("\n")
+		}
+
+		// Top subsystems
+		topSubs := extractTopValues(events, "subsystemname", 5)
+		if len(topSubs) > 0 {
+			summary.WriteString("### Top Subsystems\n")
+			for _, sub := range topSubs {
+				summary.WriteString(fmt.Sprintf("- %s: %d entries\n", sub.Value, sub.Count))
+			}
+			summary.WriteString("\n")
+		}
+
+		// Time range
+		timeRange := extractTimeRange(events)
+		if timeRange != "" {
+			summary.WriteString(fmt.Sprintf("### Time Range\n%s\n\n", timeRange))
+		}
+
+		// Sample messages (first 3 unique error/warning messages)
+		sampleMessages := extractSampleMessages(events, 3)
+		if len(sampleMessages) > 0 {
+			summary.WriteString("### Sample Messages\n")
+			for i, msg := range sampleMessages {
+				// Truncate long messages
+				if len(msg) > 150 {
+					msg = msg[:147] + "..."
+				}
+				summary.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, msg))
+			}
+			summary.WriteString("\n")
+		}
+	} else {
+		summary.WriteString("**No events found** matching the query criteria.\n\n")
+	}
+
+	// Add query metadata if present
+	if meta, ok := result["_query_metadata"].(map[string]interface{}); ok {
+		summary.WriteString("### Query Info\n")
+		if tier, ok := meta["tier"].(string); ok {
+			summary.WriteString(fmt.Sprintf("- Tier: %s\n", tier))
+		}
+		if start, ok := meta["start_date"].(string); ok {
+			summary.WriteString(fmt.Sprintf("- Start: %s\n", start))
+		}
+		if end, ok := meta["end_date"].(string); ok {
+			summary.WriteString(fmt.Sprintf("- End: %s\n", end))
+		}
+		summary.WriteString("\n")
+	}
+
+	// Add guidance for getting full results
+	summary.WriteString("---\n")
+	summary.WriteString("💡 **To see full log entries**, run the same query without `summary_only: true`\n")
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: summary.String()},
+		},
+	}, nil
+}
+
+// extractSampleMessages extracts unique log messages from events
+func extractSampleMessages(events []interface{}, limit int) []string {
+	seen := make(map[string]bool)
+	var messages []string
+
+	for _, event := range events {
+		if len(messages) >= limit {
+			break
+		}
+		if eventMap, ok := event.(map[string]interface{}); ok {
+			msg := ""
+			// Try different message field locations
+			if m, ok := eventMap["message"].(string); ok {
+				msg = m
+			} else if userData, ok := eventMap["user_data"].(map[string]interface{}); ok {
+				if m, ok := userData["message"].(string); ok {
+					msg = m
+				}
+			} else if text, ok := eventMap["text"].(string); ok {
+				msg = text
+			}
+
+			if msg != "" && !seen[msg] {
+				seen[msg] = true
+				messages = append(messages, msg)
+			}
+		}
+	}
+	return messages
 }
 
 // ensureResponseLimit ensures the response text doesn't exceed FinalResponseLimit

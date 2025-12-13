@@ -240,23 +240,23 @@ func TestValidateDataPrimeQuery_SeverityValues(t *testing.T) {
 			query:       "source logs | filter $m.severity == error",
 			shouldError: false, // We uppercase and check, so 'error' becomes ERROR which is valid
 		},
+		// Note: Numeric severity values are now auto-corrected by AutoCorrectDataPrimeQuery(),
+		// not rejected by ValidateDataPrimeQuery(). These tests verify validation passes
+		// after auto-correction is applied.
 		{
-			name:          "numeric severity value 4",
-			query:         "source logs | filter $m.severity >= 4",
-			shouldError:   true,
-			errorContains: "Numeric severity values are not allowed",
+			name:        "numeric severity value 4 (auto-corrected to ERROR)",
+			query:       "source logs | filter $m.severity >= ERROR", // After auto-correction
+			shouldError: false,
 		},
 		{
-			name:          "numeric severity value 0",
-			query:         "source logs | filter $m.severity == 0",
-			shouldError:   true,
-			errorContains: "VERBOSE",
+			name:        "numeric severity value 0 (auto-corrected to VERBOSE)",
+			query:       "source logs | filter $m.severity == VERBOSE", // After auto-correction
+			shouldError: false,
 		},
 		{
-			name:          "numeric severity value comparison",
-			query:         "source logs | filter $m.severity != 2",
-			shouldError:   true,
-			errorContains: "INFO",
+			name:        "numeric severity value comparison (auto-corrected to INFO)",
+			query:       "source logs | filter $m.severity != INFO", // After auto-correction
+			shouldError: false,
 		},
 		{
 			name:        "valid VERBOSE severity",
@@ -283,6 +283,76 @@ func TestValidateDataPrimeQuery_SeverityValues(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %s", err.Error())
 				}
+			}
+		})
+	}
+}
+
+func TestAutoCorrectDataPrimeQuery(t *testing.T) {
+	tests := []struct {
+		name                string
+		query               string
+		expectedQuery       string
+		expectedCorrections int
+	}{
+		{
+			name:                "no corrections needed",
+			query:               "source logs | filter $m.severity >= ERROR",
+			expectedQuery:       "source logs | filter $m.severity >= ERROR",
+			expectedCorrections: 0,
+		},
+		{
+			name:                "numeric severity 5 to CRITICAL",
+			query:               "source logs | filter $m.severity >= 5",
+			expectedQuery:       "source logs | filter $m.severity >= CRITICAL",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "numeric severity 4 to ERROR",
+			query:               "source logs | filter $m.severity == 4",
+			expectedQuery:       "source logs | filter $m.severity == ERROR",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "numeric severity 0 to VERBOSE",
+			query:               "source logs | filter $m.severity != 0",
+			expectedQuery:       "source logs | filter $m.severity != VERBOSE",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "multiple numeric severities",
+			query:               "source logs | filter $m.severity >= 4 && $m.severity < 6",
+			expectedQuery:       "source logs | filter $m.severity >= ERROR && $m.severity < CRITICAL",
+			expectedCorrections: 2,
+		},
+		{
+			name:                "lowercase severity typo",
+			query:               "source logs | filter $m.severity == error",
+			expectedQuery:       "source logs | filter $m.severity == ERROR",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "abbreviated severity WARN",
+			query:               "source logs | filter $m.severity >= WARN",
+			expectedQuery:       "source logs | filter $m.severity >= WARNING",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "abbreviated severity ERR",
+			query:               "source logs | filter $m.severity == ERR",
+			expectedQuery:       "source logs | filter $m.severity == ERROR",
+			expectedCorrections: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			corrected, corrections := AutoCorrectDataPrimeQuery(tt.query)
+			if corrected != tt.expectedQuery {
+				t.Errorf("Expected query '%s', got '%s'", tt.expectedQuery, corrected)
+			}
+			if len(corrections) != tt.expectedCorrections {
+				t.Errorf("Expected %d corrections, got %d: %v", tt.expectedCorrections, len(corrections), corrections)
 			}
 		})
 	}

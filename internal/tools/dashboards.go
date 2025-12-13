@@ -257,8 +257,31 @@ func (t *ListDashboardsTool) InputSchema() interface{} {
 	}
 }
 
+// Metadata returns semantic metadata for AI-driven discovery
+func (t *ListDashboardsTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:   []ToolCategory{CategoryDashboard, CategoryDiscovery, CategoryVisualization},
+		Keywords:     []string{"dashboards", "list", "all", "visualizations", "charts", "monitoring"},
+		Complexity:   ComplexitySimple,
+		UseCases:     []string{"View all dashboards", "Find visualization", "Audit dashboard setup"},
+		RelatedTools: []string{"get_dashboard", "create_dashboard", "pin_dashboard"},
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"dashboards": map[string]interface{}{
+					"type":  "array",
+					"items": map[string]string{"type": "object"},
+				},
+			},
+		},
+		ChainPosition: ChainStart,
+	}
+}
+
 // Execute lists all dashboards.
-func (t *ListDashboardsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ListDashboardsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	session := GetSession()
+
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/dashboards",
@@ -266,8 +289,13 @@ func (t *ListDashboardsTool) Execute(ctx context.Context, _ map[string]interface
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
+		session.RecordToolUse(t.Name(), false, arguments)
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Record successful tool use and cache result
+	session.RecordToolUse(t.Name(), true, arguments)
+	session.CacheResult(t.Name(), result)
 
 	return t.FormatResponseWithSuggestions(result, "list_dashboards")
 }
@@ -308,10 +336,34 @@ func (t *GetDashboardTool) InputSchema() interface{} {
 	}
 }
 
+// Metadata returns semantic metadata for AI-driven discovery
+func (t *GetDashboardTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:   []ToolCategory{CategoryDashboard, CategoryVisualization},
+		Keywords:     []string{"dashboard", "get", "retrieve", "fetch", "visualization", "chart"},
+		Complexity:   ComplexitySimple,
+		UseCases:     []string{"View dashboard details", "Inspect dashboard widgets", "Get dashboard configuration"},
+		RelatedTools: []string{"list_dashboards", "update_dashboard", "delete_dashboard"},
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"id":          map[string]string{"type": "string"},
+				"name":        map[string]string{"type": "string"},
+				"description": map[string]string{"type": "string"},
+				"layout":      map[string]string{"type": "object"},
+			},
+		},
+		ChainPosition: ChainMiddle,
+	}
+}
+
 // Execute gets a specific dashboard.
 func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	session := GetSession()
+
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
+		session.RecordToolUse(t.Name(), false, arguments)
 		return NewToolResultError("dashboard_id is required and must be a string"), nil
 	}
 
@@ -322,8 +374,13 @@ func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
+		session.RecordToolUse(t.Name(), false, arguments)
 		return HandleGetError(err, "Dashboard", dashboardID, "list_dashboards"), nil
 	}
+
+	// Record successful tool use and cache result
+	session.RecordToolUse(t.Name(), true, map[string]interface{}{"dashboard_id": dashboardID})
+	session.CacheResult(t.Name(), result)
 
 	return t.FormatResponseWithSuggestions(result, "get_dashboard")
 }
@@ -423,6 +480,25 @@ func (t *CreateDashboardTool) InputSchema() interface{} {
 			},
 		},
 		"required": []string{"name", "layout"},
+	}
+}
+
+// Metadata returns semantic metadata for AI-driven discovery
+func (t *CreateDashboardTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:   []ToolCategory{CategoryDashboard, CategoryVisualization, CategoryConfiguration},
+		Keywords:     []string{"dashboard", "create", "new", "visualization", "chart", "widget", "build"},
+		Complexity:   ComplexityAdvanced,
+		UseCases:     []string{"Create monitoring dashboard", "Build visualization", "Set up charts"},
+		RelatedTools: []string{"list_dashboards", "get_dashboard", "query_logs", "update_dashboard"},
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"id":   map[string]string{"type": "string"},
+				"name": map[string]string{"type": "string"},
+			},
+		},
+		ChainPosition: ChainEnd,
 	}
 }
 
@@ -649,6 +725,25 @@ func (t *UpdateDashboardTool) InputSchema() interface{} {
 	}
 }
 
+// Metadata returns semantic metadata for AI-driven discovery
+func (t *UpdateDashboardTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:   []ToolCategory{CategoryDashboard, CategoryVisualization, CategoryConfiguration},
+		Keywords:     []string{"dashboard", "update", "modify", "edit", "change", "visualization"},
+		Complexity:   ComplexityAdvanced,
+		UseCases:     []string{"Update dashboard layout", "Modify widgets", "Change dashboard configuration"},
+		RelatedTools: []string{"get_dashboard", "list_dashboards", "delete_dashboard"},
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"id":   map[string]string{"type": "string"},
+				"name": map[string]string{"type": "string"},
+			},
+		},
+		ChainPosition: ChainEnd,
+	}
+}
+
 // Execute updates a dashboard.
 // It first validates all queries in the layout to ensure they are syntactically correct.
 func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -724,6 +819,11 @@ func (t *DeleteDashboardTool) Name() string {
 	return "delete_dashboard"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *DeleteDashboardTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Dashboard")
+}
+
 // Description returns a human-readable description of the tool.
 func (t *DeleteDashboardTool) Description() string {
 	return "Delete a dashboard from IBM Cloud Logs"
@@ -740,6 +840,24 @@ func (t *DeleteDashboardTool) InputSchema() interface{} {
 			},
 		},
 		"required": []string{"dashboard_id"},
+	}
+}
+
+// Metadata returns semantic metadata for AI-driven discovery
+func (t *DeleteDashboardTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:   []ToolCategory{CategoryDashboard, CategoryConfiguration},
+		Keywords:     []string{"dashboard", "delete", "remove", "visualization"},
+		Complexity:   ComplexitySimple,
+		UseCases:     []string{"Remove obsolete dashboard", "Clean up dashboards"},
+		RelatedTools: []string{"get_dashboard", "list_dashboards"},
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"success": map[string]string{"type": "boolean"},
+			},
+		},
+		ChainPosition: ChainEnd,
 	}
 }
 

@@ -38,9 +38,3 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: detect-private-key
-
-  # Gitleaks - detect secrets in code
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
-    hooks:
-      - id: gitleaks

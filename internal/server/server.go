@@ -10,20 +10,26 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/logs-mcp-server/internal/auth"
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/logs-mcp-server/internal/health"
 	"github.com/tareqmamari/logs-mcp-server/internal/metrics"
 	"github.com/tareqmamari/logs-mcp-server/internal/prompts"
+	"github.com/tareqmamari/logs-mcp-server/internal/resources"
 	"github.com/tareqmamari/logs-mcp-server/internal/tools"
 )
 
 // Server represents the MCP server
 type Server struct {
-	mcpServer *mcp.Server
-	apiClient *client.Client
-	config    *config.Config
-	logger    *zap.Logger
-	metrics   *metrics.Metrics
+	mcpServer     *mcp.Server
+	apiClient     *client.Client
+	config        *config.Config
+	logger        *zap.Logger
+	metrics       *metrics.Metrics
+	version       string
+	healthServer  *health.Server
+	authenticator *auth.Authenticator
 }
 
 // New creates a new MCP server instance.
@@ -34,21 +40,55 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Create MCP server with tools and prompts capabilities
+	// Create authenticator for health checks
+	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticator: %w", err)
+	}
+
+	// Create MCP server with tools, prompts, and resources capabilities
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "IBM Cloud Logs MCP Server",
 		Version: version,
 	}, &mcp.ServerOptions{
-		HasTools:   true,
-		HasPrompts: true,
+		HasTools:     true,
+		HasPrompts:   true,
+		HasResources: true,
 	})
 
+	metricsTracker := metrics.New(logger)
+
+	// Initialize user-specific session using JWT subject from IAM token
+	// The subject uniquely identifies the user/service across sessions
+	userID, err := authenticator.GetUserIdentity()
+	if err != nil {
+		// Fall back to API key hash if token retrieval fails
+		logger.Warn("Could not get user identity from token, using API key hash",
+			zap.Error(err),
+		)
+		tools.SetCurrentUser(cfg.APIKey, cfg.InstanceID)
+	} else {
+		tools.SetCurrentUserFromJWT(userID, cfg.InstanceID)
+		logger.Debug("Initialized user session from JWT",
+			zap.String("user_id", userID),
+			zap.String("instance_id", cfg.InstanceID),
+		)
+	}
+
 	s := &Server{
-		mcpServer: mcpServer,
-		apiClient: apiClient,
-		config:    cfg,
-		logger:    logger,
-		metrics:   metrics.New(logger),
+		mcpServer:     mcpServer,
+		apiClient:     apiClient,
+		config:        cfg,
+		logger:        logger,
+		metrics:       metricsTracker,
+		version:       version,
+		authenticator: authenticator,
+	}
+
+	// Create health server if port is configured (port > 0)
+	if cfg.HealthPort > 0 {
+		healthChecker := health.New(apiClient, authenticator, logger)
+		s.healthServer = health.NewServer(healthChecker, logger, cfg.HealthPort, cfg.HealthBindAddr, cfg.MetricsEndpoint)
 	}
 
 	// Register all tools
@@ -58,6 +98,9 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 
 	// Register all prompts
 	s.registerPrompts()
+
+	// Register all resources
+	s.registerResources()
 
 	return s, nil
 }
@@ -188,10 +231,21 @@ func (s *Server) registerTools() error {
 	// Query Intelligence tools
 	s.registerTool(tools.NewQueryTemplatesTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewValidateQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewQueryCostEstimateTool(s.apiClient, s.logger))
 
 	// Workflow Automation tools
 	s.registerTool(tools.NewInvestigateIncidentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewHealthCheckTool(s.apiClient, s.logger))
+
+	// Meta tools (discovery and session management)
+	s.registerTool(tools.NewDiscoverToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSessionContextTool(s.apiClient, s.logger))
+
+	// Dynamic toolset meta-tools (token-efficient discovery pattern)
+	// These enable: search_tools → describe_tools → execute workflow
+	s.registerTool(tools.NewSearchToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDescribeToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListToolCategoriesBrief(s.apiClient, s.logger))
 
 	s.logger.Info("Registered all MCP tools")
 	return nil
@@ -202,16 +256,24 @@ func (s *Server) registerTools() error {
 func (s *Server) registerTool(t tools.Tool) {
 	toolName := t.Name()
 
-	// Create tool definition
+	// Register in dynamic registry for search_tools/describe_tools pattern
+	tools.RegisterToolForDynamic(t)
+
+	// Create tool definition with annotations
 	mcpTool := &mcp.Tool{
 		Name:        toolName,
 		Description: t.Description(),
 		InputSchema: t.InputSchema(),
+		Annotations: t.Annotations(),
 	}
 
 	// Create handler that calls the tool's Execute method with metrics tracking
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
+
+		// Add client to context for tool execution
+		// This enables per-request client injection for future HTTP transport
+		ctx = tools.WithClient(ctx, s.apiClient)
 
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
@@ -245,13 +307,53 @@ func (s *Server) registerPrompts() {
 	s.logger.Info("Registered all MCP prompts", zap.Int("count", len(registry.GetPrompts())))
 }
 
+// registerResources registers all available MCP resources
+func (s *Server) registerResources() {
+	registry := resources.NewRegistry(s.config, s.metrics, s.logger, s.version)
+
+	for _, r := range registry.GetResources() {
+		s.mcpServer.AddResource(r.Resource, r.Handler)
+		s.logger.Debug("Registered resource", zap.String("uri", r.Resource.URI))
+	}
+
+	s.logger.Info("Registered all MCP resources", zap.Int("count", len(registry.GetResources())))
+}
+
 // Start starts the MCP server
 func (s *Server) Start(ctx context.Context) error {
 	s.logger.Info("Starting MCP server")
 
+	// Start health HTTP server in background if configured
+	if s.healthServer != nil {
+		go func() {
+			if err := s.healthServer.Start(); err != nil {
+				s.logger.Error("Health server error", zap.Error(err))
+			}
+		}()
+		// Mark as ready once server is starting
+		s.healthServer.SetReady(true)
+	}
+
 	defer func() {
 		// Log final metrics on shutdown
 		s.metrics.LogStats()
+
+		// Save user session for persistence (learned patterns, preferences)
+		if err := tools.SaveCurrentSession(); err != nil {
+			s.logger.Error("Failed to save user session", zap.Error(err))
+		} else {
+			s.logger.Debug("User session saved successfully")
+		}
+
+		// Shutdown health server
+		if s.healthServer != nil {
+			s.healthServer.SetReady(false)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.healthServer.Shutdown(shutdownCtx); err != nil {
+				s.logger.Error("Failed to shutdown health server", zap.Error(err))
+			}
+		}
 
 		if err := s.apiClient.Close(); err != nil {
 			s.logger.Error("Failed to close API client", zap.Error(err))

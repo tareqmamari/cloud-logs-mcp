@@ -275,6 +275,11 @@ func (t *DeleteDashboardFolderTool) Name() string {
 	return "delete_dashboard_folder"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *DeleteDashboardFolderTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Dashboard Folder")
+}
+
 // Description returns a human-readable description of the tool.
 func (t *DeleteDashboardFolderTool) Description() string {
 	return "Delete a dashboard folder"

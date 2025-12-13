@@ -14,11 +14,13 @@ type ProactiveSuggestion struct {
 
 // SmartSuggestion represents an enhanced suggestion with pre-filled parameters and urgency
 type SmartSuggestion struct {
-	Tool          string                 `json:"tool"`           // Suggested tool to use
-	Description   string                 `json:"description"`    // Why this suggestion is relevant
-	Urgency       string                 `json:"urgency"`        // "info", "warning", "critical"
-	PrefilledArgs map[string]interface{} `json:"prefilled_args"` // Pre-populated parameters
-	Reason        string                 `json:"reason"`         // Detailed reason for this suggestion
+	Tool          string                 `json:"tool"`               // Suggested tool to use
+	Description   string                 `json:"description"`        // Why this suggestion is relevant
+	Urgency       string                 `json:"urgency"`            // "info", "warning", "critical"
+	PrefilledArgs map[string]interface{} `json:"prefilled_args"`     // Pre-populated parameters
+	Reason        string                 `json:"reason"`             // Detailed reason for this suggestion
+	Confidence    float64                `json:"confidence"`         // 0.0-1.0 confidence score
+	Evidence      []string               `json:"evidence,omitempty"` // Supporting evidence for this suggestion
 }
 
 // GetSmartSuggestions generates context-aware suggestions with pre-filled arguments
@@ -82,34 +84,55 @@ func getQueryResultSuggestions(result map[string]interface{}) []SmartSuggestion 
 		}
 	}
 
+	errorRate := float64(errorCount) * 100 / float64(max(len(events), 1))
+	criticalRate := float64(criticalCount) * 100 / float64(max(len(events), 1))
+
 	// Critical errors - urgent
 	if criticalCount > 0 {
+		// Confidence based on critical count and consistency
+		confidence := calculateConfidence(criticalCount, len(events), []string{"critical_errors"})
 		suggestions = append(suggestions, SmartSuggestion{
 			Tool:        "create_alert",
 			Description: fmt.Sprintf("Create alert for %d critical errors detected", criticalCount),
 			Urgency:     "critical",
 			PrefilledArgs: map[string]interface{}{
 				"severity_filter": "critical",
+				"application":     topApp,
 			},
-			Reason: "Critical errors require immediate attention and monitoring",
+			Reason:     "Critical errors require immediate attention and monitoring",
+			Confidence: confidence,
+			Evidence: []string{
+				fmt.Sprintf("%d critical severity logs found", criticalCount),
+				fmt.Sprintf("%.1f%% of results are critical", criticalRate),
+				fmt.Sprintf("Top affected application: %s", topApp),
+			},
 		})
 	}
 
 	// High error rate
 	if len(events) > 10 && errorCount > len(events)/5 {
+		confidence := calculateConfidence(errorCount, len(events), []string{"high_error_rate"})
 		suggestions = append(suggestions, SmartSuggestion{
 			Tool:        "investigate_incident",
 			Description: "High error rate detected - investigate root cause",
 			Urgency:     "warning",
 			PrefilledArgs: map[string]interface{}{
 				"application": topApp,
+				"severity":    "error",
 			},
-			Reason: fmt.Sprintf("%.0f%% error rate detected", float64(errorCount)*100/float64(len(events))),
+			Reason:     fmt.Sprintf("%.0f%% error rate detected", errorRate),
+			Confidence: confidence,
+			Evidence: []string{
+				fmt.Sprintf("%d errors out of %d total events", errorCount, len(events)),
+				fmt.Sprintf("Error rate: %.1f%% (threshold: 20%%)", errorRate),
+				fmt.Sprintf("Primary application: %s (%d occurrences)", topApp, appCounts[topApp]),
+			},
 		})
 	}
 
-	// Large result set
+	// Large result set - suggest dashboard
 	if len(events) >= MaxSSEEvents {
+		confidence := 0.75 // Moderate confidence for dashboards
 		suggestions = append(suggestions, SmartSuggestion{
 			Tool:        "create_dashboard",
 			Description: "Create dashboard to visualize high-volume data",
@@ -117,11 +140,78 @@ func getQueryResultSuggestions(result map[string]interface{}) []SmartSuggestion 
 			PrefilledArgs: map[string]interface{}{
 				"application_filter": topApp,
 			},
-			Reason: "Large result sets are better analyzed through dashboards",
+			Reason:     "Large result sets are better analyzed through dashboards",
+			Confidence: confidence,
+			Evidence: []string{
+				fmt.Sprintf("Result set hit maximum limit (%d events)", MaxSSEEvents),
+				"Visual analysis recommended for patterns",
+			},
 		})
 	}
 
+	// Session-aware suggestions
+	session := GetSession()
+	if session.GetInvestigation() == nil && (errorCount > 5 || criticalCount > 0) {
+		// Suggest starting investigation if not already in one
+		suggestions = append(suggestions, SmartSuggestion{
+			Tool:        "investigate_incident",
+			Description: "Start structured investigation for these errors",
+			Urgency:     "info",
+			PrefilledArgs: map[string]interface{}{
+				"application": topApp,
+			},
+			Reason:     "Structured investigation helps track findings and root cause",
+			Confidence: 0.7,
+			Evidence: []string{
+				"No active investigation in session",
+				"Multiple errors detected suggest systematic issue",
+			},
+		})
+	}
+
+	// Record to session for future context
+	session.SetLastQuery(fmt.Sprintf("query returned %d events, %d errors, %d critical", len(events), errorCount, criticalCount))
+	if topApp != "" {
+		session.SetFilter("last_queried_app", topApp)
+	}
+
 	return suggestions
+}
+
+// calculateConfidence computes a confidence score based on evidence strength
+func calculateConfidence(count, total int, factors []string) float64 {
+	// Base confidence from ratio
+	ratio := float64(count) / float64(max(total, 1))
+
+	// Higher ratio = higher confidence
+	baseConfidence := 0.5 + (ratio * 0.4)
+
+	// Adjust based on sample size
+	if total < 10 {
+		baseConfidence *= 0.7 // Lower confidence for small samples
+	} else if total > 100 {
+		baseConfidence *= 1.1 // Higher confidence for large samples
+	}
+
+	// Adjust based on factors
+	for _, factor := range factors {
+		switch factor {
+		case "critical_errors":
+			baseConfidence += 0.1 // Critical errors are high signal
+		case "high_error_rate":
+			baseConfidence += 0.05
+		}
+	}
+
+	// Clamp to [0.0, 1.0]
+	if baseConfidence > 1.0 {
+		baseConfidence = 1.0
+	}
+	if baseConfidence < 0.0 {
+		baseConfidence = 0.0
+	}
+
+	return baseConfidence
 }
 
 // getAlertListSuggestions analyzes alerts and suggests actions
@@ -318,13 +408,34 @@ func FormatSmartSuggestions(suggestions []SmartSuggestion) string {
 			urgencyIcon = "🚨"
 		}
 
-		builder.WriteString(fmt.Sprintf("\n%s **%s** `%s`\n", urgencyIcon, s.Urgency, s.Tool))
+		// Format confidence as percentage with indicator
+		confidenceStr := ""
+		if s.Confidence > 0 {
+			confidenceIcon := "🔵" // Low
+			if s.Confidence >= 0.7 {
+				confidenceIcon = "🟢" // High
+			} else if s.Confidence >= 0.5 {
+				confidenceIcon = "🟡" // Medium
+			}
+			confidenceStr = fmt.Sprintf(" %s %.0f%% confidence", confidenceIcon, s.Confidence*100)
+		}
+
+		builder.WriteString(fmt.Sprintf("\n%s **%s** `%s`%s\n", urgencyIcon, strings.ToUpper(s.Urgency), s.Tool, confidenceStr))
 		builder.WriteString(fmt.Sprintf("   %s\n", s.Description))
 		if s.Reason != "" {
 			builder.WriteString(fmt.Sprintf("   _Reason: %s_\n", s.Reason))
 		}
+
+		// Show evidence if available
+		if len(s.Evidence) > 0 {
+			builder.WriteString("   📋 Evidence:\n")
+			for _, e := range s.Evidence {
+				builder.WriteString(fmt.Sprintf("      • %s\n", e))
+			}
+		}
+
 		if len(s.PrefilledArgs) > 0 {
-			builder.WriteString("   Pre-filled args: ")
+			builder.WriteString("   🔧 Pre-filled args: ")
 			args := []string{}
 			for k, v := range s.PrefilledArgs {
 				args = append(args, fmt.Sprintf("%s=%v", k, v))
