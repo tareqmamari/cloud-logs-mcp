@@ -154,6 +154,11 @@ func NewDeleteRuleGroupTool(c *client.Client, l *zap.Logger) *DeleteRuleGroupToo
 // Name returns the tool name
 func (t *DeleteRuleGroupTool) Name() string { return "delete_rule_group" }
 
+// Annotations returns tool hints for LLMs
+func (t *DeleteRuleGroupTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Rule Group")
+}
+
 // Description returns the tool description
 func (t *DeleteRuleGroupTool) Description() string { return "Delete a rule group" }
 
@@ -287,6 +292,11 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 					},
 				},
 			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the webhook configuration without creating it. Use this to preview and check for errors.",
+				"default":     false,
+			},
 		},
 		"required": []string{"webhook"},
 		"examples": []interface{}{
@@ -314,11 +324,75 @@ func (t *CreateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(args, "dry_run", false)
+	if dryRun {
+		return t.validateWebhook(wh)
+	}
+
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/outgoing_webhooks", Body: wh})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponseWithSuggestions(res, "create_outgoing_webhook")
+}
+
+// validateWebhook performs dry-run validation for webhook creation
+func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Validate required fields
+	requiredFields := []string{"name", "type", "url"}
+	for _, field := range requiredFields {
+		if _, ok := wh[field]; !ok {
+			result.Errors = append(result.Errors, "Missing required field: "+field)
+			result.Valid = false
+		}
+	}
+
+	// Validate name
+	if name, ok := wh["name"].(string); ok {
+		result.Summary["name"] = name
+	}
+
+	// Validate type
+	validTypes := map[string]bool{
+		"generic":                 true,
+		"slack":                   true,
+		"pagerduty":               true,
+		"ibm_event_notifications": true,
+	}
+	if whType, ok := wh["type"].(string); ok {
+		if !validTypes[whType] {
+			result.Errors = append(result.Errors, "Invalid webhook type: "+whType+". Valid types: generic, slack, pagerduty, ibm_event_notifications")
+			result.Valid = false
+		}
+		result.Summary["type"] = whType
+	}
+
+	// Validate URL format
+	if urlStr, ok := wh["url"].(string); ok {
+		result.Summary["url"] = urlStr
+		if urlStr == "" {
+			result.Errors = append(result.Errors, "URL cannot be empty")
+			result.Valid = false
+		}
+	}
+
+	// Add suggestions
+	if result.Valid {
+		result.Suggestions = append(result.Suggestions, "Webhook configuration is valid")
+		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the webhook")
+	} else {
+		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating")
+	}
+
+	result.EstimatedImpact = &ImpactEstimate{RiskLevel: "low"}
+	return FormatDryRunResult(result, "Outgoing Webhook", wh), nil
 }
 
 // UpdateOutgoingWebhookTool updates an existing outgoing webhook.
@@ -367,6 +441,11 @@ func NewDeleteOutgoingWebhookTool(c *client.Client, l *zap.Logger) *DeleteOutgoi
 
 // Name returns the tool name
 func (t *DeleteOutgoingWebhookTool) Name() string { return "delete_outgoing_webhook" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteOutgoingWebhookTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Outgoing Webhook")
+}
 
 // Description returns the tool description
 func (t *DeleteOutgoingWebhookTool) Description() string { return "Delete an outgoing webhook" }
@@ -677,6 +756,11 @@ func NewDeletePolicyTool(c *client.Client, l *zap.Logger) *DeletePolicyTool {
 // Name returns the tool name
 func (t *DeletePolicyTool) Name() string { return "delete_policy" }
 
+// Annotations returns tool hints for LLMs
+func (t *DeletePolicyTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Policy")
+}
+
 // Description returns the tool description
 func (t *DeletePolicyTool) Description() string { return "Delete a policy" }
 
@@ -849,6 +933,11 @@ func (t *CreateE2MTool) InputSchema() interface{} {
 					},
 				},
 			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the E2M configuration without creating it. Use this to preview and check for errors.",
+				"default":     false,
+			},
 		},
 		"required": []string{"e2m"},
 		"examples": []interface{}{
@@ -890,11 +979,71 @@ func (t *CreateE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(args, "dry_run", false)
+	if dryRun {
+		return t.validateE2M(e2m)
+	}
+
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/events2metrics", Body: e2m})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponseWithSuggestions(res, "create_e2m")
+}
+
+// validateE2M performs dry-run validation for E2M creation
+func (t *CreateE2MTool) validateE2M(e2m map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Validate required fields
+	requiredFields := []string{"name", "type"}
+	for _, field := range requiredFields {
+		if _, ok := e2m[field]; !ok {
+			result.Errors = append(result.Errors, "Missing required field: "+field)
+			result.Valid = false
+		}
+	}
+
+	// Validate name
+	if name, ok := e2m["name"].(string); ok {
+		result.Summary["name"] = name
+	}
+
+	// Validate type
+	validTypes := map[string]bool{
+		"logs2metrics":  true,
+		"spans2metrics": true,
+	}
+	if e2mType, ok := e2m["type"].(string); ok {
+		if !validTypes[e2mType] {
+			result.Errors = append(result.Errors, "Invalid E2M type: "+e2mType+". Valid types: logs2metrics, spans2metrics")
+			result.Valid = false
+		}
+		result.Summary["type"] = e2mType
+	}
+
+	// Check for logs_query (required for logs2metrics)
+	if e2mType, _ := e2m["type"].(string); e2mType == "logs2metrics" {
+		if _, ok := e2m["logs_query"]; !ok {
+			result.Warnings = append(result.Warnings, "No logs_query specified - E2M may not match any logs")
+		}
+	}
+
+	// Add suggestions
+	if result.Valid {
+		result.Suggestions = append(result.Suggestions, "E2M configuration is valid")
+		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the E2M configuration")
+	} else {
+		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating")
+	}
+
+	result.EstimatedImpact = &ImpactEstimate{RiskLevel: "low"}
+	return FormatDryRunResult(result, "Events-to-Metrics", e2m), nil
 }
 
 // ReplaceE2MTool replaces an events-to-metrics configuration.
@@ -943,6 +1092,11 @@ func NewDeleteE2MTool(c *client.Client, l *zap.Logger) *DeleteE2MTool {
 
 // Name returns the tool name
 func (t *DeleteE2MTool) Name() string { return "delete_e2m" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteE2MTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Events to Metrics")
+}
 
 // Description returns the tool description
 func (t *DeleteE2MTool) Description() string { return "Delete an events-to-metrics configuration" }
@@ -1080,6 +1234,11 @@ func (t *CreateDataAccessRuleTool) InputSchema() interface{} {
 					},
 				},
 			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the data access rule without creating it. Use this to preview and check for errors.",
+				"default":     false,
+			},
 		},
 		"required": []string{"rule"},
 		"examples": []interface{}{
@@ -1112,11 +1271,57 @@ func (t *CreateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(args, "dry_run", false)
+	if dryRun {
+		return t.validateDataAccessRule(rule)
+	}
+
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/data_access_rules", Body: rule})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponseWithSuggestions(res, "create_data_access_rule")
+}
+
+// validateDataAccessRule performs dry-run validation for data access rule creation
+func (t *CreateDataAccessRuleTool) validateDataAccessRule(rule map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Validate required fields
+	if _, ok := rule["display_name"]; !ok {
+		result.Errors = append(result.Errors, "Missing required field: display_name")
+		result.Valid = false
+	} else if name, ok := rule["display_name"].(string); ok {
+		result.Summary["display_name"] = name
+	}
+
+	// Check for filters or default_expression
+	hasFilters := false
+	if _, ok := rule["filters"]; ok {
+		hasFilters = true
+	}
+	if _, ok := rule["default_expression"]; ok {
+		hasFilters = true
+	}
+	if !hasFilters {
+		result.Warnings = append(result.Warnings, "No filters or default_expression specified - rule may not restrict any data")
+	}
+
+	// Add suggestions
+	if result.Valid {
+		result.Suggestions = append(result.Suggestions, "Data access rule configuration is valid")
+		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the rule")
+	} else {
+		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating")
+	}
+
+	result.EstimatedImpact = &ImpactEstimate{RiskLevel: "medium"}
+	return FormatDryRunResult(result, "Data Access Rule", rule), nil
 }
 
 // UpdateDataAccessRuleTool updates an existing data access rule.
@@ -1165,6 +1370,11 @@ func NewDeleteDataAccessRuleTool(c *client.Client, l *zap.Logger) *DeleteDataAcc
 
 // Name returns the tool name
 func (t *DeleteDataAccessRuleTool) Name() string { return "delete_data_access_rule" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteDataAccessRuleTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Data Access Rule")
+}
 
 // Description returns the tool description
 func (t *DeleteDataAccessRuleTool) Description() string { return "Delete a data access rule" }
@@ -1368,6 +1578,11 @@ func NewDeleteEnrichmentTool(c *client.Client, l *zap.Logger) *DeleteEnrichmentT
 
 // Name returns the tool name
 func (t *DeleteEnrichmentTool) Name() string { return "delete_enrichment" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteEnrichmentTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Enrichment")
+}
 
 // Description returns the tool description
 func (t *DeleteEnrichmentTool) Description() string { return "Delete an enrichment" }
@@ -1636,6 +1851,11 @@ func NewDeleteViewTool(c *client.Client, l *zap.Logger) *DeleteViewTool {
 // Name returns the tool name
 func (t *DeleteViewTool) Name() string { return "delete_view" }
 
+// Annotations returns tool hints for LLMs
+func (t *DeleteViewTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete View")
+}
+
 // Description returns the tool description
 func (t *DeleteViewTool) Description() string { return "Delete a view" }
 
@@ -1795,6 +2015,11 @@ func NewDeleteViewFolderTool(c *client.Client, l *zap.Logger) *DeleteViewFolderT
 
 // Name returns the tool name
 func (t *DeleteViewFolderTool) Name() string { return "delete_view_folder" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteViewFolderTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete View Folder")
+}
 
 // Description returns the tool description
 func (t *DeleteViewFolderTool) Description() string { return "Delete a view folder" }

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -42,6 +43,18 @@ func (t *ListStreamsTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *ListStreamsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
+	session := GetSession()
+	cacheHelper := GetCacheHelper()
+
+	// Check cache first
+	if cached, ok := cacheHelper.Get(t.Name(), "all"); ok {
+		if cachedResult, ok := cached.(map[string]interface{}); ok {
+			session.RecordToolUse(t.Name(), true, nil)
+			cachedResult["_cached"] = true
+			return t.FormatResponseWithSuggestions(cachedResult, "list_streams")
+		}
+	}
+
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/streams",
@@ -49,8 +62,13 @@ func (t *ListStreamsTool) Execute(ctx context.Context, _ map[string]interface{})
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
+		session.RecordToolUse(t.Name(), false, nil)
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Cache the result
+	cacheHelper.Set(t.Name(), "all", result)
+	session.RecordToolUse(t.Name(), true, nil)
 
 	return t.FormatResponseWithSuggestions(result, "list_streams")
 }
@@ -165,10 +183,16 @@ func (t *CreateStreamTool) InputSchema() interface{} {
 			"name": map[string]interface{}{
 				"type":        "string",
 				"description": "The name of the stream (1-4096 characters)",
+				"examples":    []string{"production-errors-stream", "frontend-logs-stream"},
 			},
 			"dpxl_expression": map[string]interface{}{
 				"type":        "string",
 				"description": "DPXL expression to filter logs (e.g., '<v1>contains(kubernetes.labels.app, \"frontend\")')",
+				"examples": []string{
+					"<v1>contains(kubernetes.labels.app, \"frontend\")",
+					"<v1>severity >= 5",
+					"<v1>applicationname == \"api-gateway\"",
+				},
 			},
 			"is_active": map[string]interface{}{
 				"type":        "boolean",
@@ -192,6 +216,15 @@ func (t *CreateStreamTool) InputSchema() interface{} {
 						"description": "Kafka topic name",
 					},
 				},
+				"example": map[string]interface{}{
+					"brokers": "broker-1.kafka.svc.cluster.local:9092,broker-2.kafka.svc.cluster.local:9092",
+					"topic":   "production-logs",
+				},
+			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the stream configuration without creating it. Use this to preview what will be created and check for errors.",
+				"default":     false,
 			},
 		},
 		"required": []string{"name", "dpxl_expression"},
@@ -200,6 +233,8 @@ func (t *CreateStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	cacheHelper := GetCacheHelper()
+
 	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -220,12 +255,19 @@ func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]int
 		body["is_active"] = isActive
 	}
 
-	if compressionType, _ := GetStringParam(arguments, "compression_type", false); compressionType != "" {
+	compressionType, _ := GetStringParam(arguments, "compression_type", false)
+	if compressionType != "" {
 		body["compression_type"] = compressionType
 	}
 
 	if eventStreams, ok := arguments["ibm_event_streams"].(map[string]interface{}); ok {
 		body["ibm_event_streams"] = eventStreams
+	}
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
+	if dryRun {
+		return t.validateStream(body)
 	}
 
 	req := &client.Request{
@@ -239,7 +281,106 @@ func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
+	// Invalidate related caches
+	cacheHelper.InvalidateRelated(t.Name())
+
 	return t.FormatResponseWithSuggestions(result, "create_stream")
+}
+
+// validateStream performs dry-run validation for stream creation
+func (t *CreateStreamTool) validateStream(stream map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Validate required fields
+	if name, ok := stream["name"].(string); ok {
+		if len(name) < 1 {
+			result.Errors = append(result.Errors, "Stream name must not be empty")
+			result.Valid = false
+		}
+		if len(name) > 4096 {
+			result.Errors = append(result.Errors, "Stream name must be at most 4096 characters")
+			result.Valid = false
+		}
+		result.Summary["name"] = name
+	} else {
+		result.Errors = append(result.Errors, "Missing required field: name")
+		result.Valid = false
+	}
+
+	// Validate DPXL expression
+	if dpxl, ok := stream["dpxl_expression"].(string); ok {
+		if len(dpxl) < 1 {
+			result.Errors = append(result.Errors, "DPXL expression must not be empty")
+			result.Valid = false
+		}
+		// Basic DPXL syntax check
+		if !strings.HasPrefix(dpxl, "<v1>") {
+			result.Warnings = append(result.Warnings, "DPXL expression should start with '<v1>' version prefix")
+		}
+		result.Summary["dpxl_expression"] = dpxl
+	} else {
+		result.Errors = append(result.Errors, "Missing required field: dpxl_expression")
+		result.Valid = false
+	}
+
+	// Validate compression type
+	if compression, ok := stream["compression_type"].(string); ok {
+		validCompressions := []string{"gzip", "snappy", "lz4", "zstd", "unspecified"}
+		isValid := false
+		for _, valid := range validCompressions {
+			if compression == valid {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			result.Errors = append(result.Errors, fmt.Sprintf("Invalid compression_type: '%s'. Must be one of: %v", compression, validCompressions))
+			result.Valid = false
+		}
+		result.Summary["compression_type"] = compression
+	}
+
+	// Validate IBM Event Streams config
+	if eventStreams, ok := stream["ibm_event_streams"].(map[string]interface{}); ok {
+		if brokers, ok := eventStreams["brokers"].(string); ok && brokers != "" {
+			result.Summary["brokers"] = brokers
+		} else {
+			result.Warnings = append(result.Warnings, "No brokers specified in ibm_event_streams - stream may not function correctly")
+		}
+		if topic, ok := eventStreams["topic"].(string); ok && topic != "" {
+			result.Summary["topic"] = topic
+		} else {
+			result.Warnings = append(result.Warnings, "No topic specified in ibm_event_streams - stream may not function correctly")
+		}
+	} else {
+		result.Warnings = append(result.Warnings, "No ibm_event_streams configuration provided - stream destination not configured")
+	}
+
+	// Validate is_active
+	if isActive, ok := stream["is_active"].(bool); ok {
+		result.Summary["is_active"] = isActive
+	} else {
+		result.Summary["is_active"] = true // default
+	}
+
+	// Add suggestions
+	if result.Valid {
+		result.Suggestions = append(result.Suggestions, "Stream configuration is valid")
+		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the stream")
+	} else {
+		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating the stream")
+	}
+
+	// Estimate impact
+	result.EstimatedImpact = &ImpactEstimate{
+		EstimatedCost: "Data egress charges may apply based on stream volume",
+		RiskLevel:     "medium", // Streams can have cost implications
+	}
+
+	return FormatDryRunResult(result, "Stream", stream), nil
 }
 
 // UpdateStreamTool updates an existing stream
@@ -309,6 +450,8 @@ func (t *UpdateStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	cacheHelper := GetCacheHelper()
+
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -352,6 +495,9 @@ func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]int
 		return NewToolResultError(err.Error()), nil
 	}
 
+	// Invalidate related caches
+	cacheHelper.InvalidateRelated(t.Name())
+
 	return t.FormatResponseWithSuggestions(result, "update_stream")
 }
 
@@ -370,6 +516,11 @@ func NewDeleteStreamTool(client *client.Client, logger *zap.Logger) *DeleteStrea
 // Name returns the tool name
 func (t *DeleteStreamTool) Name() string {
 	return "delete_stream"
+}
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteStreamTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Stream")
 }
 
 // Description returns the tool description
@@ -393,6 +544,8 @@ func (t *DeleteStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	cacheHelper := GetCacheHelper()
+
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
@@ -407,6 +560,9 @@ func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Invalidate related caches
+	cacheHelper.InvalidateRelated(t.Name())
 
 	return t.FormatResponseWithSuggestions(result, "delete_stream")
 }

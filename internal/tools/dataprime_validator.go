@@ -39,12 +39,71 @@ func ValidateDataPrimeQuery(query string) *DataPrimeValidationError {
 		return err
 	}
 
-	// 4. Validate severity values if used
+	// 4. Validate severity values if used (but numeric values are now auto-corrected)
 	if err := validateSeverityUsage(query); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// AutoCorrectDataPrimeQuery fixes common issues in DataPrime queries automatically.
+// This improves UX by fixing known issues instead of rejecting queries.
+// Returns the corrected query and a list of corrections made.
+func AutoCorrectDataPrimeQuery(query string) (string, []string) {
+	var corrections []string
+	corrected := query
+
+	// Auto-correct numeric severity to named severity
+	// Maps: 0→VERBOSE, 1→DEBUG, 2→INFO, 3→WARNING, 4→ERROR, 5→CRITICAL
+	severityNumToName := map[string]string{
+		"0": "VERBOSE",
+		"1": "DEBUG",
+		"2": "INFO",
+		"3": "WARNING",
+		"4": "ERROR",
+		"5": "CRITICAL",
+		"6": "CRITICAL", // Handle out-of-range as CRITICAL
+	}
+
+	numericSeverityPattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)(\d+)`)
+	if matches := numericSeverityPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			numValue := match[2]
+			namedValue := severityNumToName[numValue]
+			if namedValue == "" {
+				namedValue = "ERROR" // Default for unknown values
+			}
+			oldVal := match[0]
+			newVal := match[1] + namedValue
+			corrected = strings.Replace(corrected, oldVal, newVal, 1)
+			corrections = append(corrections, fmt.Sprintf("severity %s → %s", numValue, namedValue))
+		}
+	}
+
+	// Auto-correct common severity typos
+	severityTypos := map[string]string{
+		"ERR":      "ERROR",
+		"WARN":     "WARNING",
+		"CRIT":     "CRITICAL",
+		"DBG":      "DEBUG",
+		"VERB":     "VERBOSE",
+		"error":    "ERROR",
+		"warning":  "WARNING",
+		"critical": "CRITICAL",
+		"info":     "INFO",
+		"debug":    "DEBUG",
+	}
+
+	for typo, correct := range severityTypos {
+		typoPattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)` + regexp.QuoteMeta(typo) + `\b`)
+		if typoPattern.MatchString(corrected) {
+			corrected = typoPattern.ReplaceAllString(corrected, "${1}"+correct)
+			corrections = append(corrections, fmt.Sprintf("severity %s → %s", typo, correct))
+		}
+	}
+
+	return corrected, corrections
 }
 
 // validateNoTildeOperator checks that ~~ is NOT used (it's not valid DataPrime)
@@ -171,43 +230,8 @@ func validateSeverityUsage(query string) *DataPrimeValidationError {
 		"CRITICAL": true,
 	}
 
-	// Severity name to numeric mapping for suggestions
-	severityToName := map[string]string{
-		"0": "VERBOSE",
-		"1": "DEBUG",
-		"2": "INFO",
-		"3": "WARNING",
-		"4": "ERROR",
-		"5": "CRITICAL",
-	}
-
-	// Check for $m.severity with numeric values (NOT allowed - must use names)
-	numericSeverityPattern := regexp.MustCompile(`\$m\.severity\s*(==|!=|>=|<=|>|<)\s*(\d+)`)
-	if match := numericSeverityPattern.FindStringSubmatch(query); match != nil {
-		operator := match[1]
-		numValue := match[2]
-		suggestedName := severityToName[numValue]
-		if suggestedName == "" {
-			suggestedName = "ERROR" // Default suggestion for out-of-range values
-		}
-
-		return &DataPrimeValidationError{
-			Message: fmt.Sprintf("Numeric severity values are not allowed. Use severity names instead of '%s'", numValue),
-			Suggestion: fmt.Sprintf(`Severity must use named values, not numbers.
-
-**Valid severity names (in order):**
-VERBOSE, DEBUG, INFO, WARNING, ERROR, CRITICAL
-
-**Your query:** $m.severity %s %s
-**Corrected:** $m.severity %s %s
-
-**Examples:**
-- filter $m.severity == ERROR
-- filter $m.severity >= WARNING
-- filter $m.severity != DEBUG`, operator, numValue, operator, suggestedName),
-			Field: "$m.severity",
-		}
-	}
+	// Note: Numeric severity values are now auto-corrected by AutoCorrectDataPrimeQuery()
+	// so we don't reject them here. This validation now only catches truly invalid names.
 
 	// Check for $m.severity with invalid named value
 	severityPattern := regexp.MustCompile(`\$m\.severity\s*(==|!=|>=|<=|>|<)\s*['"]?([a-zA-Z]+)['"]?`)

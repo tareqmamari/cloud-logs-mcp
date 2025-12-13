@@ -28,6 +28,11 @@ func NewInvestigateIncidentTool(c *client.Client, l *zap.Logger) *InvestigateInc
 // Name returns the tool name
 func (t *InvestigateIncidentTool) Name() string { return "investigate_incident" }
 
+// Annotations returns tool hints for LLMs
+func (t *InvestigateIncidentTool) Annotations() *mcp.ToolAnnotations {
+	return WorkflowAnnotations("Investigate Incident")
+}
+
 // Description returns the tool description
 func (t *InvestigateIncidentTool) Description() string {
 	return `Comprehensive incident investigation workflow that analyzes logs, checks alerts, and provides root cause suggestions.
@@ -58,6 +63,7 @@ func (t *InvestigateIncidentTool) InputSchema() interface{} {
 			"application": map[string]interface{}{
 				"type":        "string",
 				"description": "Application name to investigate (recommended for focused analysis)",
+				"examples":    []string{"api-gateway", "payment-service", "auth-service"},
 			},
 			"time_range": map[string]interface{}{
 				"type":        "string",
@@ -74,6 +80,41 @@ func (t *InvestigateIncidentTool) InputSchema() interface{} {
 			"keyword": map[string]interface{}{
 				"type":        "string",
 				"description": "Additional keyword to search for in logs",
+				"examples":    []string{"timeout", "connection refused", "500", "OOM"},
+			},
+		},
+		"examples": []interface{}{
+			map[string]interface{}{
+				"application": "api-gateway",
+				"time_range":  "1h",
+				"severity":    "error",
+			},
+			map[string]interface{}{
+				"application": "payment-service",
+				"time_range":  "6h",
+				"severity":    "warning",
+				"keyword":     "timeout",
+			},
+		},
+	}
+}
+
+// Metadata returns semantic metadata for tool discovery
+func (t *InvestigateIncidentTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:    []ToolCategory{CategoryWorkflow, CategoryObservability},
+		Keywords:      []string{"investigate", "incident", "debug", "troubleshoot", "root cause", "error", "analysis"},
+		Complexity:    ComplexitySimple,
+		UseCases:      []string{"Investigate incidents", "Find root cause", "Debug production errors", "Analyze error patterns"},
+		RelatedTools:  []string{"query_logs", "list_alerts", "create_alert", "health_check"},
+		ChainPosition: ChainStarter,
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"summary":     map[string]interface{}{"type": "string", "description": "Investigation summary"},
+				"findings":    map[string]interface{}{"type": "array", "description": "Key findings from analysis"},
+				"hypotheses":  map[string]interface{}{"type": "array", "description": "Root cause hypotheses"},
+				"suggestions": map[string]interface{}{"type": "array", "description": "Recommended next actions"},
 			},
 		},
 	}
@@ -86,12 +127,39 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 	severity, _ := GetStringParam(args, "severity", false)
 	keyword, _ := GetStringParam(args, "keyword", false)
 
+	// Get session context for defaults and tracking
+	session := GetSession()
+
+	// Use session preferences if not specified
 	if timeRange == "" {
-		timeRange = "1h"
+		if pref := session.GetPreferences().PreferredTimeRange; pref != "" {
+			timeRange = pref
+		} else {
+			timeRange = "1h"
+		}
 	}
 	if severity == "" {
 		severity = "error"
 	}
+
+	// Check session filters for application if not specified
+	if application == "" {
+		if lastApp := session.GetFilter("last_queried_app"); lastApp != "" {
+			application = lastApp
+		}
+	}
+
+	// Start or continue investigation tracking
+	if session.GetInvestigation() == nil {
+		session.StartInvestigation(application, timeRange)
+	}
+
+	// Record tool usage
+	session.RecordToolUse(t.Name(), true, map[string]interface{}{
+		"application": application,
+		"time_range":  timeRange,
+		"severity":    severity,
+	})
 
 	// Build the investigation query
 	var queryParts []string
@@ -179,6 +247,7 @@ func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, _ s
 // formatInvestigationResults formats the investigation findings
 func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]interface{}, query, application, timeRange, severity string) (*mcp.CallToolResult, error) {
 	var response strings.Builder
+	session := GetSession()
 
 	response.WriteString("# 🔍 Incident Investigation Report\n\n")
 
@@ -278,6 +347,20 @@ func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]i
 		hypotheses := generateHypotheses(events)
 		for i, h := range hypotheses {
 			response.WriteString(fmt.Sprintf("%d. %s\n", i+1, h))
+			// Add hypothesis as finding to session
+			session.AddFinding(t.Name(), h, "info", "hypothesis")
+		}
+
+		// Record key findings to session
+		session.AddFinding(t.Name(), fmt.Sprintf("Found %d error logs in %s", len(events), timeRange), "info", "count")
+		if analysis != nil && analysis.Statistics != nil && analysis.Statistics.ErrorRate > 0 {
+			sev := "info"
+			if analysis.Statistics.ErrorRate > 10 {
+				sev = "critical"
+			} else if analysis.Statistics.ErrorRate > 5 {
+				sev = "warning"
+			}
+			session.AddFinding(t.Name(), fmt.Sprintf("Error rate: %.1f%%", analysis.Statistics.ErrorRate), sev, "metric")
 		}
 
 		// Recommended actions
@@ -404,6 +487,11 @@ func NewHealthCheckTool(c *client.Client, l *zap.Logger) *HealthCheckTool {
 // Name returns the tool name
 func (t *HealthCheckTool) Name() string { return "health_check" }
 
+// Annotations returns tool hints for LLMs
+func (t *HealthCheckTool) Annotations() *mcp.ToolAnnotations {
+	return WorkflowAnnotations("Health Check")
+}
+
 // Description returns the tool description
 func (t *HealthCheckTool) Description() string {
 	return `Quick system health check that summarizes recent activity, error rates, and potential issues.
@@ -429,6 +517,29 @@ func (t *HealthCheckTool) InputSchema() interface{} {
 				"description": "Time range to check: 15m, 1h, 6h (default: 1h)",
 				"enum":        []string{"15m", "1h", "6h"},
 				"default":     "1h",
+			},
+		},
+	}
+}
+
+// Metadata returns semantic metadata for tool discovery
+func (t *HealthCheckTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:    []ToolCategory{CategoryWorkflow, CategoryObservability},
+		Keywords:      []string{"health", "status", "check", "overview", "system", "monitoring", "summary"},
+		Complexity:    ComplexitySimple,
+		UseCases:      []string{"Check system health", "Get status overview", "Morning health checks", "Quick status"},
+		RelatedTools:  []string{"query_logs", "list_alerts", "investigate_incident"},
+		ChainPosition: ChainStarter,
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"overall_status":  map[string]interface{}{"type": "string", "enum": []string{"healthy", "warning", "critical"}},
+				"total_logs":      map[string]interface{}{"type": "integer"},
+				"total_errors":    map[string]interface{}{"type": "integer"},
+				"error_rate":      map[string]interface{}{"type": "number"},
+				"unhealthy_apps":  map[string]interface{}{"type": "array"},
+				"recommendations": map[string]interface{}{"type": "array"},
 			},
 		},
 	}
@@ -594,6 +705,11 @@ func NewValidateQueryTool(c *client.Client, l *zap.Logger) *ValidateQueryTool {
 // Name returns the tool name
 func (t *ValidateQueryTool) Name() string { return "validate_query" }
 
+// Annotations returns tool hints for LLMs
+func (t *ValidateQueryTool) Annotations() *mcp.ToolAnnotations {
+	return ReadOnlyAnnotations("Validate Query")
+}
+
 // Description returns the tool description
 func (t *ValidateQueryTool) Description() string {
 	return `Validate a DataPrime query for syntax errors without executing it.
@@ -620,6 +736,28 @@ func (t *ValidateQueryTool) InputSchema() interface{} {
 			},
 		},
 		"required": []string{"query"},
+	}
+}
+
+// Metadata returns semantic metadata for tool discovery
+func (t *ValidateQueryTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Categories:    []ToolCategory{CategoryQuery, CategoryAIHelper},
+		Keywords:      []string{"validate", "check", "query", "syntax", "verify", "debug", "dataprime"},
+		Complexity:    ComplexitySimple,
+		UseCases:      []string{"Validate query syntax", "Debug queries", "Check before running"},
+		RelatedTools:  []string{"query_logs", "build_query", "explain_query"},
+		ChainPosition: ChainMiddle,
+		OutputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"valid":       map[string]interface{}{"type": "boolean", "description": "Whether the query is valid"},
+				"errors":      map[string]interface{}{"type": "array", "description": "Syntax errors found"},
+				"warnings":    map[string]interface{}{"type": "array", "description": "Warnings and suggestions"},
+				"structure":   map[string]interface{}{"type": "array", "description": "Query structure breakdown"},
+				"suggestions": map[string]interface{}{"type": "array", "description": "Improvement suggestions"},
+			},
+		},
 	}
 }
 

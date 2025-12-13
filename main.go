@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -87,25 +88,49 @@ func main() {
 		logger.Fatal("Failed to create MCP server", zap.Error(err))
 	}
 
-	// Setup graceful shutdown
+	// Setup graceful shutdown with timeout
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
+	// Channel to signal server completion
+	serverDone := make(chan error, 1)
+
 	go func() {
-		<-sigChan
-		logger.Info("Received shutdown signal")
-		cancel()
+		serverDone <- mcpServer.Start(ctx)
 	}()
 
-	// Start server
-	if err := mcpServer.Start(ctx); err != nil {
-		logger.Fatal("Server error", zap.Error(err))
+	// Wait for shutdown signal or server error
+	select {
+	case sig := <-sigChan:
+		logger.Info("Received shutdown signal", zap.String("signal", sig.String()))
+	case err := <-serverDone:
+		if err != nil {
+			logger.Error("Server error", zap.Error(err))
+		}
+		cancel()
+		return
 	}
 
-	logger.Info("Server shutdown complete")
+	// Initiate graceful shutdown with timeout
+	logger.Info("Initiating graceful shutdown", zap.Duration("timeout", cfg.ShutdownTimeout))
+	cancel()
+
+	// Wait for server to finish with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer shutdownCancel()
+
+	select {
+	case <-serverDone:
+		logger.Info("Server shutdown complete")
+	case <-shutdownCtx.Done():
+		logger.Warn("Shutdown timeout exceeded, forcing exit",
+			zap.Duration("timeout", cfg.ShutdownTimeout))
+	}
+
+	// Allow a brief moment for final cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // initLogger initializes and returns a zap logger.

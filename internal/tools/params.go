@@ -92,19 +92,71 @@ func GetBoolParam(arguments map[string]interface{}, key string, required bool) (
 	}
 }
 
+// Pagination defaults
+const (
+	DefaultPageLimit = 50
+	MaxPageLimit     = 100
+)
+
 // GetPaginationParams extracts pagination parameters (limit, cursor)
+// Applies defaults and validates limits to ensure consistent pagination across all tools.
 func GetPaginationParams(arguments map[string]interface{}) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 
+	// Handle limit with default and maximum
 	if limit, ok := arguments["limit"]; ok {
-		params["limit"] = limit
+		var limitInt int
+		switch v := limit.(type) {
+		case float64:
+			limitInt = int(v)
+		case int:
+			limitInt = v
+		case int64:
+			limitInt = int(v)
+		default:
+			return nil, fmt.Errorf("limit must be a number")
+		}
+
+		// Enforce maximum limit
+		if limitInt > MaxPageLimit {
+			limitInt = MaxPageLimit
+		}
+		if limitInt < 1 {
+			limitInt = DefaultPageLimit
+		}
+		params["limit"] = limitInt
+	} else {
+		params["limit"] = DefaultPageLimit
 	}
 
 	if cursor, ok := arguments["cursor"]; ok {
 		params["cursor"] = cursor
 	}
 
+	// Support offset-based pagination as alternative
+	if offset, ok := arguments["offset"]; ok {
+		params["offset"] = offset
+	}
+
 	return params, nil
+}
+
+// StandardPaginationSchema returns the standard pagination schema for list operations.
+// Use this in all list tools for consistent pagination parameters.
+func StandardPaginationSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"limit": map[string]interface{}{
+			"type":        "integer",
+			"description": fmt.Sprintf("Maximum number of results to return (default: %d, max: %d)", DefaultPageLimit, MaxPageLimit),
+			"default":     DefaultPageLimit,
+			"minimum":     1,
+			"maximum":     MaxPageLimit,
+		},
+		"cursor": map[string]interface{}{
+			"type":        "string",
+			"description": "Pagination cursor from a previous response's _pagination.next_cursor field",
+		},
+	}
 }
 
 // AddPaginationToQuery adds pagination parameters to query map

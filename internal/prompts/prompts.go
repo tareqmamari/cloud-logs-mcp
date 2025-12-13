@@ -7,6 +7,8 @@ package prompts
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -20,10 +22,48 @@ type PromptDefinition struct {
 	Handler mcp.PromptHandler
 }
 
+// SessionContextProvider is an interface for accessing session context
+// This allows the prompts package to access session data without circular imports
+type SessionContextProvider interface {
+	GetLastQuery() string
+	GetAllFilters() map[string]string
+	GetRecentTools(limit int) []RecentToolInfo
+	GetInvestigation() *InvestigationInfo
+	GetPreferences() *UserPreferencesInfo
+	GetSuggestedNextTools() []string
+}
+
+// RecentToolInfo contains information about a recently used tool
+type RecentToolInfo struct {
+	Tool      string
+	Timestamp time.Time
+	Success   bool
+}
+
+// InvestigationInfo contains information about an active investigation
+type InvestigationInfo struct {
+	ID            string
+	StartTime     time.Time
+	Application   string
+	TimeRange     string
+	Hypothesis    string
+	FindingsCount int
+	ToolsUsed     []string
+}
+
+// UserPreferencesInfo contains learned user preferences
+type UserPreferencesInfo struct {
+	PreferredTimeRange   string
+	PreferredSeverity    int
+	FrequentApplications []string
+	PreferredLimit       int
+}
+
 // Registry holds all registered prompts
 type Registry struct {
-	logger  *zap.Logger
-	prompts []*PromptDefinition
+	logger          *zap.Logger
+	prompts         []*PromptDefinition
+	contextProvider SessionContextProvider
 }
 
 // NewRegistry creates a new prompt registry with all available prompts
@@ -33,6 +73,11 @@ func NewRegistry(logger *zap.Logger) *Registry {
 	}
 	r.registerPrompts()
 	return r
+}
+
+// SetContextProvider sets the session context provider for context-aware prompts
+func (r *Registry) SetContextProvider(provider SessionContextProvider) {
+	r.contextProvider = provider
 }
 
 // GetPrompts returns all registered prompt definitions
@@ -50,6 +95,12 @@ func (r *Registry) registerPrompts() {
 		r.optimizeRetentionPrompt(),
 		r.testLogIngestionPrompt(),
 		r.createDashboardWorkflowPrompt(),
+		r.continueInvestigationPrompt(),
+		r.dataprimeTutorialPrompt(),
+		r.quickStartPrompt(),
+		r.securityAuditPrompt(),
+		r.contextAwarePrompt(),
+		r.smartSuggestPrompt(),
 	}
 }
 
@@ -401,6 +452,61 @@ Ready to start ingesting logs?`, applicationName, applicationName, applicationNa
 	}
 }
 
+// continueInvestigationPrompt creates a session-aware prompt for continuing investigations
+func (r *Registry) continueInvestigationPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "continue_investigation",
+			Title:       "Continue Investigation",
+			Description: "Resume an ongoing investigation using session context and previous findings",
+			Arguments:   []*mcp.PromptArgument{},
+		},
+		Handler: func(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			content := `Continue the current investigation using session context.
+
+**This prompt leverages your session state to:**
+1. Resume from where you left off
+2. Build on previous findings
+3. Apply persistent filters automatically
+4. Track progress toward resolution
+
+**To use this effectively:**
+
+1. **Check current session state:**
+   - Use: session_context with action "show"
+   - This reveals active filters, recent tools, and investigation status
+
+2. **If an investigation is active:**
+   - Review recorded findings with session_context
+   - The hypothesis and evidence collected so far will be shown
+   - Continue querying with filters already applied
+
+3. **If no investigation is active:**
+   - Start one with: session_context action "start_investigation"
+   - Or use: investigate_incident to begin structured analysis
+
+4. **As you discover issues:**
+   - Record findings: session_context action "add_finding"
+   - Update hypothesis: session_context action "set_hypothesis"
+   - Set persistent filters: session_context action "set_filter"
+
+5. **When complete:**
+   - End investigation: session_context action "end_investigation"
+   - This generates a summary of all findings and tools used
+
+**Session-Aware Benefits:**
+- Filters persist across tool calls
+- Previous queries inform suggestions
+- Investigation findings are tracked
+- Tool chains are suggested based on context
+
+Ready to continue? Start by checking your session state with session_context.`
+
+			return createPromptResult("Continue investigation with session context", content), nil
+		},
+	}
+}
+
 // createDashboardWorkflowPrompt creates the "create_dashboard_workflow" prompt definition
 func (r *Registry) createDashboardWorkflowPrompt() *PromptDefinition {
 	return &PromptDefinition{
@@ -492,4 +598,648 @@ Ready to create your dashboard? Let me know what metrics you want to visualize!`
 			return createPromptResult("Create dashboard workflow", content), nil
 		},
 	}
+}
+
+// dataprimeTutorialPrompt creates an interactive DataPrime learning prompt
+func (r *Registry) dataprimeTutorialPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "dataprime_tutorial",
+			Title:       "Learn DataPrime",
+			Description: "Interactive tutorial for learning DataPrime query syntax",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "skill_level",
+					Description: "Your experience level: beginner, intermediate, advanced",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			skillLevel := getStringArg(req.Params.Arguments, "skill_level", "beginner")
+
+			var content string
+			switch skillLevel {
+			case "intermediate":
+				content = `# DataPrime Intermediate Tutorial
+
+You're ready to learn more advanced DataPrime concepts!
+
+**Aggregations and Grouping:**
+` + "```" + `
+source logs
+| filter $d.severity >= 4
+| groupby $l.applicationName
+| count
+| sort -_count
+| limit 10
+` + "```" + `
+
+**Time-Based Analysis:**
+` + "```" + `
+source logs
+| filter $d.status_code >= 500
+| groupby $m.timestamp.bucket(15m)
+| count
+` + "```" + `
+
+**String Operations:**
+` + "```" + `
+source logs
+| filter $d.message.contains('timeout')
+| extract $d.message into (duration using /took (\d+)ms/)
+| filter duration > 1000
+` + "```" + `
+
+**Try these exercises:**
+1. Count errors per application per hour
+2. Find requests with response time > 5s
+3. Extract and analyze error codes from messages
+
+Use **build_query** to help construct queries!
+Use **explain_query** to understand complex queries!
+Use **validate_query** to check syntax before running!`
+
+			case "advanced":
+				content = `# DataPrime Advanced Tutorial
+
+Master complex DataPrime patterns!
+
+**Subqueries and Joins:**
+` + "```" + `
+source logs
+| filter $d.trace_id in (
+    source logs
+    | filter $d.severity == 6
+    | select $d.trace_id
+  )
+| sort $m.timestamp
+` + "```" + `
+
+**Window Functions:**
+` + "```" + `
+source logs
+| groupby $l.applicationName, $m.timestamp.bucket(1h)
+| count
+| window rolling(3) as moving_avg
+` + "```" + `
+
+**Complex Extractions:**
+` + "```" + `
+source logs
+| extract $d.message into (
+    method using /\"(\w+)\s+\/api/,
+    endpoint using /\"[A-Z]+\s+(\/[^\s]+)/,
+    status using /HTTP\/\d\.\d\"\s+(\d+)/
+  )
+| groupby method, endpoint
+| count
+| sort -_count
+` + "```" + `
+
+**Performance Optimization:**
+- Use specific time ranges
+- Filter early in the pipeline
+- Limit results for exploration
+- Use aggregations instead of raw logs when possible
+
+**Advanced exercises:**
+1. Correlate errors with deployment events
+2. Calculate p95 latency per endpoint
+3. Build anomaly detection queries`
+
+			default: // beginner
+				content = `# DataPrime Beginner Tutorial
+
+Welcome to DataPrime! Let's learn the basics.
+
+**Basic Query Structure:**
+` + "```" + `
+source logs | filter <condition> | select <fields>
+` + "```" + `
+
+**Field References:**
+- ` + "`$d.field`" + ` - Data fields (from log payload)
+- ` + "`$l.field`" + ` - Labels (applicationName, subsystemName)
+- ` + "`$m.field`" + ` - Metadata (timestamp, severity)
+
+**Example 1: Filter by severity**
+` + "```" + `
+source logs | filter $d.severity == 'error'
+` + "```" + `
+
+**Example 2: Search in messages**
+` + "```" + `
+source logs | filter $d.message.contains('timeout')
+` + "```" + `
+
+**Example 3: Filter by application**
+` + "```" + `
+source logs | filter $l.applicationName == 'api-gateway'
+` + "```" + `
+
+**Example 4: Combine filters**
+` + "```" + `
+source logs
+| filter $d.severity >= 4
+| filter $l.applicationName == 'api-gateway'
+| limit 100
+` + "```" + `
+
+**Try these tools to help you learn:**
+- **build_query**: Describe what you want in plain English
+- **explain_query**: Understand what a query does
+- **validate_query**: Check if your query is correct
+- **query_logs**: Run your query
+
+Ready to try? Start with: query_logs with query "source logs | limit 10"`
+			}
+
+			return createPromptResult("DataPrime tutorial for "+skillLevel, content), nil
+		},
+	}
+}
+
+// quickStartPrompt provides a quick start guide for new users
+func (r *Registry) quickStartPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "quick_start",
+			Title:       "Quick Start Guide",
+			Description: "Get started quickly with IBM Cloud Logs - essential commands and workflows",
+			Arguments:   []*mcp.PromptArgument{},
+		},
+		Handler: func(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			content := `# IBM Cloud Logs Quick Start Guide
+
+**Not sure where to start? Here are the most common tasks:**
+
+## 1. Check System Health
+` + "```" + `
+health_check
+` + "```" + `
+Quick overview of error rates and system status.
+
+## 2. Search Logs
+` + "```" + `
+query_logs with query "severity:error" and time_range "1h"
+` + "```" + `
+Find specific log entries.
+
+## 3. Investigate Issues
+` + "```" + `
+investigate_incident with application "your-app" and severity "error"
+` + "```" + `
+Automated analysis of error patterns.
+
+## 4. View Alerts
+` + "```" + `
+list_alerts
+` + "```" + `
+See all configured alerting rules.
+
+## 5. View Dashboards
+` + "```" + `
+list_dashboards
+` + "```" + `
+Browse available visualizations.
+
+---
+
+## Need Help Finding Tools?
+` + "```" + `
+discover_tools with intent "what you want to do"
+` + "```" + `
+
+**Example intents:**
+- "investigate errors in production"
+- "set up alerting for my service"
+- "learn how to write queries"
+- "reduce logging costs"
+
+---
+
+## Common Workflows
+
+| Task | Start With |
+|------|------------|
+| Debug an issue | ` + "`investigate_incident`" + ` |
+| Set up monitoring | ` + "`list_alerts`" + ` then ` + "`create_alert`" + ` |
+| Create visualizations | ` + "`list_dashboards`" + ` then ` + "`create_dashboard`" + ` |
+| Optimize costs | ` + "`list_policies`" + ` |
+| Learn queries | ` + "`build_query`" + ` or ` + "`query_templates`" + ` |
+
+---
+
+**Pro Tips:**
+- Use ` + "`session_context`" + ` to track your investigation progress
+- Filters you set persist across tool calls
+- Tool suggestions appear based on your recent activity
+
+Ready to explore? Try ` + "`health_check`" + ` to see your current system status!`
+
+			return createPromptResult("Quick start guide for IBM Cloud Logs", content), nil
+		},
+	}
+}
+
+// securityAuditPrompt guides through a security audit workflow
+func (r *Registry) securityAuditPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "security_audit",
+			Title:       "Security Audit",
+			Description: "Guide through auditing security configurations and access patterns",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "focus_area",
+					Description: "Area to focus on: access, authentication, data, all",
+					Required:    false,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			focusArea := getStringArg(req.Params.Arguments, "focus_area", "all")
+
+			content := fmt.Sprintf(`# Security Audit Workflow
+
+**Focus Area: %s**
+
+## Step 1: Review Data Access Rules
+`+"```"+`
+list_data_access_rules
+`+"```"+`
+Check who has access to what data:
+- Review rule scopes and filters
+- Identify overly permissive rules
+- Ensure principle of least privilege
+
+## Step 2: Audit Authentication Logs
+`+"```"+`
+query_logs with query "source logs | filter $d.event_type.contains('auth') | limit 100"
+`+"```"+`
+Look for:
+- Failed authentication attempts
+- Unusual login patterns
+- Service account usage
+
+## Step 3: Check Alert Configurations
+`+"```"+`
+list_alerts
+`+"```"+`
+Verify security alerts exist for:
+- Authentication failures
+- Privilege escalation
+- Data access anomalies
+- Suspicious patterns
+
+## Step 4: Review Policies
+`+"```"+`
+list_policies
+`+"```"+`
+Ensure:
+- Sensitive logs have appropriate retention
+- Compliance requirements are met
+- Logs aren't being dropped inappropriately
+
+## Step 5: Examine Outgoing Webhooks
+`+"```"+`
+list_outgoing_webhooks
+`+"```"+`
+Verify:
+- Webhook destinations are authorized
+- No unexpected external endpoints
+- HTTPS is used for all webhooks
+
+## Step 6: Analyze Anomalies
+`+"```"+`
+query_logs with query "source logs | filter $d.severity >= 5 | filter $d.message.contains('unauthorized') OR $d.message.contains('forbidden') | limit 50"
+`+"```"+`
+
+## Security Checklist
+- [ ] Data access rules follow least privilege
+- [ ] Authentication failures are alerted
+- [ ] Sensitive data has appropriate retention
+- [ ] No unauthorized webhook destinations
+- [ ] Security events are being logged
+- [ ] Anomaly detection alerts are configured
+
+## Recommended Actions
+After the audit, consider:
+1. **Create security alerts** using `+"`suggest_alert`"+` with security focus
+2. **Document findings** in a security report
+3. **Set up dashboards** for security monitoring
+4. **Schedule regular audits** using this workflow
+
+Ready to start? Begin with `+"`list_data_access_rules`"+` to review access controls.`, focusArea)
+
+			return createPromptResult("Security audit workflow", content), nil
+		},
+	}
+}
+
+// contextAwarePrompt creates a dynamic prompt that adapts to session context
+func (r *Registry) contextAwarePrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "context_aware_assist",
+			Title:       "Context-Aware Assistant",
+			Description: "Get personalized guidance based on your current session, active filters, recent activity, and learned preferences",
+			Arguments:   []*mcp.PromptArgument{},
+		},
+		Handler: func(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			var builder strings.Builder
+			builder.WriteString("# Context-Aware Assistance\n\n")
+
+			// Check if we have a context provider
+			if r.contextProvider == nil {
+				builder.WriteString("*Session context not available. Here's general guidance:*\n\n")
+				builder.WriteString("## Getting Started\n")
+				builder.WriteString("- Use `health_check` to see your system status\n")
+				builder.WriteString("- Use `discover_tools` to find relevant tools for your task\n")
+				builder.WriteString("- Use `query_logs` to search your logs\n")
+				return createPromptResult("Context-aware assistance", builder.String()), nil
+			}
+
+			// Build context-aware content
+			builder.WriteString("Based on your current session, here's personalized guidance:\n\n")
+
+			// Check for active investigation
+			if inv := r.contextProvider.GetInvestigation(); inv != nil {
+				builder.WriteString("## 🔍 Active Investigation\n\n")
+				builder.WriteString(fmt.Sprintf("**Investigation ID:** %s\n", inv.ID))
+				builder.WriteString(fmt.Sprintf("**Started:** %s ago\n", time.Since(inv.StartTime).Round(time.Minute)))
+				if inv.Application != "" {
+					builder.WriteString(fmt.Sprintf("**Application:** %s\n", inv.Application))
+				}
+				if inv.Hypothesis != "" {
+					builder.WriteString(fmt.Sprintf("**Current Hypothesis:** %s\n", inv.Hypothesis))
+				}
+				builder.WriteString(fmt.Sprintf("**Findings:** %d recorded\n\n", inv.FindingsCount))
+
+				// Suggest next steps based on tools already used
+				usedTools := make(map[string]bool)
+				for _, t := range inv.ToolsUsed {
+					usedTools[t] = true
+				}
+
+				builder.WriteString("**Suggested Next Steps:**\n")
+				investigationTools := []struct {
+					name string
+					desc string
+				}{
+					{"query_logs", "Search for more evidence"},
+					{"suggest_alert", "Create alerts based on findings"},
+					{"create_dashboard", "Visualize patterns"},
+					{"session_context", "Record a finding"},
+				}
+				for _, tool := range investigationTools {
+					if !usedTools[tool.name] {
+						builder.WriteString(fmt.Sprintf("- `%s` - %s\n", tool.name, tool.desc))
+					}
+				}
+				builder.WriteString("\n")
+			}
+
+			// Show active filters
+			filters := r.contextProvider.GetAllFilters()
+			if len(filters) > 0 {
+				builder.WriteString("## 🎯 Active Filters\n\n")
+				builder.WriteString("These filters are automatically applied to your queries:\n")
+				for key, value := range filters {
+					builder.WriteString(fmt.Sprintf("- **%s:** `%s`\n", key, value))
+				}
+				builder.WriteString("\n*Use `session_context` with action `clear_filter` to remove filters.*\n\n")
+			}
+
+			// Show last query
+			if lastQuery := r.contextProvider.GetLastQuery(); lastQuery != "" {
+				builder.WriteString("## 📝 Last Query\n\n")
+				builder.WriteString("```\n")
+				builder.WriteString(lastQuery)
+				builder.WriteString("\n```\n")
+				builder.WriteString("*Use `explain_query` to understand this query or `build_query` to modify it.*\n\n")
+			}
+
+			// Show user preferences
+			if prefs := r.contextProvider.GetPreferences(); prefs != nil {
+				hasPrefs := prefs.PreferredTimeRange != "" || len(prefs.FrequentApplications) > 0 || prefs.PreferredLimit > 0
+				if hasPrefs {
+					builder.WriteString("## ⚙️ Learned Preferences\n\n")
+					builder.WriteString("Based on your usage patterns:\n")
+					if prefs.PreferredTimeRange != "" {
+						builder.WriteString(fmt.Sprintf("- **Default time range:** %s\n", prefs.PreferredTimeRange))
+					}
+					if len(prefs.FrequentApplications) > 0 {
+						builder.WriteString(fmt.Sprintf("- **Frequent applications:** %s\n", strings.Join(prefs.FrequentApplications, ", ")))
+					}
+					if prefs.PreferredLimit > 0 {
+						builder.WriteString(fmt.Sprintf("- **Default result limit:** %d\n", prefs.PreferredLimit))
+					}
+					builder.WriteString("\n")
+				}
+			}
+
+			// Show recent tools and suggest next
+			recentTools := r.contextProvider.GetRecentTools(5)
+			if len(recentTools) > 0 {
+				builder.WriteString("## 🕐 Recent Activity\n\n")
+				builder.WriteString("Your recent tool usage:\n")
+				for _, t := range recentTools {
+					status := "✅"
+					if !t.Success {
+						status = "❌"
+					}
+					builder.WriteString(fmt.Sprintf("- %s `%s` (%s ago)\n", status, t.Tool, time.Since(t.Timestamp).Round(time.Second)))
+				}
+				builder.WriteString("\n")
+
+				// Show suggested next tools
+				if suggested := r.contextProvider.GetSuggestedNextTools(); len(suggested) > 0 {
+					builder.WriteString("**Based on your patterns, you might want to use:**\n")
+					for _, tool := range suggested {
+						builder.WriteString(fmt.Sprintf("- `%s`\n", tool))
+					}
+					builder.WriteString("\n")
+				}
+			}
+
+			// If no context, provide general guidance
+			if len(filters) == 0 && r.contextProvider.GetLastQuery() == "" && len(recentTools) == 0 {
+				builder.WriteString("## 🚀 Getting Started\n\n")
+				builder.WriteString("No session context yet. Here are some ways to begin:\n\n")
+				builder.WriteString("1. **Check system health:** `health_check`\n")
+				builder.WriteString("2. **Discover tools:** `discover_tools` with your intent\n")
+				builder.WriteString("3. **Search logs:** `query_logs` with your search criteria\n")
+				builder.WriteString("4. **Start an investigation:** `investigate_incident`\n")
+			}
+
+			return createPromptResult("Context-aware assistance based on your session", builder.String()), nil
+		},
+	}
+}
+
+// smartSuggestPrompt creates a prompt that provides intelligent suggestions
+func (r *Registry) smartSuggestPrompt() *PromptDefinition {
+	return &PromptDefinition{
+		Prompt: &mcp.Prompt{
+			Name:        "smart_suggest",
+			Title:       "Smart Suggestions",
+			Description: "Get intelligent tool and workflow suggestions based on your goal and current context",
+			Arguments: []*mcp.PromptArgument{
+				{
+					Name:        "goal",
+					Description: "What you want to accomplish (e.g., 'debug production errors', 'set up monitoring')",
+					Required:    true,
+				},
+			},
+		},
+		Handler: func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			goal := getStringArg(req.Params.Arguments, "goal", "")
+			if goal == "" {
+				return createPromptResult("Smart suggestions", "Please provide a goal to get personalized suggestions."), nil
+			}
+
+			var builder strings.Builder
+			builder.WriteString(fmt.Sprintf("# Smart Suggestions for: %s\n\n", goal))
+
+			goalLower := strings.ToLower(goal)
+
+			// Analyze the goal and provide tailored suggestions
+			var primaryTools []string
+			var workflow string
+			var tips []string
+
+			switch {
+			case containsAny(goalLower, "error", "debug", "issue", "problem", "crash", "fail"):
+				primaryTools = []string{"investigate_incident", "query_logs", "health_check"}
+				workflow = "error_investigation"
+				tips = []string{
+					"Start with `health_check` for a quick overview",
+					"Use `investigate_incident` for guided analysis",
+					"Set filters with `session_context` to focus on specific services",
+					"Record findings as you discover them for the postmortem",
+				}
+
+			case containsAny(goalLower, "alert", "monitor", "notify", "threshold"):
+				primaryTools = []string{"suggest_alert", "create_alert", "create_outgoing_webhook"}
+				workflow = "monitoring_setup"
+				tips = []string{
+					"Use `suggest_alert` to get AI-recommended alert configurations",
+					"Create webhooks first if you need Slack/PagerDuty notifications",
+					"Test with dry_run: true before creating alerts",
+					"Consider different severity levels for different conditions",
+				}
+
+			case containsAny(goalLower, "dashboard", "visualiz", "chart", "graph"):
+				primaryTools = []string{"create_dashboard", "list_dashboards", "query_logs"}
+				workflow = "dashboard_creation"
+				tips = []string{
+					"Query logs first to understand what data is available",
+					"Use line_chart for time-series data, bar_chart for categories",
+					"Group related widgets in sections for better organization",
+					"Start with a simple dashboard and iterate",
+				}
+
+			case containsAny(goalLower, "cost", "retention", "optimi", "save", "reduce"):
+				primaryTools = []string{"list_policies", "list_e2m", "export_data_usage"}
+				workflow = "cost_optimization"
+				tips = []string{
+					"Review current policies to understand retention settings",
+					"Consider E2M to convert high-volume logs to metrics",
+					"Archive logs to lower-cost tiers where appropriate",
+					"Use priority levels to tier your data",
+				}
+
+			case containsAny(goalLower, "learn", "dataprime", "query", "syntax", "how to"):
+				primaryTools = []string{"query_templates", "build_query", "explain_query"}
+				workflow = "query_learning"
+				tips = []string{
+					"Use `build_query` to convert natural language to DataPrime",
+					"Use `explain_query` to understand existing queries",
+					"Start with simple filters and add complexity gradually",
+					"Use `validate_query` to check syntax before running",
+				}
+
+			case containsAny(goalLower, "security", "audit", "access", "permission"):
+				primaryTools = []string{"list_data_access_rules", "query_logs", "list_alerts"}
+				workflow = "security_investigation"
+				tips = []string{
+					"Review data access rules for least privilege",
+					"Search for authentication failures and unauthorized access",
+					"Ensure security-related alerts are configured",
+					"Check webhook destinations for unauthorized endpoints",
+				}
+
+			case containsAny(goalLower, "export", "stream", "kafka", "siem"):
+				primaryTools = []string{"list_streams", "create_stream", "query_logs"}
+				workflow = "log_export_setup"
+				tips = []string{
+					"Query logs first to verify the data you want to export",
+					"Use DPXL expressions to filter what gets streamed",
+					"Consider compression settings for large volumes",
+					"Test with a small time window first",
+				}
+
+			default:
+				primaryTools = []string{"discover_tools", "health_check", "query_logs"}
+				workflow = ""
+				tips = []string{
+					"Use `discover_tools` with your intent for best matches",
+					"Start with `health_check` to understand system state",
+					"Use `session_context` to set up filters for your work",
+				}
+			}
+
+			// Write recommendations
+			builder.WriteString("## Recommended Tools\n\n")
+			for i, tool := range primaryTools {
+				builder.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, tool))
+			}
+			builder.WriteString("\n")
+
+			if workflow != "" {
+				builder.WriteString(fmt.Sprintf("## Suggested Workflow: %s\n\n", workflow))
+				builder.WriteString("Use `discover_tools` with this intent to see the full workflow chain.\n\n")
+			}
+
+			builder.WriteString("## Tips\n\n")
+			for _, tip := range tips {
+				builder.WriteString(fmt.Sprintf("- %s\n", tip))
+			}
+			builder.WriteString("\n")
+
+			// Add context-aware suggestions if available
+			if r.contextProvider != nil {
+				if inv := r.contextProvider.GetInvestigation(); inv != nil {
+					builder.WriteString("## 💡 Context Note\n\n")
+					builder.WriteString(fmt.Sprintf("You have an active investigation (%s). ", inv.ID))
+					builder.WriteString("Your new activity will be tracked as part of this investigation.\n\n")
+				}
+
+				if filters := r.contextProvider.GetAllFilters(); len(filters) > 0 {
+					builder.WriteString("## 🎯 Active Filters Applied\n\n")
+					for key, value := range filters {
+						builder.WriteString(fmt.Sprintf("- %s: `%s`\n", key, value))
+					}
+					builder.WriteString("\n")
+				}
+			}
+
+			builder.WriteString("---\n")
+			builder.WriteString(fmt.Sprintf("*Ready to start? Try: `%s`*\n", primaryTools[0]))
+
+			return createPromptResult(fmt.Sprintf("Smart suggestions for: %s", goal), builder.String()), nil
+		},
+	}
+}
+
+// containsAny checks if s contains any of the substrings
+func containsAny(s string, substrings ...string) bool {
+	for _, sub := range substrings {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }

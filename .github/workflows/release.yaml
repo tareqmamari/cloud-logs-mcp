@@ -9,6 +9,7 @@ permissions:
   contents: write
   id-token: write
   packages: write
+  attestations: write
 
 jobs:
   goreleaser:
@@ -38,6 +39,9 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
 
+      - name: Install syft (for SBOM generation)
+        uses: anchore/sbom-action/download-syft@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
@@ -53,5 +57,10 @@ jobs:
           echo "### :rocket: Release Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Supply Chain Security:**" >> $GITHUB_STEP_SUMMARY
+          echo "- :lock: Artifacts signed with Cosign (keyless OIDC)" >> $GITHUB_STEP_SUMMARY
+          echo "- :page_facing_up: SBOMs generated with Syft (SPDX format)" >> $GITHUB_STEP_SUMMARY
+          echo "- :white_check_mark: Checksums verified (SHA256)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[View Release](${{ github.event.release.html_url }})" >> $GITHUB_STEP_SUMMARY

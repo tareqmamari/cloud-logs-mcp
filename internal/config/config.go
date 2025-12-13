@@ -47,7 +47,12 @@ type Config struct {
 	// Observability
 	EnableTracing   bool `json:"enable_tracing"`   // Enable distributed tracing (default: true)
 	EnableAuditLog  bool `json:"enable_audit_log"` // Enable audit logging (default: true)
-	MetricsEndpoint bool `json:"metrics_endpoint"` // Enable Prometheus metrics endpoint (default: false)
+	MetricsEndpoint bool `json:"metrics_endpoint"` // Enable Prometheus metrics endpoint (default: true)
+
+	// Health & Metrics HTTP Server
+	HealthPort      int           `json:"health_port"`      // Port for health/metrics HTTP server (default: 8080, 0 to disable)
+	HealthBindAddr  string        `json:"health_bind_addr"` // Bind address for health server (default: 127.0.0.1 for security)
+	ShutdownTimeout time.Duration `json:"shutdown_timeout"` // Timeout for graceful shutdown (default: 30s)
 
 	// Logging
 	LogLevel  string `json:"log_level"`
@@ -77,7 +82,11 @@ func Load() (*Config, error) {
 		// Observability defaults
 		EnableTracing:   true,
 		EnableAuditLog:  true,
-		MetricsEndpoint: false,
+		MetricsEndpoint: true, // Enabled by default for operational visibility
+		// Health & shutdown defaults
+		HealthPort:      8080,
+		HealthBindAddr:  "127.0.0.1", // Bind to localhost by default for security
+		ShutdownTimeout: 30 * time.Second,
 	}
 
 	// Try to load from config file if specified
@@ -205,6 +214,20 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		cfg.LogFormat = v
+	}
+	if v := os.Getenv("LOGS_HEALTH_PORT"); v != "" {
+		var port int
+		if _, err := fmt.Sscanf(v, "%d", &port); err == nil {
+			cfg.HealthPort = port
+		}
+	}
+	if v := os.Getenv("LOGS_HEALTH_BIND_ADDR"); v != "" {
+		cfg.HealthBindAddr = v
+	}
+	if v := os.Getenv("LOGS_SHUTDOWN_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.ShutdownTimeout = d
+		}
 	}
 }
 

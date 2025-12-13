@@ -4,11 +4,20 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
+)
+
+// Query timeout constants
+const (
+	// DefaultQueryTimeout is the timeout for synchronous query requests (SSE streaming).
+	// This is longer than the default HTTP timeout because SSE queries wait for
+	// all results to stream before returning.
+	DefaultQueryTimeout = 60 * time.Second
 )
 
 // Parameter aliases for IBM Cloud Logs terminology mapping
@@ -97,6 +106,11 @@ func (t *QueryTool) Name() string {
 	return "query_logs"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *QueryTool) Annotations() *mcp.ToolAnnotations {
+	return QueryAnnotations("Query Logs")
+}
+
 // Description returns the tool description
 func (t *QueryTool) Description() string {
 	return `Execute a synchronous streaming query against IBM Cloud Logs (also known as ICL or Cloud Logs). This is the DEFAULT and PREFERRED method for querying logs.
@@ -148,6 +162,8 @@ var validQueryFields = map[string]bool{
 	"default_source":           true,
 	"strict_fields_validation": true,
 	"now_date":                 true,
+	// Token optimization field
+	"summary_only": true,
 	// Convenience filter aliases (resolved to query filters)
 	"applicationName":  true,
 	"namespace":        true,
@@ -176,6 +192,11 @@ func (t *QueryTool) InputSchema() interface{} {
 				"description": "The query string to execute (DataPrime or Lucene syntax). Max 4096 characters.",
 				"minLength":   1,
 				"maxLength":   4096,
+				"examples": []string{
+					"source logs | filter $m.severity >= 5",
+					"source logs | filter $l.applicationname == 'api-gateway' && $m.severity >= 4",
+					"source logs | filter $d.message.contains('timeout') | limit 100",
+				},
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
@@ -219,6 +240,11 @@ func (t *QueryTool) InputSchema() interface{} {
 				"format":      "date-time",
 				"description": "Override current time for time-based functions like now() in DataPrime. Defaults to system time.",
 			},
+			"summary_only": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, return only statistical summary (severity distribution, top apps, counts) without raw events. Reduces response tokens by ~90%. Default: false.",
+				"default":     false,
+			},
 			// Application filter with aliases
 			"applicationName": map[string]interface{}{
 				"type":        "string",
@@ -245,6 +271,9 @@ func (t *QueryTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	// Get session context for filters and tracking
+	session := GetSession()
+
 	// Validate that all provided fields are recognized
 	var unknownFields []string
 	for field := range arguments {
@@ -262,6 +291,17 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		return NewToolResultError(err.Error()), nil
 	}
 
+	// Apply session filters if not explicitly specified
+	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); !found {
+		// Check session for application filter
+		if sessionApp := session.GetFilter("application"); sessionApp != "" {
+			arguments["applicationName"] = sessionApp
+		}
+	} else {
+		// Update session with the application being queried
+		session.SetFilter("last_queried_app", appName)
+	}
+
 	// Validate query length per API spec
 	if len(query) > 4096 {
 		return NewToolResultError(fmt.Sprintf("Query too long: %d characters (max 4096)", len(query))), nil
@@ -272,11 +312,13 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	var filters []string
 
 	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); found {
-		filters = append(filters, `$l.applicationname == '`+appName+`'`)
+		// Escape the value to prevent query injection
+		filters = append(filters, `$l.applicationname == '`+escapeDataPrimeString(appName)+`'`)
 	}
 
 	if subsysName, found := resolveAliasedParam(arguments, "subsystemName", subsystemAliases); found {
-		filters = append(filters, `$l.subsystemname == '`+subsysName+`'`)
+		// Escape the value to prevent query injection
+		filters = append(filters, `$l.subsystemname == '`+escapeDataPrimeString(subsysName)+`'`)
 	}
 
 	// Append filters to query if any were specified
@@ -363,8 +405,13 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		metadata["now_date"] = nowDate
 	}
 
-	// Validate DataPrime query before sending to API (if using dataprime syntax)
+	// Auto-correct and validate DataPrime query before sending to API
+	var queryCorrections []string
 	if syntax == "dataprime" || syntax == "dataprime_utf8_base64" {
+		// Auto-correct common issues (e.g., numeric severity → named severity)
+		query, queryCorrections = AutoCorrectDataPrimeQuery(query)
+
+		// Validate after auto-correction
 		if validationErr := ValidateDataPrimeQuery(query); validationErr != nil {
 			return NewToolResultError(validationErr.Error()), nil
 		}
@@ -380,14 +427,60 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		Method:    "POST",
 		Path:      "/v1/query",
 		Body:      body,
-		AcceptSSE: true, // Sync query returns Server-Sent Events stream
+		AcceptSSE: true,                // Sync query returns Server-Sent Events stream
+		Timeout:   DefaultQueryTimeout, // Longer timeout for SSE streaming (60s)
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
+		// Record failed tool usage
+		session.RecordToolUse(t.Name(), false, map[string]interface{}{
+			"query": query,
+			"error": err.Error(),
+		})
 		// Enhance error with query-specific suggestions
 		errorMsg := FormatQueryError(query, err.Error())
 		return NewToolResultError(errorMsg), nil
+	}
+
+	// Record successful tool usage with query info
+	session.RecordToolUse(t.Name(), true, map[string]interface{}{
+		"query":      query,
+		"start_date": metadata["start_date"],
+		"end_date":   metadata["end_date"],
+		"tier":       tier,
+	})
+
+	// Update session with query context for future reference
+	session.SetLastQuery(query)
+
+	// Learn user preferences from this query
+	if limit > 0 {
+		session.GetPreferences().PreferredLimit = limit
+	}
+
+	// Add query metadata to result for transparency
+	if result == nil {
+		result = make(map[string]interface{})
+	}
+	queryMeta := map[string]interface{}{
+		"tier":       tier,
+		"syntax":     syntax,
+		"start_date": metadata["start_date"],
+		"end_date":   metadata["end_date"],
+		"limit":      metadata["limit"],
+	}
+	// Include auto-corrections made to the query (helps LLM learn)
+	if len(queryCorrections) > 0 {
+		queryMeta["auto_corrections"] = queryCorrections
+		queryMeta["corrected_query"] = query
+	}
+	result["_query_metadata"] = queryMeta
+
+	// Check if summary_only mode is requested (token optimization)
+	summaryOnly, _ := GetBoolParam(arguments, "summary_only", false)
+	if summaryOnly {
+		return t.FormatCompactSummary(result, "query_logs")
 	}
 
 	return t.FormatResponseWithSummaryAndSuggestions(result, "query results", "query_logs")
@@ -408,6 +501,11 @@ func NewSubmitBackgroundQueryTool(client *client.Client, logger *zap.Logger) *Su
 // Name returns the tool name
 func (t *SubmitBackgroundQueryTool) Name() string {
 	return "submit_background_query"
+}
+
+// Annotations returns tool hints for LLMs
+func (t *SubmitBackgroundQueryTool) Annotations() *mcp.ToolAnnotations {
+	return CreateAnnotations("Submit Background Query")
 }
 
 // Description returns the tool description
@@ -509,6 +607,11 @@ func (t *GetBackgroundQueryStatusTool) Name() string {
 	return "get_background_query_status"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *GetBackgroundQueryStatusTool) Annotations() *mcp.ToolAnnotations {
+	return ReadOnlyAnnotations("Get Background Query Status")
+}
+
 // Description returns the tool description
 func (t *GetBackgroundQueryStatusTool) Description() string {
 	return "Check the status of a background query"
@@ -565,6 +668,11 @@ func (t *GetBackgroundQueryDataTool) Name() string {
 	return "get_background_query_data"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *GetBackgroundQueryDataTool) Annotations() *mcp.ToolAnnotations {
+	return ReadOnlyAnnotations("Get Background Query Data")
+}
+
 // Description returns the tool description
 func (t *GetBackgroundQueryDataTool) Description() string {
 	return "Retrieve the results of a completed background query"
@@ -619,6 +727,11 @@ func NewCancelBackgroundQueryTool(client *client.Client, logger *zap.Logger) *Ca
 // Name returns the tool name
 func (t *CancelBackgroundQueryTool) Name() string {
 	return "cancel_background_query"
+}
+
+// Annotations returns tool hints for LLMs
+func (t *CancelBackgroundQueryTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Cancel Background Query")
 }
 
 // Description returns the tool description

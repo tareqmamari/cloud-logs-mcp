@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -10,11 +11,179 @@ import (
 
 // ValidationResult represents the result of a dry-run validation
 type ValidationResult struct {
-	Valid       bool                   `json:"valid"`
-	Errors      []string               `json:"errors,omitempty"`
-	Warnings    []string               `json:"warnings,omitempty"`
-	Summary     map[string]interface{} `json:"summary,omitempty"`
-	Suggestions []string               `json:"suggestions,omitempty"`
+	Valid           bool                   `json:"valid"`
+	Errors          []string               `json:"errors,omitempty"`
+	Warnings        []string               `json:"warnings,omitempty"`
+	Summary         map[string]interface{} `json:"summary,omitempty"`
+	Suggestions     []string               `json:"suggestions,omitempty"`
+	EstimatedImpact *ImpactEstimate        `json:"estimated_impact,omitempty"`
+}
+
+// ImpactEstimate provides estimates for the operation's impact
+type ImpactEstimate struct {
+	AffectedResources int    `json:"affected_resources,omitempty"`
+	EstimatedCost     string `json:"estimated_cost,omitempty"`
+	EstimatedLatency  string `json:"estimated_latency,omitempty"`
+	RiskLevel         string `json:"risk_level,omitempty"` // low, medium, high
+}
+
+// DryRunValidator interface for tools that support dry-run validation
+type DryRunValidator interface {
+	// ValidateConfig validates the configuration without executing
+	ValidateConfig(config map[string]interface{}) *ValidationResult
+	// GetRequiredFields returns the list of required fields
+	GetRequiredFields() []string
+	// GetResourceType returns the type of resource being validated
+	GetResourceType() string
+}
+
+// ResourceValidator provides common validation logic for resources
+type ResourceValidator struct {
+	resourceType    string
+	requiredFields  []string
+	fieldValidators map[string]FieldValidator
+}
+
+// FieldValidator defines validation rules for a single field
+type FieldValidator struct {
+	Type          string   // string, int, bool, object, array
+	MinLength     int      // for strings
+	MaxLength     int      // for strings
+	MinValue      int      // for ints
+	MaxValue      int      // for ints
+	AllowedValues []string // enum values
+	Pattern       string   // regex pattern for strings
+	Required      bool
+}
+
+// NewResourceValidator creates a new resource validator
+func NewResourceValidator(resourceType string, requiredFields []string) *ResourceValidator {
+	return &ResourceValidator{
+		resourceType:    resourceType,
+		requiredFields:  requiredFields,
+		fieldValidators: make(map[string]FieldValidator),
+	}
+}
+
+// AddFieldValidator adds a validator for a specific field
+func (rv *ResourceValidator) AddFieldValidator(field string, validator FieldValidator) {
+	rv.fieldValidators[field] = validator
+}
+
+// Validate performs validation on the given config
+func (rv *ResourceValidator) Validate(config map[string]interface{}) *ValidationResult {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Track which fields have been checked as required
+	checkedRequired := make(map[string]bool)
+
+	// Check required fields from the requiredFields list
+	for _, field := range rv.requiredFields {
+		if _, ok := config[field]; !ok {
+			result.Errors = append(result.Errors, fmt.Sprintf("Missing required field: %s", field))
+			result.Valid = false
+		}
+		checkedRequired[field] = true
+	}
+
+	// Apply field validators
+	for field, validator := range rv.fieldValidators {
+		val, exists := config[field]
+		if !exists {
+			// Only add error if field is required AND not already checked above
+			if validator.Required && !checkedRequired[field] {
+				result.Errors = append(result.Errors, fmt.Sprintf("Missing required field: %s", field))
+				result.Valid = false
+			}
+			continue
+		}
+
+		if err := rv.validateField(field, val, validator); err != "" {
+			result.Errors = append(result.Errors, err)
+			result.Valid = false
+		}
+	}
+
+	return result
+}
+
+// validateField validates a single field value against its validator
+func (rv *ResourceValidator) validateField(field string, val interface{}, v FieldValidator) string {
+	switch v.Type {
+	case "string":
+		strVal, ok := val.(string)
+		if !ok {
+			return fmt.Sprintf("Field '%s' must be a string", field)
+		}
+		if v.MinLength > 0 && len(strVal) < v.MinLength {
+			return fmt.Sprintf("Field '%s' must be at least %d characters", field, v.MinLength)
+		}
+		if v.MaxLength > 0 && len(strVal) > v.MaxLength {
+			return fmt.Sprintf("Field '%s' must be at most %d characters", field, v.MaxLength)
+		}
+		if len(v.AllowedValues) > 0 {
+			found := false
+			for _, allowed := range v.AllowedValues {
+				if strVal == allowed {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Sprintf("Invalid value for '%s': got '%s', must be one of: %v", field, strVal, v.AllowedValues)
+			}
+		}
+		if v.Pattern != "" {
+			matched, err := regexp.MatchString(v.Pattern, strVal)
+			if err != nil || !matched {
+				return fmt.Sprintf("Field '%s' does not match required pattern", field)
+			}
+		}
+	case "int":
+		var intVal int
+		switch num := val.(type) {
+		case float64:
+			intVal = int(num)
+		case int:
+			intVal = num
+		case int64:
+			intVal = int(num)
+		default:
+			return fmt.Sprintf("Field '%s' must be a number", field)
+		}
+		if v.MinValue > 0 && intVal < v.MinValue {
+			return fmt.Sprintf("Field '%s' must be at least %d", field, v.MinValue)
+		}
+		if v.MaxValue > 0 && intVal > v.MaxValue {
+			return fmt.Sprintf("Field '%s' must be at most %d", field, v.MaxValue)
+		}
+	case "bool":
+		if _, ok := val.(bool); !ok {
+			return fmt.Sprintf("Field '%s' must be a boolean", field)
+		}
+	case "object":
+		if _, ok := val.(map[string]interface{}); !ok {
+			return fmt.Sprintf("Field '%s' must be an object", field)
+		}
+	case "array":
+		if _, ok := val.([]interface{}); !ok {
+			return fmt.Sprintf("Field '%s' must be an array", field)
+		}
+	}
+	return ""
+}
+
+// GetResourceType returns the resource type
+func (rv *ResourceValidator) GetResourceType() string {
+	return rv.resourceType
+}
+
+// GetRequiredFields returns the required fields
+func (rv *ResourceValidator) GetRequiredFields() []string {
+	return rv.requiredFields
 }
 
 // ValidateRequiredFields checks if all required fields are present in the configuration
@@ -130,6 +299,31 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 		builder.WriteString("### Warnings\n\n")
 		for _, warn := range result.Warnings {
 			builder.WriteString(fmt.Sprintf("- ⚠️ %s\n", warn))
+		}
+		builder.WriteString("\n")
+	}
+
+	// Add impact estimate if available
+	if result.EstimatedImpact != nil {
+		builder.WriteString("### Estimated Impact\n\n")
+		if result.EstimatedImpact.AffectedResources > 0 {
+			builder.WriteString(fmt.Sprintf("- **Affected Resources:** %d\n", result.EstimatedImpact.AffectedResources))
+		}
+		if result.EstimatedImpact.EstimatedCost != "" {
+			builder.WriteString(fmt.Sprintf("- **Estimated Cost:** %s\n", result.EstimatedImpact.EstimatedCost))
+		}
+		if result.EstimatedImpact.EstimatedLatency != "" {
+			builder.WriteString(fmt.Sprintf("- **Estimated Latency:** %s\n", result.EstimatedImpact.EstimatedLatency))
+		}
+		if result.EstimatedImpact.RiskLevel != "" {
+			riskEmoji := "🟢"
+			switch result.EstimatedImpact.RiskLevel {
+			case "medium":
+				riskEmoji = "🟡"
+			case "high":
+				riskEmoji = "🔴"
+			}
+			builder.WriteString(fmt.Sprintf("- **Risk Level:** %s %s\n", riskEmoji, result.EstimatedImpact.RiskLevel))
 		}
 		builder.WriteString("\n")
 	}

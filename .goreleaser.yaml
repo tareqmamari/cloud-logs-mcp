@@ -93,8 +93,23 @@ signs:
     artifacts: checksum
     output: true
 
+# SBOM (Software Bill of Materials) generation using Syft
+# Creates SBOMs for all archives, enabling supply chain transparency
+# Requires syft to be installed in the CI environment (see release.yaml)
 sboms:
-  - disable: true
+  - id: archive
+    artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+    cmd: syft
+    args:
+      - "${artifact}"
+      - "--output"
+      - "spdx-json=${document}"
+  - id: source
+    artifacts: source
+    documents:
+      - "${artifact}.sbom.json"
 
 
 # Docker images (optional - can be enabled if needed)

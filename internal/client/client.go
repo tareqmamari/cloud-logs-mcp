@@ -125,9 +125,10 @@ type Request struct {
 	Query          map[string]string
 	Body           interface{}
 	Headers        map[string]string
-	RequestID      string // Optional client-provided request ID for idempotency
-	UseIngressHost bool   // Use ingress endpoint instead of API endpoint for log ingestion
-	AcceptSSE      bool   // Use text/event-stream Accept header for streaming responses (e.g., sync queries)
+	RequestID      string        // Optional client-provided request ID for idempotency
+	UseIngressHost bool          // Use ingress endpoint instead of API endpoint for log ingestion
+	AcceptSSE      bool          // Use text/event-stream Accept header for streaming responses (e.g., sync queries)
+	Timeout        time.Duration // Optional per-request timeout (overrides client default)
 }
 
 // Response represents an HTTP response
@@ -193,6 +194,13 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		}
 	}
 
+	// Apply per-request timeout if specified (e.g., longer timeout for SSE queries)
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
+
 	// Build URL - use ingress endpoint for log ingestion, API endpoint for everything else
 	baseURL := c.config.ServiceURL
 	if req.UseIngressHost {
@@ -236,6 +244,9 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		httpReq.Header.Set("Accept", "application/json")
 	}
 	httpReq.Header.Set("User-Agent", fmt.Sprintf("logs-mcp-server/%s", c.version))
+
+	// Add MCP Protocol Version header (per MCP 2025-06-18 spec requirement)
+	httpReq.Header.Set("MCP-Protocol-Version", "2025-06-18")
 
 	// Add tracing headers if enabled
 	if c.enableTracing {

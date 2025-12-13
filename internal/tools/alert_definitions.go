@@ -159,6 +159,11 @@ func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
 					},
 				},
 			},
+			"dry_run": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, validates the alert definition without creating it. Use this to preview and check for errors.",
+				"default":     false,
+			},
 		},
 		"required": []string{"definition"},
 	}
@@ -170,11 +175,72 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+
+	// Check for dry-run mode
+	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
+	if dryRun {
+		return t.validateAlertDefinition(def)
+	}
+
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/alert_definitions", Body: def})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 	return t.FormatResponseWithSuggestions(result, "create_alert_definition")
+}
+
+// validateAlertDefinition performs dry-run validation
+func (t *CreateAlertDefinitionTool) validateAlertDefinition(def map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := &ValidationResult{
+		Valid:   true,
+		Summary: make(map[string]interface{}),
+	}
+
+	// Validate required fields
+	requiredFields := []string{"name", "type"}
+	for _, field := range requiredFields {
+		if _, ok := def[field]; !ok {
+			result.Errors = append(result.Errors, "Missing required field: "+field)
+			result.Valid = false
+		}
+	}
+
+	// Validate name
+	if name, ok := def["name"].(string); ok {
+		result.Summary["name"] = name
+	}
+
+	// Validate type
+	validTypes := map[string]bool{
+		"logs_immediate": true,
+		"logs_threshold": true,
+		"logs_ratio":     true,
+		"logs_anomaly":   true,
+		"logs_new_value": true,
+	}
+	if alertType, ok := def["type"].(string); ok {
+		if !validTypes[alertType] {
+			result.Errors = append(result.Errors, "Invalid alert type: "+alertType+". Valid types: logs_immediate, logs_threshold, logs_ratio, logs_anomaly, logs_new_value")
+			result.Valid = false
+		}
+		result.Summary["type"] = alertType
+	}
+
+	// Check for condition (required for most types)
+	if _, ok := def["condition"]; !ok {
+		result.Warnings = append(result.Warnings, "No condition specified - alert may not trigger as expected")
+	}
+
+	// Add suggestions
+	if result.Valid {
+		result.Suggestions = append(result.Suggestions, "Alert definition configuration is valid")
+		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the alert definition")
+	} else {
+		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating")
+	}
+
+	result.EstimatedImpact = &ImpactEstimate{RiskLevel: "low"}
+	return FormatDryRunResult(result, "Alert Definition", def), nil
 }
 
 // UpdateAlertDefinitionTool updates an existing alert definition
@@ -236,6 +302,11 @@ func NewDeleteAlertDefinitionTool(client *client.Client, logger *zap.Logger) *De
 
 // Name returns the tool name
 func (t *DeleteAlertDefinitionTool) Name() string { return "delete_alert_definition" }
+
+// Annotations returns tool hints for LLMs
+func (t *DeleteAlertDefinitionTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Alert Definition")
+}
 
 // Description returns the tool description
 func (t *DeleteAlertDefinitionTool) Description() string {

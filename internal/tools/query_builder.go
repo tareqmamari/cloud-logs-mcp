@@ -29,6 +29,11 @@ func (t *BuildQueryTool) Name() string {
 	return "build_query"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *BuildQueryTool) Annotations() *mcp.ToolAnnotations {
+	return ReadOnlyAnnotations("Build Query")
+}
+
 // Description returns a human-readable description of the tool.
 func (t *BuildQueryTool) Description() string {
 	return `Build a log query from structured parameters without needing to know Lucene or DataPrime syntax.

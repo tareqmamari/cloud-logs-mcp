@@ -284,6 +284,11 @@ func (t *DeleteEventStreamTargetTool) Name() string {
 	return "delete_event_stream_target"
 }
 
+// Annotations returns tool hints for LLMs
+func (t *DeleteEventStreamTargetTool) Annotations() *mcp.ToolAnnotations {
+	return DeleteAnnotations("Delete Event Stream Target")
+}
+
 // Description returns the tool description
 func (t *DeleteEventStreamTargetTool) Description() string {
 	return "Delete an event stream target"
