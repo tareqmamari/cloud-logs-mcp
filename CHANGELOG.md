@@ -6,6 +6,13 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.7.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.6.0...v0.7.0) (2025-12-13)
+
+
+### Features
+
+* add MCP best practices and infrastructure improvements ([af27af3](https://github.com/tareqmamari/cloud-logs-mcp/commit/af27af3f2fc03e326a7900b25a376bd57a2403da))
+
 ## [0.6.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.5.1...v0.6.0) (2025-12-10)
 
 
