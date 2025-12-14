@@ -69,9 +69,9 @@ func TestScoutLogsTool_TierParameter(t *testing.T) {
 		return
 	}
 
-	// Verify default is archive (logs always land there unless TCO policy excludes)
-	if tierProp["default"] != "archive" {
-		t.Errorf("Expected tier default to be 'archive', got %v", tierProp["default"])
+	// Verify no hardcoded default (tier comes from TCO policies at runtime)
+	if _, hasDefault := tierProp["default"]; hasDefault {
+		t.Error("tier should not have a hardcoded default - it should come from TCO policies")
 	}
 
 	// Verify enum values include archive and frequent_search

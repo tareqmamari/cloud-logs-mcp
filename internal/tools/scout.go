@@ -110,9 +110,8 @@ func (t *ScoutLogsTool) InputSchema() interface{} {
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
-				"description": "Log tier to query. archive (default - logs always land here unless TCO policy excludes them), frequent_search (Priority Insights - only if TCO policy routes logs there). Use list_policies to see TCO routing rules.",
+				"description": "Log tier to query. If not specified, uses the default from your TCO policies (fetched at session start). archive (COS/cold storage - logs always land here unless excluded), frequent_search (Priority Insights).",
 				"enum":        []string{"archive", "frequent_search"},
-				"default":     "archive",
 			},
 		},
 		"examples": []interface{}{
@@ -175,11 +174,24 @@ func (t *ScoutLogsTool) Execute(ctx context.Context, args map[string]interface{}
 		topN = int(val)
 	}
 
-	// Tier with default and normalization
-	// Default to archive since logs always land there unless TCO policy excludes them
+	// Tier with default from session TCO config
+	// If user doesn't specify a tier, use the session's recommended default
 	tier, _ := GetStringParam(args, "tier", false)
 	if tier == "" {
-		tier = "archive"
+		// Get default tier from session TCO config (fetched at session start)
+		session := GetSessionFromContext(ctx)
+		if session != nil {
+			// If application is specified, check for application-specific tier routing
+			if application != "" {
+				tier = session.GetTierForApplication(application)
+			} else {
+				tier = session.GetDefaultTier()
+			}
+		}
+		// Final fallback: frequent_search (faster queries when logs go to both tiers)
+		if tier == "" {
+			tier = "frequent_search"
+		}
 	} else {
 		tier = normalizeTier(tier)
 	}

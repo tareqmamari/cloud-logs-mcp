@@ -56,6 +56,9 @@ type SessionContext struct {
 
 	// LearnedPatterns stores persistent patterns across sessions
 	LearnedPatterns *LearnedPatterns `json:"learned_patterns,omitempty"`
+
+	// TCOConfig holds TCO policy configuration discovered at session start
+	TCOConfig *TCOConfig `json:"tco_config,omitempty"`
 }
 
 // LearnedPatterns stores patterns that persist across sessions
@@ -82,6 +85,60 @@ type PatternSequence struct {
 	Count       int       `json:"count"`
 	SuccessRate float64   `json:"success_rate"`
 	LastUsed    time.Time `json:"last_used"`
+}
+
+// TCOConfig holds Total Cost of Ownership policy configuration.
+// This is populated at session start by fetching policies from the API.
+type TCOConfig struct {
+	// HasPolicies indicates whether any TCO policies are configured
+	HasPolicies bool `json:"has_policies"`
+
+	// HasArchive indicates logs are routed to archive tier (COS/cold storage)
+	// This is true by default - logs always land in archive unless explicitly excluded
+	HasArchive bool `json:"has_archive"`
+
+	// HasFrequentSearch indicates logs are routed to frequent_search tier (Priority Insights)
+	// Only true if TCO policies explicitly route logs there
+	HasFrequentSearch bool `json:"has_frequent_search"`
+
+	// DefaultTier is the recommended default tier based on policy analysis
+	// "frequent_search" if no policies (faster queries), otherwise based on policy analysis
+	DefaultTier string `json:"default_tier"`
+
+	// PolicyCount is the number of TCO policies configured
+	PolicyCount int `json:"policy_count"`
+
+	// LastUpdated when the TCO config was last fetched
+	LastUpdated time.Time `json:"last_updated"`
+
+	// Policies stores the ordered list of policy rules for tier lookup
+	// Order matters - first matching policy wins
+	Policies []TCOPolicyRule `json:"policies,omitempty"`
+}
+
+// TCOPolicyRule represents a single TCO policy rule for tier lookup
+type TCOPolicyRule struct {
+	// ApplicationRule matches by application name
+	ApplicationRule *TCOMatchRule `json:"application_rule,omitempty"`
+
+	// SubsystemRule matches by subsystem name
+	SubsystemRule *TCOMatchRule `json:"subsystem_rule,omitempty"`
+
+	// Tier is the target tier for logs matching this rule
+	// "frequent_search" for type_high/type_medium, "archive" for type_low
+	Tier string `json:"tier"`
+
+	// Priority is the original policy priority (type_high, type_medium, type_low)
+	Priority string `json:"priority,omitempty"`
+}
+
+// TCOMatchRule defines how to match application or subsystem names
+type TCOMatchRule struct {
+	// Name is the value to match against
+	Name string `json:"name"`
+
+	// RuleType is how to match: "is", "is_not", "includes", "starts_with"
+	RuleType string `json:"rule_type"`
 }
 
 // InvestigationContext tracks state during multi-step investigations
@@ -1093,4 +1150,132 @@ func (s *SessionContext) GetWorkflowSuggestion() map[string]interface{} {
 	}
 
 	return suggestion
+}
+
+// GetTCOConfig returns the TCO configuration for this session
+func (s *SessionContext) GetTCOConfig() *TCOConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.TCOConfig
+}
+
+// SetTCOConfig sets the TCO configuration for this session
+func (s *SessionContext) SetTCOConfig(config *TCOConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.TCOConfig = config
+	s.UpdatedAt = time.Now()
+}
+
+// GetDefaultTier returns the recommended default tier based on TCO policies.
+// Returns "frequent_search" if no TCO config is set (faster queries when logs go to both tiers).
+func (s *SessionContext) GetDefaultTier() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.TCOConfig == nil {
+		return "frequent_search" // Default: faster queries when logs go to both tiers
+	}
+	return s.TCOConfig.DefaultTier
+}
+
+// GetTierForApplication returns the recommended tier for a specific application.
+// Checks TCO policies in order - first matching policy wins.
+// Falls back to default tier if no matching policy is found.
+func (s *SessionContext) GetTierForApplication(appName string) string {
+	return s.GetTierForAppAndSubsystem(appName, "")
+}
+
+// GetTierForAppAndSubsystem returns the recommended tier for a specific application and subsystem.
+// Checks TCO policies in order - first matching policy wins.
+// Falls back to default tier if no matching policy is found.
+func (s *SessionContext) GetTierForAppAndSubsystem(appName, subsystemName string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.TCOConfig == nil || len(s.TCOConfig.Policies) == 0 {
+		return s.getDefaultTierLocked()
+	}
+
+	// Check policies in order - first match wins
+	for _, policy := range s.TCOConfig.Policies {
+		if matchesTCOPolicy(policy, appName, subsystemName) {
+			return policy.Tier
+		}
+	}
+
+	return s.getDefaultTierLocked()
+}
+
+// getDefaultTierLocked returns default tier (caller must hold lock)
+func (s *SessionContext) getDefaultTierLocked() string {
+	if s.TCOConfig == nil {
+		return "frequent_search"
+	}
+	return s.TCOConfig.DefaultTier
+}
+
+// matchesTCOPolicy checks if an application/subsystem matches a TCO policy rule
+func matchesTCOPolicy(policy TCOPolicyRule, appName, subsystemName string) bool {
+	// If policy has application rule, it must match
+	if policy.ApplicationRule != nil {
+		if !matchesTCORule(policy.ApplicationRule, appName) {
+			return false
+		}
+	}
+
+	// If policy has subsystem rule, it must match
+	if policy.SubsystemRule != nil {
+		if !matchesTCORule(policy.SubsystemRule, subsystemName) {
+			return false
+		}
+	}
+
+	// If policy has no rules, it matches everything
+	return true
+}
+
+// matchesTCORule checks if a value matches a TCO match rule
+func matchesTCORule(rule *TCOMatchRule, value string) bool {
+	if rule == nil {
+		return true
+	}
+
+	switch rule.RuleType {
+	case "is":
+		return value == rule.Name
+	case "is_not":
+		return value != rule.Name
+	case "starts_with":
+		return len(value) >= len(rule.Name) && value[:len(rule.Name)] == rule.Name
+	case "includes":
+		return containsSubstring(value, rule.Name)
+	default:
+		return value == rule.Name
+	}
+}
+
+// containsSubstring checks if s contains substr
+func containsSubstring(s, substr string) bool {
+	if len(substr) > len(s) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// IsTCOConfigStale returns true if TCO config should be refreshed (older than 1 hour)
+// TCO policies are rarely changed, so hourly refresh is sufficient
+func (s *SessionContext) IsTCOConfigStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.TCOConfig == nil {
+		return true
+	}
+	return time.Since(s.TCOConfig.LastUpdated) > 1*time.Hour
 }
