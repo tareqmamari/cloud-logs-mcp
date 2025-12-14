@@ -1,8 +1,11 @@
 # IBM Cloud Logs MCP Server
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/tareqmamari/cloud-logs-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/tareqmamari/cloud-logs-mcp)
+[![CI](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/tareqmamari/cloud-logs-mcp)](https://go.dev/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tareqmamari/cloud-logs-mcp)](https://goreportcard.com/report/github.com/tareqmamari/cloud-logs-mcp)
 [![Release](https://img.shields.io/github/v/release/tareqmamari/cloud-logs-mcp)](https://github.com/tareqmamari/cloud-logs-mcp/releases)
+[![License](https://img.shields.io/github/license/tareqmamari/cloud-logs-mcp)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/tareqmamari/cloud-logs-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/tareqmamari/cloud-logs-mcp)
 
 Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs instances.
 
@@ -10,10 +13,10 @@ Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants t
 
 ## Overview
 
-This MCP server provides comprehensive access to IBM Cloud Logs through 86 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
+This MCP server provides comprehensive access to IBM Cloud Logs through 87 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (86 tools)
+- Complete IBM Cloud Logs API coverage (87 tools)
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
 - Configurable rate limiting
@@ -120,7 +123,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-86 tools organized by functionality:
+87 tools organized by functionality:
 
 #### Query Operations (5 tools)
 - `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
