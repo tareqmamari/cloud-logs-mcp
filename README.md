@@ -1,6 +1,6 @@
 # IBM Cloud Logs MCP Server
 
-[![CI](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yaml/badge.svg)](https://github.com/tareqmamari/cloud-logs-mcp/actions/workflows/ci.yaml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/tareqmamari/cloud-logs-mcp)](https://go.dev/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tareqmamari/cloud-logs-mcp)](https://goreportcard.com/report/github.com/tareqmamari/cloud-logs-mcp)
 [![Release](https://img.shields.io/github/v/release/tareqmamari/cloud-logs-mcp)](https://github.com/tareqmamari/cloud-logs-mcp/releases)
