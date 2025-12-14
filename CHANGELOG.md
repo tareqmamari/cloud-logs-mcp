@@ -6,6 +6,18 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.8.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.7.0...v0.8.0) (2025-12-14)
+
+
+### Features
+
+* **tools:** add mixed-type field auto-correction and response cleanup ([5fb42c9](https://github.com/tareqmamari/cloud-logs-mcp/commit/5fb42c95925556c214faf5fc4effc24f370040bb))
+
+
+### Bug Fixes
+
+* **client:** use crypto/rand for retry jitter ([71a59bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/71a59bbfbcdb60bc82a3f475aef0645a0cacf6c2))
+
 ## [0.7.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.6.0...v0.7.0) (2025-12-13)
 
 
