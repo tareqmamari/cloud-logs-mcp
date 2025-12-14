@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/sast.yaml'
   schedule:
     - cron: '0 0 * * 0'  # Weekly on Sunday
   workflow_dispatch:
