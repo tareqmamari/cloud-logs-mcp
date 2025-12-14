@@ -152,6 +152,7 @@ func (s *Server) registerTools() error {
 	// Query tools
 	s.registerTool(tools.NewQueryTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewBuildQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDataPrimeReferenceTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewSubmitBackgroundQueryTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetBackgroundQueryStatusTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
