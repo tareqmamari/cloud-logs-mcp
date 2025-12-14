@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -144,17 +145,24 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff with overflow protection
+			// Exponential backoff with jitter to prevent thundering herd
 			// Cap shift value to prevent overflow (max 30 ensures we stay within reasonable time bounds)
 			shift := min(attempt-1, 30)
-			waitTime := c.config.RetryWaitMin * time.Duration(1<<shift)
-			if waitTime > c.config.RetryWaitMax {
-				waitTime = c.config.RetryWaitMax
+			baseWait := c.config.RetryWaitMin * time.Duration(1<<shift)
+			if baseWait > c.config.RetryWaitMax {
+				baseWait = c.config.RetryWaitMax
 			}
+
+			// Add jitter: random value between 0 and 25% of base wait time
+			// This spreads out retry attempts when multiple clients fail simultaneously
+			// Using math/rand is appropriate for jitter (not security-sensitive)
+			jitter := time.Duration(rand.Int63n(int64(baseWait) / 4)) //nolint:gosec // G404: jitter doesn't need cryptographic randomness
+			waitTime := baseWait + jitter
 
 			c.logger.Debug("Retrying request",
 				zap.Int("attempt", attempt),
 				zap.Duration("wait", waitTime),
+				zap.Duration("jitter", jitter),
 			)
 
 			select {

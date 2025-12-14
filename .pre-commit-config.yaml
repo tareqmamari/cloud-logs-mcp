@@ -28,6 +28,13 @@ repos:
         types: [go]
         pass_filenames: false
 
+      - id: gocyclo
+        name: gocyclo (cyclomatic complexity)
+        entry: gocyclo -over 30
+        language: system
+        types: [go]
+        pass_filenames: true
+
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

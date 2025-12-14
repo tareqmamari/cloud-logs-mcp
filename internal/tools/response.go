@@ -40,6 +40,157 @@ const (
 	MaxTopValues = 5
 )
 
+// metadataFieldsToRemove contains metadata keys that add noise without LLM value
+var metadataFieldsToRemove = map[string]bool{
+	"logid": true, "branchid": true, "templateid": true, "priorityclass": true,
+	"processingoutputtimestampnanos": true, "processingoutputtimestampmicros": true,
+	"timestampmicros": true, "ingresstimestamp": true,
+}
+
+// CleanQueryResults removes unnecessary fields from query results to reduce response size
+// and improve LLM comprehension. Transforms verbose API format into compact, actionable data.
+func CleanQueryResults(result map[string]interface{}) map[string]interface{} {
+	events, ok := result["events"].([]interface{})
+	if !ok || len(events) == 0 {
+		return result
+	}
+
+	cleanedEvents := make([]interface{}, 0, len(events))
+	for _, event := range events {
+		eventMap, ok := event.(map[string]interface{})
+		if !ok {
+			cleanedEvents = append(cleanedEvents, event)
+			continue
+		}
+		// Handle the nested result structure from API
+		if resultObj, ok := eventMap["result"].(map[string]interface{}); ok {
+			if results, ok := resultObj["results"].([]interface{}); ok {
+				for _, r := range results {
+					if rMap, ok := r.(map[string]interface{}); ok {
+						cleanedEvents = append(cleanedEvents, transformLogEntry(rMap))
+					}
+				}
+			}
+		} else {
+			// Direct event format
+			cleanedEvents = append(cleanedEvents, transformLogEntry(eventMap))
+		}
+	}
+
+	// Create compact result
+	cleaned := map[string]interface{}{
+		"logs": cleanedEvents,
+	}
+
+	// Preserve query metadata
+	if meta, ok := result["_query_metadata"]; ok {
+		cleaned["_query_metadata"] = meta
+	}
+
+	return cleaned
+}
+
+// transformLogEntry converts verbose log entry to compact format
+func transformLogEntry(entry map[string]interface{}) map[string]interface{} {
+	compact := make(map[string]interface{})
+
+	// Extract essential labels (app, subsystem)
+	if labels, ok := entry["labels"].([]interface{}); ok {
+		for _, l := range labels {
+			if lm, ok := l.(map[string]interface{}); ok {
+				key, _ := lm["key"].(string)
+				value, _ := lm["value"].(string)
+				if value == "" {
+					continue
+				}
+				switch key {
+				case "applicationname":
+					compact["app"] = value
+				case "subsystemname":
+					compact["subsystem"] = value
+				}
+			}
+		}
+	}
+
+	// Extract essential metadata (timestamp, severity)
+	if metadata, ok := entry["metadata"].([]interface{}); ok {
+		for _, m := range metadata {
+			if mm, ok := m.(map[string]interface{}); ok {
+				key, _ := mm["key"].(string)
+				value, _ := mm["value"].(string)
+				keyLower := strings.ToLower(key)
+				if metadataFieldsToRemove[keyLower] {
+					continue
+				}
+				switch key {
+				case "timestamp":
+					compact["time"] = value
+				case "severity":
+					compact["severity"] = value
+				}
+			}
+		}
+	}
+
+	// Parse and extract from user_data JSON
+	if userData, ok := entry["user_data"].(string); ok && userData != "" {
+		var ud map[string]interface{}
+		if err := json.Unmarshal([]byte(userData), &ud); err == nil {
+			extractUserData(ud, compact)
+		}
+	}
+
+	return compact
+}
+
+// extractUserData extracts essential fields from parsed user_data
+func extractUserData(ud map[string]interface{}, compact map[string]interface{}) {
+	// Extract message
+	if event, ok := ud["event"].(map[string]interface{}); ok {
+		if msg, ok := event["_message"].(string); ok {
+			compact["message"] = msg
+		}
+		// Extract SQL if present (useful for DB queries)
+		if sql, ok := event["sql"].(string); ok {
+			compact["sql"] = sql
+		}
+		// Extract execution time if present
+		if execMs, ok := event["execMs"].(float64); ok {
+			compact["exec_ms"] = int(execMs)
+		}
+	}
+
+	// Direct message field
+	if msg, ok := ud["message"].(string); ok && compact["message"] == nil {
+		compact["message"] = msg
+	}
+
+	// Log level
+	if level, ok := ud["level"].(string); ok {
+		compact["level"] = level
+	}
+
+	// Logger name (shortened)
+	if logger, ok := ud["logger_name"].(string); ok {
+		// Shorten long logger names
+		parts := strings.Split(logger, ".")
+		if len(parts) > 2 {
+			compact["logger"] = parts[len(parts)-2] + "." + parts[len(parts)-1]
+		} else {
+			compact["logger"] = logger
+		}
+	}
+
+	// Trace/span IDs (useful for correlation)
+	if traceID, ok := ud["trace_id"].(string); ok {
+		compact["trace_id"] = traceID
+	}
+	if spanID, ok := ud["span_id"].(string); ok {
+		compact["span_id"] = spanID
+	}
+}
+
 // FormatResponse formats the response as a text/content for MCP
 // If the result exceeds MaxResultSize, it will be truncated with pagination hints
 func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -639,6 +790,11 @@ func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]int
 				},
 			},
 		}, nil
+	}
+
+	// Clean query results to remove unnecessary fields (reduces response size ~30-50%)
+	if resultType == "query results" {
+		result = CleanQueryResults(result)
 	}
 
 	// Generate summary

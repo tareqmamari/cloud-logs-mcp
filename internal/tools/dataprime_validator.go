@@ -47,12 +47,112 @@ func ValidateDataPrimeQuery(query string) *DataPrimeValidationError {
 	return nil
 }
 
+// mixedTypeFields are $d fields that commonly have object|string type and need casting
+// when using string methods like .contains(), .startsWith(), .endsWith(), .matches()
+var mixedTypeFields = map[string]bool{
+	"message": true,
+	"msg":     true,
+	"log":     true,
+	"text":    true,
+	"body":    true,
+	"content": true,
+	"payload": true,
+	"data":    true,
+	"error":   true,
+	"err":     true,
+	"reason":  true,
+	"details": true,
+}
+
+// stringMethods are DataPrime string methods that require string type input
+var stringMethods = []string{"contains", "startsWith", "endsWith", "matches", "toLowerCase", "toUpperCase", "trim"}
+
+// autoCorrectMixedTypeStringMethods adds :string type cast to $d fields that commonly have
+// mixed object|string type when string methods are called on them.
+// Example: $d.message.contains('error') -> $d.message:string.contains('error')
+func autoCorrectMixedTypeStringMethods(query string, corrections []string) (string, []string) {
+	corrected := query
+
+	// Build pattern to match $d.field.stringMethod where field is a known mixed-type field
+	// Pattern: $d.field.method( where field is in mixedTypeFields and method is a string method
+	for field := range mixedTypeFields {
+		for _, method := range stringMethods {
+			// Match $d.field.method( but not $d.field:string.method(
+			pattern := regexp.MustCompile(`(\$d\.` + regexp.QuoteMeta(field) + `)\.` + regexp.QuoteMeta(method) + `\(`)
+			if pattern.MatchString(corrected) {
+				// Replace with $d.field:string.method(
+				replacement := "${1}:string." + method + "("
+				corrected = pattern.ReplaceAllString(corrected, replacement)
+				corrections = append(corrections, fmt.Sprintf("$d.%s.%s() → $d.%s:string.%s() (field may have mixed object|string type)", field, method, field, method))
+			}
+		}
+	}
+
+	return corrected, corrections
+}
+
 // AutoCorrectDataPrimeQuery fixes common issues in DataPrime queries automatically.
 // This improves UX by fixing known issues instead of rejecting queries.
 // Returns the corrected query and a list of corrections made.
 func AutoCorrectDataPrimeQuery(query string) (string, []string) {
 	var corrections []string
 	corrected := query
+
+	// Auto-correct $d.field.contains/startsWith/endsWith/matches to $d.field:string.method
+	// This handles mixed-type fields (object|string) that need type casting for string methods
+	// Common fields: message, msg, log, text, body, content, payload, data
+	corrected, corrections = autoCorrectMixedTypeStringMethods(corrected, corrections)
+
+	// Auto-correct $d.level to $m.severity (common mistake - level is often mixed type)
+	// Maps string level names to severity names
+	levelToSeverity := map[string]string{
+		"'INFO'":     "INFO",
+		"'info'":     "INFO",
+		"'DEBUG'":    "DEBUG",
+		"'debug'":    "DEBUG",
+		"'WARNING'":  "WARNING",
+		"'warning'":  "WARNING",
+		"'WARN'":     "WARNING",
+		"'warn'":     "WARNING",
+		"'ERROR'":    "ERROR",
+		"'error'":    "ERROR",
+		"'ERR'":      "ERROR",
+		"'err'":      "ERROR",
+		"'CRITICAL'": "CRITICAL",
+		"'critical'": "CRITICAL",
+		"'VERBOSE'":  "VERBOSE",
+		"'verbose'":  "VERBOSE",
+	}
+
+	levelPattern := regexp.MustCompile(`\$d\.level\s*(==|!=)\s*('(?:INFO|info|DEBUG|debug|WARNING|warning|WARN|warn|ERROR|error|ERR|err|CRITICAL|critical|VERBOSE|verbose)')`)
+	if matches := levelPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			operator := match[1]
+			levelValue := match[2]
+			severityName := levelToSeverity[levelValue]
+			if severityName != "" {
+				oldExpr := match[0]
+				newExpr := "$m.severity " + operator + " " + severityName
+				corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+				corrections = append(corrections, fmt.Sprintf("$d.level %s %s → $m.severity %s %s (level field has mixed types)", operator, levelValue, operator, severityName))
+			}
+		}
+	}
+
+	// Auto-correct $d.status_code == 200 to $d.status_code == '200'
+	// HTTP status codes are often stored as strings in logs
+	statusCodePattern := regexp.MustCompile(`(\$d\.(?:status_code|statusCode|http_status|httpStatus|response_code|responseCode))\s*(==|!=)\s*(\d{3})`)
+	if matches := statusCodePattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			field := match[1]
+			operator := match[2]
+			numValue := match[3]
+			oldExpr := match[0]
+			newExpr := field + " " + operator + " '" + numValue + "'"
+			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("%s %s %s → %s %s '%s' (status codes are often strings)", field, operator, numValue, field, operator, numValue))
+		}
+	}
 
 	// Auto-correct numeric severity to named severity
 	// Maps: 0→VERBOSE, 1→DEBUG, 2→INFO, 3→WARNING, 4→ERROR, 5→CRITICAL

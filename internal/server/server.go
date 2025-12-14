@@ -275,6 +275,10 @@ func (s *Server) registerTool(t tools.Tool) {
 		// This enables per-request client injection for future HTTP transport
 		ctx = tools.WithClient(ctx, s.apiClient)
 
+		// Add session to context for tool execution
+		// This enables per-request session injection for better testability
+		ctx = tools.WithSession(ctx, tools.GetSession())
+
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
 			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
@@ -307,16 +311,28 @@ func (s *Server) registerPrompts() {
 	s.logger.Info("Registered all MCP prompts", zap.Int("count", len(registry.GetPrompts())))
 }
 
-// registerResources registers all available MCP resources
+// registerResources registers all available MCP resources and resource templates
 func (s *Server) registerResources() {
 	registry := resources.NewRegistry(s.config, s.metrics, s.logger, s.version)
 
+	// Register static resources
 	for _, r := range registry.GetResources() {
 		s.mcpServer.AddResource(r.Resource, r.Handler)
 		s.logger.Debug("Registered resource", zap.String("uri", r.Resource.URI))
 	}
 
-	s.logger.Info("Registered all MCP resources", zap.Int("count", len(registry.GetResources())))
+	// Register resource templates for dynamic resource access
+	// Templates allow LLMs to request configuration examples dynamically
+	templateHandler := registry.GetTemplateHandler()
+	for _, t := range registry.GetResourceTemplates() {
+		s.mcpServer.AddResourceTemplate(&t, templateHandler)
+		s.logger.Debug("Registered resource template", zap.String("uri_template", t.URITemplate))
+	}
+
+	s.logger.Info("Registered all MCP resources",
+		zap.Int("static_count", len(registry.GetResources())),
+		zap.Int("template_count", len(registry.GetResourceTemplates())),
+	)
 }
 
 // Start starts the MCP server
