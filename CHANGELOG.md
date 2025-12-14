@@ -6,6 +6,22 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.8.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.7.0...v0.8.0) (2025-12-14)
+
+
+### Features
+
+* **server:** add about://service resource with service aliases ([2e072fc](https://github.com/tareqmamari/cloud-logs-mcp/commit/2e072fc2249877a2d6c2b3bbea1aaeff290e2982))
+* **tools:** add get_dataprime_reference tool and shorten descriptions ([fb56957](https://github.com/tareqmamari/cloud-logs-mcp/commit/fb56957bfd3d357e5c6a0bd9526aaf1ec04eae5a))
+* **tools:** add mixed-type field auto-correction and response cleanup ([5fb42c9](https://github.com/tareqmamari/cloud-logs-mcp/commit/5fb42c95925556c214faf5fc4effc24f370040bb))
+* **tools:** add tool registry factory and per-tool-type timeouts ([8502f96](https://github.com/tareqmamari/cloud-logs-mcp/commit/8502f96ae8eb431804103b1afe4186ba063f2c8e))
+
+
+### Bug Fixes
+
+* **client:** use crypto/rand for retry jitter ([71a59bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/71a59bbfbcdb60bc82a3f475aef0645a0cacf6c2))
+* **validator:** auto-correct 'sort' to 'orderby' in DataPrime queries ([aa567e2](https://github.com/tareqmamari/cloud-logs-mcp/commit/aa567e2a318e171d1c34c1bc479c48298718df1f))
+
 ## [0.7.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.6.0...v0.7.0) (2025-12-13)
 
 
