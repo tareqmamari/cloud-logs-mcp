@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,6 +27,12 @@ type Tool interface {
 	// These hints help LLMs make better decisions about tool usage.
 	// Returns nil if no annotations are needed (defaults will be used).
 	Annotations() *mcp.ToolAnnotations
+
+	// DefaultTimeout returns the recommended timeout for this tool type.
+	// Returns 0 to use the client/server default timeout.
+	// This allows different tool categories (queries, workflows, etc.)
+	// to have appropriate timeout values based on their expected execution time.
+	DefaultTimeout() time.Duration
 }
 
 // EnhancedTool extends Tool with semantic discovery capabilities.

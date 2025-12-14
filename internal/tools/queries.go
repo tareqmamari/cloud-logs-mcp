@@ -111,6 +111,12 @@ func (t *QueryTool) Annotations() *mcp.ToolAnnotations {
 	return QueryAnnotations("Query Logs")
 }
 
+// DefaultTimeout returns the timeout for query operations.
+// Query tools use a longer timeout due to SSE streaming.
+func (t *QueryTool) DefaultTimeout() time.Duration {
+	return DefaultQueryTimeout
+}
+
 // Description returns the tool description
 func (t *QueryTool) Description() string {
 	return `Execute a synchronous query against IBM Cloud Logs. This is the DEFAULT method for querying logs.

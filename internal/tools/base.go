@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -13,6 +14,32 @@ import (
 	"github.com/tareqmamari/logs-mcp-server/internal/cache"
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 	"github.com/tareqmamari/logs-mcp-server/internal/tracing"
+)
+
+// Tool timeout constants for different operation types.
+// These provide sensible defaults based on expected execution times.
+const (
+	// DefaultToolTimeout is the fallback timeout when no specific timeout is set.
+	// Returns 0 to indicate "use client/server default".
+	DefaultToolTimeout = 0
+
+	// DefaultListTimeout for list operations (standard API calls)
+	DefaultListTimeout = 30 * time.Second
+
+	// DefaultGetTimeout for single resource fetch operations
+	DefaultGetTimeout = 15 * time.Second
+
+	// DefaultCreateTimeout for create/update operations
+	DefaultCreateTimeout = 30 * time.Second
+
+	// DefaultDeleteTimeout for delete operations (quick)
+	DefaultDeleteTimeout = 15 * time.Second
+
+	// DefaultWorkflowTimeout for multi-step workflow operations
+	DefaultWorkflowTimeout = 90 * time.Second
+
+	// DefaultHealthCheckTimeout for health check operations
+	DefaultHealthCheckTimeout = 45 * time.Second
 )
 
 // BaseTool provides common functionality for all tools
@@ -34,6 +61,13 @@ func NewBaseTool(client *client.Client, logger *zap.Logger) *BaseTool {
 func (t *BaseTool) Annotations() *mcp.ToolAnnotations {
 	// Default: no specific annotations, let MCP use defaults
 	return nil
+}
+
+// DefaultTimeout returns the default timeout for this tool.
+// Returns 0 to use the client/server default timeout.
+// Tools should override this method to provide specific timeouts.
+func (t *BaseTool) DefaultTimeout() time.Duration {
+	return DefaultToolTimeout
 }
 
 // GetClient returns the API client, preferring context over stored client.
