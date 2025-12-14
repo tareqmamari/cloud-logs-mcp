@@ -386,6 +386,25 @@ func TestAutoCorrectDataPrimeQuery(t *testing.T) {
 			expectedQuery:       "source logs | filter $m.severity == ERROR",
 			expectedCorrections: 1,
 		},
+		// sort -> orderby corrections
+		{
+			name:                "sort ascending to orderby",
+			query:               "source logs | filter $l.applicationname == 'myapp' | sort $m.timestamp | limit 50",
+			expectedQuery:       "source logs | filter $l.applicationname == 'myapp' | orderby $m.timestamp | limit 50",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "sort descending to orderby desc",
+			query:               "source logs | filter $l.subsystemname == 'api' | sort -$m.timestamp | limit 100",
+			expectedQuery:       "source logs | filter $l.subsystemname == 'api' | orderby $m.timestamp desc | limit 100",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "sort with $d field",
+			query:               "source logs | sort -$d.response_time | limit 10",
+			expectedQuery:       "source logs | orderby $d.response_time desc | limit 10",
+			expectedCorrections: 1,
+		},
 	}
 
 	for _, tt := range tests {

@@ -203,6 +203,31 @@ func AutoCorrectDataPrimeQuery(query string) (string, []string) {
 		}
 	}
 
+	// Auto-correct 'sort' to 'orderby' (sort is not a valid DataPrime keyword)
+	// DataPrime uses: orderby, sortby, order by, sort by
+	// Handle: | sort field, | sort -field (descending)
+	sortPattern := regexp.MustCompile(`\|\s*sort\s+(-?)(\$[a-zA-Z_.]+)`)
+	if matches := sortPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			descending := match[1] // "-" for descending or "" for ascending
+			field := match[2]
+			oldExpr := match[0]
+			var newExpr string
+			if descending == "-" {
+				newExpr = "| orderby " + field + " desc"
+			} else {
+				newExpr = "| orderby " + field
+			}
+			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("sort %s%s → orderby %s%s (use 'orderby' in DataPrime)", descending, field, field, func() string {
+				if descending == "-" {
+					return " desc"
+				}
+				return ""
+			}()))
+		}
+	}
+
 	return corrected, corrections
 }
 
