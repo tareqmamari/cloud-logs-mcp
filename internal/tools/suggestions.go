@@ -480,439 +480,183 @@ func getErrorRecoverySuggestions(toolName string) []ProactiveSuggestion {
 	}
 }
 
-// getSuccessSuggestions returns suggestions based on successful tool execution
-func getSuccessSuggestions(toolName string, result map[string]interface{}) []ProactiveSuggestion {
-	switch toolName {
+// staticSuggestions maps tool names to their static suggestions.
+// This data-driven approach reduces cyclomatic complexity.
+var staticSuggestions = map[string][]ProactiveSuggestion{
 	// Query tools
-	case "query_logs":
-		suggestions := []ProactiveSuggestion{}
-		if events, ok := result["events"].([]interface{}); ok {
-			if len(events) == 0 {
-				suggestions = append(suggestions,
-					ProactiveSuggestion{Tool: "query_logs", Description: "Try expanding the time range or relaxing filters - no results found"},
-				)
-			} else if len(events) > 100 {
-				suggestions = append(suggestions,
-					ProactiveSuggestion{Tool: "create_dashboard", Description: "Create a dashboard to visualize these query results"},
-					ProactiveSuggestion{Tool: "create_alert", Description: "Set up an alert to monitor this condition"},
-				)
-			}
-		}
-		return suggestions
-
-	case "submit_background_query":
-		return []ProactiveSuggestion{
-			{Tool: "get_background_query_status", Description: "Check query progress"},
-		}
-
-	case "get_background_query_status":
-		if status, ok := result["status"].(string); ok {
-			switch status {
-			case "completed", "COMPLETED":
-				return []ProactiveSuggestion{
-					{Tool: "get_background_query_data", Description: "Retrieve the completed query results"},
-				}
-			case "running", "RUNNING":
-				return []ProactiveSuggestion{
-					{Tool: "get_background_query_status", Description: "Check again in a few moments"},
-					{Tool: "cancel_background_query", Description: "Cancel if no longer needed"},
-				}
-			}
-		}
-		return nil
+	"submit_background_query": {{Tool: "get_background_query_status", Description: "Check query progress"}},
+	"cancel_background_query": {{Tool: "submit_background_query", Description: "Submit a new background query"}},
 
 	// Dashboard tools
-	case "list_dashboards":
-		return []ProactiveSuggestion{
-			{Tool: "get_dashboard", Description: "Get details of a specific dashboard"},
-			{Tool: "create_dashboard", Description: "Create a new dashboard"},
-		}
+	"list_dashboards":       {{Tool: "get_dashboard", Description: "Get details of a specific dashboard"}, {Tool: "create_dashboard", Description: "Create a new dashboard"}},
+	"get_dashboard":         {{Tool: "update_dashboard", Description: "Modify this dashboard"}, {Tool: "pin_dashboard", Description: "Pin this dashboard for quick access"}, {Tool: "move_dashboard_to_folder", Description: "Organize into a folder"}},
+	"delete_dashboard":      {{Tool: "list_dashboards", Description: "View remaining dashboards"}},
+	"pin_dashboard":         {{Tool: "get_dashboard", Description: "View the pinned dashboard"}, {Tool: "list_dashboards", Description: "View all dashboards"}},
+	"unpin_dashboard":       {{Tool: "list_dashboards", Description: "View all dashboards"}},
+	"set_default_dashboard": {{Tool: "get_dashboard", Description: "View the default dashboard"}, {Tool: "list_dashboards", Description: "View all dashboards"}},
 
-	case "get_dashboard":
-		return []ProactiveSuggestion{
-			{Tool: "update_dashboard", Description: "Modify this dashboard"},
-			{Tool: "pin_dashboard", Description: "Pin this dashboard for quick access"},
-			{Tool: "move_dashboard_to_folder", Description: "Organize into a folder"},
-		}
-
-	case "create_dashboard", "update_dashboard":
-		if id, ok := result["id"].(string); ok && id != "" {
-			return []ProactiveSuggestion{
-				{Tool: "get_dashboard", Description: "View the created/updated dashboard"},
-				{Tool: "pin_dashboard", Description: "Pin for quick access"},
-			}
-		}
-		return nil
+	// Dashboard folder tools
+	"list_dashboard_folders":   {{Tool: "create_dashboard_folder", Description: "Create a new folder"}, {Tool: "move_dashboard_to_folder", Description: "Organize dashboards into folders"}},
+	"get_dashboard_folder":     {{Tool: "update_dashboard_folder", Description: "Modify this folder"}, {Tool: "move_dashboard_to_folder", Description: "Move dashboards into this folder"}},
+	"create_dashboard_folder":  {{Tool: "move_dashboard_to_folder", Description: "Move dashboards into the new folder"}, {Tool: "list_dashboard_folders", Description: "View all folders"}},
+	"move_dashboard_to_folder": {{Tool: "get_dashboard", Description: "View the moved dashboard"}, {Tool: "list_dashboard_folders", Description: "View all folders"}},
 
 	// Alert tools
-	case "list_alerts":
-		return []ProactiveSuggestion{
-			{Tool: "get_alert", Description: "Get details of a specific alert"},
-			{Tool: "create_alert", Description: "Create a new alert"},
-		}
-
-	case "get_alert":
-		return []ProactiveSuggestion{
-			{Tool: "update_alert", Description: "Modify this alert configuration"},
-			{Tool: "activate_alert", Description: "Activate/deactivate this alert"},
-		}
-
-	case "create_alert":
-		return []ProactiveSuggestion{
-			{Tool: "list_alerts", Description: "View all alerts including the new one"},
-			{Tool: "query_logs", Description: "Test the alert condition with a query"},
-		}
-
-	// Data access policy tools
-	case "list_data_access_policies":
-		return []ProactiveSuggestion{
-			{Tool: "get_data_access_policy", Description: "Get details of a specific policy"},
-			{Tool: "create_data_access_policy", Description: "Create a new data access policy"},
-		}
-
-	// Ingestion tools
-	case "ingest_logs":
-		return []ProactiveSuggestion{
-			{Tool: "query_logs", Description: "Query to verify logs were ingested"},
-		}
-
-	// Folder tools
-	case "list_dashboard_folders":
-		return []ProactiveSuggestion{
-			{Tool: "create_dashboard_folder", Description: "Create a new folder"},
-			{Tool: "move_dashboard_to_folder", Description: "Organize dashboards into folders"},
-		}
-
-	case "get_dashboard_folder":
-		return []ProactiveSuggestion{
-			{Tool: "update_dashboard_folder", Description: "Modify this folder"},
-			{Tool: "move_dashboard_to_folder", Description: "Move dashboards into this folder"},
-		}
-
-	case "create_dashboard_folder":
-		return []ProactiveSuggestion{
-			{Tool: "move_dashboard_to_folder", Description: "Move dashboards into the new folder"},
-			{Tool: "list_dashboard_folders", Description: "View all folders"},
-		}
-
-	case "move_dashboard_to_folder":
-		return []ProactiveSuggestion{
-			{Tool: "get_dashboard", Description: "View the moved dashboard"},
-			{Tool: "list_dashboard_folders", Description: "View all folders"},
-		}
-
-	case "pin_dashboard":
-		return []ProactiveSuggestion{
-			{Tool: "get_dashboard", Description: "View the pinned dashboard"},
-			{Tool: "list_dashboards", Description: "View all dashboards"},
-		}
-
-	case "unpin_dashboard":
-		return []ProactiveSuggestion{
-			{Tool: "list_dashboards", Description: "View all dashboards"},
-		}
-
-	case "set_default_dashboard":
-		return []ProactiveSuggestion{
-			{Tool: "get_dashboard", Description: "View the default dashboard"},
-			{Tool: "list_dashboards", Description: "View all dashboards"},
-		}
-
-	case "delete_dashboard":
-		return []ProactiveSuggestion{
-			{Tool: "list_dashboards", Description: "View remaining dashboards"},
-		}
-
-	case "update_alert":
-		return []ProactiveSuggestion{
-			{Tool: "get_alert", Description: "View the updated alert"},
-			{Tool: "list_alerts", Description: "View all alerts"},
-		}
-
-	case "delete_alert":
-		return []ProactiveSuggestion{
-			{Tool: "list_alerts", Description: "View remaining alerts"},
-		}
-
-	case "cancel_background_query":
-		return []ProactiveSuggestion{
-			{Tool: "submit_background_query", Description: "Submit a new background query"},
-		}
+	"list_alerts":  {{Tool: "get_alert", Description: "Get details of a specific alert"}, {Tool: "create_alert", Description: "Create a new alert"}},
+	"get_alert":    {{Tool: "update_alert", Description: "Modify this alert configuration"}, {Tool: "activate_alert", Description: "Activate/deactivate this alert"}},
+	"create_alert": {{Tool: "list_alerts", Description: "View all alerts including the new one"}, {Tool: "query_logs", Description: "Test the alert condition with a query"}},
+	"update_alert": {{Tool: "get_alert", Description: "View the updated alert"}, {Tool: "list_alerts", Description: "View all alerts"}},
+	"delete_alert": {{Tool: "list_alerts", Description: "View remaining alerts"}},
 
 	// Alert definition tools
-	case "list_alert_definitions":
-		return []ProactiveSuggestion{
-			{Tool: "get_alert_definition", Description: "Get details of a specific alert definition"},
-			{Tool: "create_alert_definition", Description: "Create a new alert definition"},
-		}
+	"list_alert_definitions":  {{Tool: "get_alert_definition", Description: "Get details of a specific alert definition"}, {Tool: "create_alert_definition", Description: "Create a new alert definition"}},
+	"get_alert_definition":    {{Tool: "update_alert_definition", Description: "Modify this alert definition"}, {Tool: "create_alert", Description: "Create an alert using this definition"}},
+	"create_alert_definition": {{Tool: "create_alert", Description: "Create an alert using this definition"}, {Tool: "list_alert_definitions", Description: "View all alert definitions"}},
 
-	case "get_alert_definition":
-		return []ProactiveSuggestion{
-			{Tool: "update_alert_definition", Description: "Modify this alert definition"},
-			{Tool: "create_alert", Description: "Create an alert using this definition"},
-		}
+	// Data access policy tools
+	"list_data_access_policies": {{Tool: "get_data_access_policy", Description: "Get details of a specific policy"}, {Tool: "create_data_access_policy", Description: "Create a new data access policy"}},
 
-	case "create_alert_definition":
-		return []ProactiveSuggestion{
-			{Tool: "create_alert", Description: "Create an alert using this definition"},
-			{Tool: "list_alert_definitions", Description: "View all alert definitions"},
-		}
+	// Ingestion tools
+	"ingest_logs": {{Tool: "query_logs", Description: "Query to verify logs were ingested"}},
 
 	// Stream tools
-	case "list_streams":
-		return []ProactiveSuggestion{
-			{Tool: "get_stream", Description: "Get details of a specific stream"},
-			{Tool: "create_stream", Description: "Create a new stream"},
-		}
-
-	case "get_stream":
-		return []ProactiveSuggestion{
-			{Tool: "update_stream", Description: "Modify this stream configuration"},
-			{Tool: "delete_stream", Description: "Remove this stream"},
-		}
-
-	case "create_stream":
-		return []ProactiveSuggestion{
-			{Tool: "list_streams", Description: "View all streams including the new one"},
-		}
+	"list_streams":  {{Tool: "get_stream", Description: "Get details of a specific stream"}, {Tool: "create_stream", Description: "Create a new stream"}},
+	"get_stream":    {{Tool: "update_stream", Description: "Modify this stream configuration"}, {Tool: "delete_stream", Description: "Remove this stream"}},
+	"create_stream": {{Tool: "list_streams", Description: "View all streams including the new one"}},
 
 	// Event stream target tools
-	case "get_event_stream_targets":
-		return []ProactiveSuggestion{
-			{Tool: "create_event_stream_target", Description: "Create a new event stream target"},
-		}
-
-	case "create_event_stream_target":
-		return []ProactiveSuggestion{
-			{Tool: "get_event_stream_targets", Description: "View all event stream targets"},
-		}
+	"get_event_stream_targets":   {{Tool: "create_event_stream_target", Description: "Create a new event stream target"}},
+	"create_event_stream_target": {{Tool: "get_event_stream_targets", Description: "View all event stream targets"}},
 
 	// Data usage tools
-	case "export_data_usage":
-		return []ProactiveSuggestion{
-			{Tool: "update_data_usage_metrics_export_status", Description: "Enable/disable data usage metrics export"},
-		}
+	"export_data_usage": {{Tool: "update_data_usage_metrics_export_status", Description: "Enable/disable data usage metrics export"}},
 
 	// Rule group tools
-	case "list_rule_groups":
-		return []ProactiveSuggestion{
-			{Tool: "get_rule_group", Description: "Get details of a specific rule group"},
-			{Tool: "create_rule_group", Description: "Create a new rule group"},
-		}
-
-	case "get_rule_group":
-		return []ProactiveSuggestion{
-			{Tool: "update_rule_group", Description: "Modify this rule group"},
-			{Tool: "delete_rule_group", Description: "Remove this rule group"},
-		}
-
-	case "create_rule_group":
-		return []ProactiveSuggestion{
-			{Tool: "list_rule_groups", Description: "View all rule groups including the new one"},
-		}
-
-	case "update_rule_group":
-		return []ProactiveSuggestion{
-			{Tool: "get_rule_group", Description: "View the updated rule group"},
-		}
-
-	case "delete_rule_group":
-		return []ProactiveSuggestion{
-			{Tool: "list_rule_groups", Description: "View remaining rule groups"},
-		}
+	"list_rule_groups":  {{Tool: "get_rule_group", Description: "Get details of a specific rule group"}, {Tool: "create_rule_group", Description: "Create a new rule group"}},
+	"get_rule_group":    {{Tool: "update_rule_group", Description: "Modify this rule group"}, {Tool: "delete_rule_group", Description: "Remove this rule group"}},
+	"create_rule_group": {{Tool: "list_rule_groups", Description: "View all rule groups including the new one"}},
+	"update_rule_group": {{Tool: "get_rule_group", Description: "View the updated rule group"}},
+	"delete_rule_group": {{Tool: "list_rule_groups", Description: "View remaining rule groups"}},
 
 	// Outgoing webhook tools
-	case "list_outgoing_webhooks":
-		return []ProactiveSuggestion{
-			{Tool: "get_outgoing_webhook", Description: "Get details of a specific webhook"},
-			{Tool: "create_outgoing_webhook", Description: "Create a new outgoing webhook"},
-		}
-
-	case "get_outgoing_webhook":
-		return []ProactiveSuggestion{
-			{Tool: "update_outgoing_webhook", Description: "Modify this webhook"},
-			{Tool: "delete_outgoing_webhook", Description: "Remove this webhook"},
-		}
-
-	case "create_outgoing_webhook":
-		return []ProactiveSuggestion{
-			{Tool: "list_outgoing_webhooks", Description: "View all webhooks including the new one"},
-		}
-
-	case "update_outgoing_webhook":
-		return []ProactiveSuggestion{
-			{Tool: "get_outgoing_webhook", Description: "View the updated webhook"},
-		}
-
-	case "delete_outgoing_webhook":
-		return []ProactiveSuggestion{
-			{Tool: "list_outgoing_webhooks", Description: "View remaining webhooks"},
-		}
+	"list_outgoing_webhooks":  {{Tool: "get_outgoing_webhook", Description: "Get details of a specific webhook"}, {Tool: "create_outgoing_webhook", Description: "Create a new outgoing webhook"}},
+	"get_outgoing_webhook":    {{Tool: "update_outgoing_webhook", Description: "Modify this webhook"}, {Tool: "delete_outgoing_webhook", Description: "Remove this webhook"}},
+	"create_outgoing_webhook": {{Tool: "list_outgoing_webhooks", Description: "View all webhooks including the new one"}},
+	"update_outgoing_webhook": {{Tool: "get_outgoing_webhook", Description: "View the updated webhook"}},
+	"delete_outgoing_webhook": {{Tool: "list_outgoing_webhooks", Description: "View remaining webhooks"}},
 
 	// Policy tools
-	case "list_policies":
-		return []ProactiveSuggestion{
-			{Tool: "get_policy", Description: "Get details of a specific policy"},
-			{Tool: "create_policy", Description: "Create a new policy"},
-		}
+	"list_policies": {{Tool: "get_policy", Description: "Get details of a specific policy"}, {Tool: "create_policy", Description: "Create a new policy"}},
+	"get_policy":    {{Tool: "update_policy", Description: "Modify this policy"}, {Tool: "delete_policy", Description: "Remove this policy"}},
+	"create_policy": {{Tool: "list_policies", Description: "View all policies including the new one"}},
+	"update_policy": {{Tool: "get_policy", Description: "View the updated policy"}},
+	"delete_policy": {{Tool: "list_policies", Description: "View remaining policies"}},
 
-	case "get_policy":
-		return []ProactiveSuggestion{
-			{Tool: "update_policy", Description: "Modify this policy"},
-			{Tool: "delete_policy", Description: "Remove this policy"},
-		}
-
-	case "create_policy":
-		return []ProactiveSuggestion{
-			{Tool: "list_policies", Description: "View all policies including the new one"},
-		}
-
-	case "update_policy":
-		return []ProactiveSuggestion{
-			{Tool: "get_policy", Description: "View the updated policy"},
-		}
-
-	case "delete_policy":
-		return []ProactiveSuggestion{
-			{Tool: "list_policies", Description: "View remaining policies"},
-		}
-
-	// E2M (Events to Metrics) tools
-	case "list_e2m":
-		return []ProactiveSuggestion{
-			{Tool: "get_e2m", Description: "Get details of a specific E2M mapping"},
-			{Tool: "create_e2m", Description: "Create a new E2M mapping"},
-		}
-
-	case "get_e2m":
-		return []ProactiveSuggestion{
-			{Tool: "replace_e2m", Description: "Replace this E2M mapping"},
-			{Tool: "delete_e2m", Description: "Remove this E2M mapping"},
-		}
-
-	case "create_e2m":
-		return []ProactiveSuggestion{
-			{Tool: "list_e2m", Description: "View all E2M mappings including the new one"},
-		}
-
-	case "replace_e2m":
-		return []ProactiveSuggestion{
-			{Tool: "get_e2m", Description: "View the replaced E2M mapping"},
-		}
-
-	case "delete_e2m":
-		return []ProactiveSuggestion{
-			{Tool: "list_e2m", Description: "View remaining E2M mappings"},
-		}
+	// E2M tools
+	"list_e2m":    {{Tool: "get_e2m", Description: "Get details of a specific E2M mapping"}, {Tool: "create_e2m", Description: "Create a new E2M mapping"}},
+	"get_e2m":     {{Tool: "replace_e2m", Description: "Replace this E2M mapping"}, {Tool: "delete_e2m", Description: "Remove this E2M mapping"}},
+	"create_e2m":  {{Tool: "list_e2m", Description: "View all E2M mappings including the new one"}},
+	"replace_e2m": {{Tool: "get_e2m", Description: "View the replaced E2M mapping"}},
+	"delete_e2m":  {{Tool: "list_e2m", Description: "View remaining E2M mappings"}},
 
 	// Data access rule tools
-	case "list_data_access_rules":
-		return []ProactiveSuggestion{
-			{Tool: "get_data_access_rule", Description: "Get details of a specific data access rule"},
-			{Tool: "create_data_access_rule", Description: "Create a new data access rule"},
-		}
-
-	case "get_data_access_rule":
-		return []ProactiveSuggestion{
-			{Tool: "update_data_access_rule", Description: "Modify this data access rule"},
-			{Tool: "delete_data_access_rule", Description: "Remove this data access rule"},
-		}
-
-	case "create_data_access_rule":
-		return []ProactiveSuggestion{
-			{Tool: "list_data_access_rules", Description: "View all data access rules including the new one"},
-		}
-
-	case "update_data_access_rule":
-		return []ProactiveSuggestion{
-			{Tool: "get_data_access_rule", Description: "View the updated data access rule"},
-		}
-
-	case "delete_data_access_rule":
-		return []ProactiveSuggestion{
-			{Tool: "list_data_access_rules", Description: "View remaining data access rules"},
-		}
+	"list_data_access_rules":  {{Tool: "get_data_access_rule", Description: "Get details of a specific data access rule"}, {Tool: "create_data_access_rule", Description: "Create a new data access rule"}},
+	"get_data_access_rule":    {{Tool: "update_data_access_rule", Description: "Modify this data access rule"}, {Tool: "delete_data_access_rule", Description: "Remove this data access rule"}},
+	"create_data_access_rule": {{Tool: "list_data_access_rules", Description: "View all data access rules including the new one"}},
+	"update_data_access_rule": {{Tool: "get_data_access_rule", Description: "View the updated data access rule"}},
+	"delete_data_access_rule": {{Tool: "list_data_access_rules", Description: "View remaining data access rules"}},
 
 	// Enrichment tools
-	case "list_enrichments", "get_enrichments":
-		return []ProactiveSuggestion{
-			{Tool: "create_enrichment", Description: "Create a new enrichment"},
-		}
-
-	case "create_enrichment":
-		return []ProactiveSuggestion{
-			{Tool: "list_enrichments", Description: "View all enrichments including the new one"},
-		}
-
-	case "update_enrichment":
-		return []ProactiveSuggestion{
-			{Tool: "list_enrichments", Description: "View all enrichments"},
-		}
-
-	case "delete_enrichment":
-		return []ProactiveSuggestion{
-			{Tool: "list_enrichments", Description: "View remaining enrichments"},
-		}
+	"list_enrichments":  {{Tool: "create_enrichment", Description: "Create a new enrichment"}},
+	"get_enrichments":   {{Tool: "create_enrichment", Description: "Create a new enrichment"}},
+	"create_enrichment": {{Tool: "list_enrichments", Description: "View all enrichments including the new one"}},
+	"update_enrichment": {{Tool: "list_enrichments", Description: "View all enrichments"}},
+	"delete_enrichment": {{Tool: "list_enrichments", Description: "View remaining enrichments"}},
 
 	// View tools
-	case "list_views":
-		return []ProactiveSuggestion{
-			{Tool: "get_view", Description: "Get details of a specific view"},
-			{Tool: "create_view", Description: "Create a new view"},
-		}
-
-	case "get_view":
-		return []ProactiveSuggestion{
-			{Tool: "replace_view", Description: "Replace this view"},
-			{Tool: "delete_view", Description: "Remove this view"},
-		}
-
-	case "create_view":
-		return []ProactiveSuggestion{
-			{Tool: "list_views", Description: "View all views including the new one"},
-		}
-
-	case "replace_view":
-		return []ProactiveSuggestion{
-			{Tool: "get_view", Description: "View the replaced view"},
-		}
-
-	case "delete_view":
-		return []ProactiveSuggestion{
-			{Tool: "list_views", Description: "View remaining views"},
-		}
+	"list_views":   {{Tool: "get_view", Description: "Get details of a specific view"}, {Tool: "create_view", Description: "Create a new view"}},
+	"get_view":     {{Tool: "replace_view", Description: "Replace this view"}, {Tool: "delete_view", Description: "Remove this view"}},
+	"create_view":  {{Tool: "list_views", Description: "View all views including the new one"}},
+	"replace_view": {{Tool: "get_view", Description: "View the replaced view"}},
+	"delete_view":  {{Tool: "list_views", Description: "View remaining views"}},
 
 	// View folder tools
-	case "list_view_folders":
-		return []ProactiveSuggestion{
-			{Tool: "get_view_folder", Description: "Get details of a specific view folder"},
-			{Tool: "create_view_folder", Description: "Create a new view folder"},
-		}
+	"list_view_folders":   {{Tool: "get_view_folder", Description: "Get details of a specific view folder"}, {Tool: "create_view_folder", Description: "Create a new view folder"}},
+	"get_view_folder":     {{Tool: "replace_view_folder", Description: "Replace this view folder"}, {Tool: "delete_view_folder", Description: "Remove this view folder"}},
+	"create_view_folder":  {{Tool: "list_view_folders", Description: "View all view folders including the new one"}},
+	"replace_view_folder": {{Tool: "get_view_folder", Description: "View the replaced view folder"}},
+	"delete_view_folder":  {{Tool: "list_view_folders", Description: "View remaining view folders"}},
+}
 
-	case "get_view_folder":
-		return []ProactiveSuggestion{
-			{Tool: "replace_view_folder", Description: "Replace this view folder"},
-			{Tool: "delete_view_folder", Description: "Remove this view folder"},
-		}
+// getSuccessSuggestions returns suggestions based on successful tool execution.
+// Uses a data-driven approach for static mappings and handles dynamic cases separately.
+func getSuccessSuggestions(toolName string, result map[string]interface{}) []ProactiveSuggestion {
+	// Handle dynamic suggestions that depend on result content
+	switch toolName {
+	case "query_logs":
+		return getQueryLogsSuggestions(result)
+	case "get_background_query_status":
+		return getBackgroundQueryStatusSuggestions(result)
+	case "create_dashboard", "update_dashboard":
+		return getDashboardMutationSuggestions(result)
+	}
 
-	case "create_view_folder":
-		return []ProactiveSuggestion{
-			{Tool: "list_view_folders", Description: "View all view folders including the new one"},
-		}
+	// Return static suggestions from the lookup table
+	if suggestions, ok := staticSuggestions[toolName]; ok {
+		return suggestions
+	}
+	return nil
+}
 
-	case "replace_view_folder":
-		return []ProactiveSuggestion{
-			{Tool: "get_view_folder", Description: "View the replaced view folder"},
-		}
-
-	case "delete_view_folder":
-		return []ProactiveSuggestion{
-			{Tool: "list_view_folders", Description: "View remaining view folders"},
-		}
-
-	default:
+// getQueryLogsSuggestions returns suggestions based on query_logs results
+func getQueryLogsSuggestions(result map[string]interface{}) []ProactiveSuggestion {
+	events, ok := result["events"].([]interface{})
+	if !ok {
 		return nil
 	}
+	if len(events) == 0 {
+		return []ProactiveSuggestion{
+			{Tool: "query_logs", Description: "Try expanding the time range or relaxing filters - no results found"},
+		}
+	}
+	if len(events) > 100 {
+		return []ProactiveSuggestion{
+			{Tool: "create_dashboard", Description: "Create a dashboard to visualize these query results"},
+			{Tool: "create_alert", Description: "Set up an alert to monitor this condition"},
+		}
+	}
+	return nil
+}
+
+// getBackgroundQueryStatusSuggestions returns suggestions based on background query status
+func getBackgroundQueryStatusSuggestions(result map[string]interface{}) []ProactiveSuggestion {
+	status, ok := result["status"].(string)
+	if !ok {
+		return nil
+	}
+	switch status {
+	case "completed", "COMPLETED":
+		return []ProactiveSuggestion{
+			{Tool: "get_background_query_data", Description: "Retrieve the completed query results"},
+		}
+	case "running", "RUNNING":
+		return []ProactiveSuggestion{
+			{Tool: "get_background_query_status", Description: "Check again in a few moments"},
+			{Tool: "cancel_background_query", Description: "Cancel if no longer needed"},
+		}
+	}
+	return nil
+}
+
+// getDashboardMutationSuggestions returns suggestions after dashboard create/update
+func getDashboardMutationSuggestions(result map[string]interface{}) []ProactiveSuggestion {
+	if id, ok := result["id"].(string); ok && id != "" {
+		return []ProactiveSuggestion{
+			{Tool: "get_dashboard", Description: "View the created/updated dashboard"},
+			{Tool: "pin_dashboard", Description: "Pin for quick access"},
+		}
+	}
+	return nil
 }
 
 // FormatProactiveSuggestions formats suggestions as a markdown string

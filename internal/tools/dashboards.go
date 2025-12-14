@@ -35,86 +35,136 @@ func extractQueriesWithInfo(layout interface{}, path string) []QueryInfo {
 
 	switch v := layout.(type) {
 	case map[string]interface{}:
-		// Check for direct query field (common in DataPrime queries)
-		if query, ok := v["query"].(string); ok && query != "" {
-			syntax := "dataprime" // Default to dataprime
-			// Check if we're inside a lucene context
-			if _, isLucene := v["lucene_query"]; isLucene {
-				syntax = "lucene"
-			}
-			queries = append(queries, QueryInfo{Query: query, Syntax: syntax, Source: path + ".query"})
-		}
-
-		// Check for dataprime_query structure (used in widget definitions)
-		if dpQuery, ok := v["dataprime_query"].(map[string]interface{}); ok {
-			if text, ok := dpQuery["text"].(string); ok && text != "" {
-				queries = append(queries, QueryInfo{Query: text, Syntax: "dataprime", Source: path + ".dataprime_query.text"})
-			}
-		}
-
-		// Check for lucene_query structure (used in widget definitions)
-		if luceneQuery, ok := v["lucene_query"].(map[string]interface{}); ok {
-			if value, ok := luceneQuery["value"].(string); ok && value != "" {
-				queries = append(queries, QueryInfo{Query: value, Syntax: "lucene", Source: path + ".lucene_query.value"})
-			}
-		}
-
-		// Check for dataprime in definition (chart widgets)
-		if definition, ok := v["definition"].(map[string]interface{}); ok {
-			if dataprime, ok := definition["dataprime"].(map[string]interface{}); ok {
-				if query, ok := dataprime["query"].(string); ok && query != "" {
-					queries = append(queries, QueryInfo{Query: query, Syntax: "dataprime", Source: path + ".definition.dataprime.query"})
-				}
-			}
-			if lucene, ok := definition["lucene"].(map[string]interface{}); ok {
-				if query, ok := lucene["query"].(string); ok && query != "" {
-					queries = append(queries, QueryInfo{Query: query, Syntax: "lucene", Source: path + ".definition.lucene.query"})
-				}
-			}
-		}
-
-		// Check query_definitions array (common in line_chart, bar_chart widgets)
-		if queryDefs, ok := v["query_definitions"].([]interface{}); ok {
-			for i, qd := range queryDefs {
-				qdPath := fmt.Sprintf("%s.query_definitions[%d]", path, i)
-				if qdMap, ok := qd.(map[string]interface{}); ok {
-					// Check for query.logs.dataprime_query or query.logs.lucene_query
-					if queryObj, ok := qdMap["query"].(map[string]interface{}); ok {
-						if logs, ok := queryObj["logs"].(map[string]interface{}); ok {
-							queries = append(queries, extractQueriesWithInfo(logs, qdPath+".query.logs")...)
-						}
-						if metrics, ok := queryObj["metrics"].(map[string]interface{}); ok {
-							queries = append(queries, extractQueriesWithInfo(metrics, qdPath+".query.metrics")...)
-						}
-						if dataprime, ok := queryObj["dataprime"].(map[string]interface{}); ok {
-							queries = append(queries, extractQueriesWithInfo(dataprime, qdPath+".query.dataprime")...)
-						}
-					}
-				}
-			}
-		}
-
-		// Recurse into all map values for nested structures
-		for key, val := range v {
-			// Skip already processed keys
-			if key == "query" || key == "dataprime_query" || key == "lucene_query" ||
-				key == "definition" || key == "query_definitions" {
-				continue
-			}
-			newPath := path
-			if newPath != "" {
-				newPath = newPath + "." + key
-			} else {
-				newPath = key
-			}
-			queries = append(queries, extractQueriesWithInfo(val, newPath)...)
-		}
+		queries = append(queries, extractQueriesFromMap(v, path)...)
 	case []interface{}:
-		// Recurse into array elements
 		for i, item := range v {
 			itemPath := fmt.Sprintf("%s[%d]", path, i)
 			queries = append(queries, extractQueriesWithInfo(item, itemPath)...)
 		}
+	}
+
+	return queries
+}
+
+// extractQueriesFromMap extracts queries from a map structure
+func extractQueriesFromMap(v map[string]interface{}, path string) []QueryInfo {
+	var queries []QueryInfo
+
+	// Extract direct queries
+	queries = append(queries, extractDirectQueries(v, path)...)
+
+	// Extract from definition (chart widgets)
+	queries = append(queries, extractDefinitionQueries(v, path)...)
+
+	// Extract from query_definitions array
+	queries = append(queries, extractQueryDefinitions(v, path)...)
+
+	// Recurse into nested structures
+	queries = append(queries, extractNestedQueries(v, path)...)
+
+	return queries
+}
+
+// extractDirectQueries extracts direct query fields from a map
+func extractDirectQueries(v map[string]interface{}, path string) []QueryInfo {
+	var queries []QueryInfo
+
+	// Check for direct query field (common in DataPrime queries)
+	if query, ok := v["query"].(string); ok && query != "" {
+		syntax := "dataprime"
+		if _, isLucene := v["lucene_query"]; isLucene {
+			syntax = "lucene"
+		}
+		queries = append(queries, QueryInfo{Query: query, Syntax: syntax, Source: path + ".query"})
+	}
+
+	// Check for dataprime_query structure
+	if dpQuery, ok := v["dataprime_query"].(map[string]interface{}); ok {
+		if text, ok := dpQuery["text"].(string); ok && text != "" {
+			queries = append(queries, QueryInfo{Query: text, Syntax: "dataprime", Source: path + ".dataprime_query.text"})
+		}
+	}
+
+	// Check for lucene_query structure
+	if luceneQuery, ok := v["lucene_query"].(map[string]interface{}); ok {
+		if value, ok := luceneQuery["value"].(string); ok && value != "" {
+			queries = append(queries, QueryInfo{Query: value, Syntax: "lucene", Source: path + ".lucene_query.value"})
+		}
+	}
+
+	return queries
+}
+
+// extractDefinitionQueries extracts queries from widget definition blocks
+func extractDefinitionQueries(v map[string]interface{}, path string) []QueryInfo {
+	var queries []QueryInfo
+
+	definition, ok := v["definition"].(map[string]interface{})
+	if !ok {
+		return queries
+	}
+
+	if dataprime, ok := definition["dataprime"].(map[string]interface{}); ok {
+		if query, ok := dataprime["query"].(string); ok && query != "" {
+			queries = append(queries, QueryInfo{Query: query, Syntax: "dataprime", Source: path + ".definition.dataprime.query"})
+		}
+	}
+	if lucene, ok := definition["lucene"].(map[string]interface{}); ok {
+		if query, ok := lucene["query"].(string); ok && query != "" {
+			queries = append(queries, QueryInfo{Query: query, Syntax: "lucene", Source: path + ".definition.lucene.query"})
+		}
+	}
+
+	return queries
+}
+
+// extractQueryDefinitions extracts queries from query_definitions arrays
+func extractQueryDefinitions(v map[string]interface{}, path string) []QueryInfo {
+	var queries []QueryInfo
+
+	queryDefs, ok := v["query_definitions"].([]interface{})
+	if !ok {
+		return queries
+	}
+
+	for i, qd := range queryDefs {
+		qdPath := fmt.Sprintf("%s.query_definitions[%d]", path, i)
+		qdMap, ok := qd.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		queryObj, ok := qdMap["query"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, subKey := range []string{"logs", "metrics", "dataprime"} {
+			if sub, ok := queryObj[subKey].(map[string]interface{}); ok {
+				queries = append(queries, extractQueriesWithInfo(sub, qdPath+".query."+subKey)...)
+			}
+		}
+	}
+
+	return queries
+}
+
+// extractNestedQueries recursively extracts queries from nested map values
+func extractNestedQueries(v map[string]interface{}, path string) []QueryInfo {
+	var queries []QueryInfo
+
+	skipKeys := map[string]bool{
+		"query": true, "dataprime_query": true, "lucene_query": true,
+		"definition": true, "query_definitions": true,
+	}
+
+	for key, val := range v {
+		if skipKeys[key] {
+			continue
+		}
+		newPath := key
+		if path != "" {
+			newPath = path + "." + key
+		}
+		queries = append(queries, extractQueriesWithInfo(val, newPath)...)
 	}
 
 	return queries
