@@ -114,64 +114,95 @@ func (rv *ResourceValidator) Validate(config map[string]interface{}) *Validation
 func (rv *ResourceValidator) validateField(field string, val interface{}, v FieldValidator) string {
 	switch v.Type {
 	case "string":
-		strVal, ok := val.(string)
-		if !ok {
-			return fmt.Sprintf("Field '%s' must be a string", field)
-		}
-		if v.MinLength > 0 && len(strVal) < v.MinLength {
-			return fmt.Sprintf("Field '%s' must be at least %d characters", field, v.MinLength)
-		}
-		if v.MaxLength > 0 && len(strVal) > v.MaxLength {
-			return fmt.Sprintf("Field '%s' must be at most %d characters", field, v.MaxLength)
-		}
-		if len(v.AllowedValues) > 0 {
-			found := false
-			for _, allowed := range v.AllowedValues {
-				if strVal == allowed {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Sprintf("Invalid value for '%s': got '%s', must be one of: %v", field, strVal, v.AllowedValues)
-			}
-		}
-		if v.Pattern != "" {
-			matched, err := regexp.MatchString(v.Pattern, strVal)
-			if err != nil || !matched {
-				return fmt.Sprintf("Field '%s' does not match required pattern", field)
-			}
-		}
+		return rv.validateStringField(field, val, v)
 	case "int":
-		var intVal int
-		switch num := val.(type) {
-		case float64:
-			intVal = int(num)
-		case int:
-			intVal = num
-		case int64:
-			intVal = int(num)
-		default:
-			return fmt.Sprintf("Field '%s' must be a number", field)
-		}
-		if v.MinValue > 0 && intVal < v.MinValue {
-			return fmt.Sprintf("Field '%s' must be at least %d", field, v.MinValue)
-		}
-		if v.MaxValue > 0 && intVal > v.MaxValue {
-			return fmt.Sprintf("Field '%s' must be at most %d", field, v.MaxValue)
-		}
+		return rv.validateIntField(field, val, v)
 	case "bool":
-		if _, ok := val.(bool); !ok {
-			return fmt.Sprintf("Field '%s' must be a boolean", field)
-		}
+		return rv.validateBoolField(field, val)
 	case "object":
-		if _, ok := val.(map[string]interface{}); !ok {
-			return fmt.Sprintf("Field '%s' must be an object", field)
-		}
+		return rv.validateObjectField(field, val)
 	case "array":
-		if _, ok := val.([]interface{}); !ok {
-			return fmt.Sprintf("Field '%s' must be an array", field)
+		return rv.validateArrayField(field, val)
+	}
+	return ""
+}
+
+func (rv *ResourceValidator) validateStringField(field string, val interface{}, v FieldValidator) string {
+	strVal, ok := val.(string)
+	if !ok {
+		return fmt.Sprintf("Field '%s' must be a string", field)
+	}
+	if v.MinLength > 0 && len(strVal) < v.MinLength {
+		return fmt.Sprintf("Field '%s' must be at least %d characters", field, v.MinLength)
+	}
+	if v.MaxLength > 0 && len(strVal) > v.MaxLength {
+		return fmt.Sprintf("Field '%s' must be at most %d characters", field, v.MaxLength)
+	}
+	if len(v.AllowedValues) > 0 && !isAllowedValue(strVal, v.AllowedValues) {
+		return fmt.Sprintf("Invalid value for '%s': got '%s', must be one of: %v", field, strVal, v.AllowedValues)
+	}
+	if v.Pattern != "" {
+		matched, err := regexp.MatchString(v.Pattern, strVal)
+		if err != nil || !matched {
+			return fmt.Sprintf("Field '%s' does not match required pattern", field)
 		}
+	}
+	return ""
+}
+
+func isAllowedValue(val string, allowed []string) bool {
+	for _, a := range allowed {
+		if val == a {
+			return true
+		}
+	}
+	return false
+}
+
+func (rv *ResourceValidator) validateIntField(field string, val interface{}, v FieldValidator) string {
+	intVal, ok := toInt(val)
+	if !ok {
+		return fmt.Sprintf("Field '%s' must be a number", field)
+	}
+	if v.MinValue > 0 && intVal < v.MinValue {
+		return fmt.Sprintf("Field '%s' must be at least %d", field, v.MinValue)
+	}
+	if v.MaxValue > 0 && intVal > v.MaxValue {
+		return fmt.Sprintf("Field '%s' must be at most %d", field, v.MaxValue)
+	}
+	return ""
+}
+
+func toInt(val interface{}) (int, bool) {
+	switch num := val.(type) {
+	case float64:
+		return int(num), true
+	case int:
+		return num, true
+	case int64:
+		return int(num), true
+	default:
+		return 0, false
+	}
+}
+
+func (rv *ResourceValidator) validateBoolField(field string, val interface{}) string {
+	if _, ok := val.(bool); !ok {
+		return fmt.Sprintf("Field '%s' must be a boolean", field)
+	}
+	return ""
+}
+
+func (rv *ResourceValidator) validateObjectField(field string, val interface{}) string {
+	if _, ok := val.(map[string]interface{}); !ok {
+		return fmt.Sprintf("Field '%s' must be an object", field)
+	}
+	return ""
+}
+
+func (rv *ResourceValidator) validateArrayField(field string, val interface{}) string {
+	if _, ok := val.([]interface{}); !ok {
+		return fmt.Sprintf("Field '%s' must be an array", field)
 	}
 	return ""
 }

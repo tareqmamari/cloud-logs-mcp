@@ -951,132 +951,160 @@ func (r *Registry) contextAwarePrompt() *PromptDefinition {
 			var builder strings.Builder
 			builder.WriteString("# Context-Aware Assistance\n\n")
 
-			// Check if we have a context provider
 			if r.contextProvider == nil {
-				builder.WriteString("*Session context not available. Here's general guidance:*\n\n")
-				builder.WriteString("## Getting Started\n")
-				builder.WriteString("- Use `health_check` to see your system status\n")
-				builder.WriteString("- Use `discover_tools` to find relevant tools for your task\n")
-				builder.WriteString("- Use `query_logs` to search your logs\n")
+				r.writeNoContextGuidance(&builder)
 				return createPromptResult("Context-aware assistance", builder.String()), nil
 			}
 
-			// Build context-aware content
 			builder.WriteString("Based on your current session, here's personalized guidance:\n\n")
 
-			// Check for active investigation
-			if inv := r.contextProvider.GetInvestigation(); inv != nil {
-				builder.WriteString("## 🔍 Active Investigation\n\n")
-				builder.WriteString(fmt.Sprintf("**Investigation ID:** %s\n", inv.ID))
-				builder.WriteString(fmt.Sprintf("**Started:** %s ago\n", time.Since(inv.StartTime).Round(time.Minute)))
-				if inv.Application != "" {
-					builder.WriteString(fmt.Sprintf("**Application:** %s\n", inv.Application))
-				}
-				if inv.Hypothesis != "" {
-					builder.WriteString(fmt.Sprintf("**Current Hypothesis:** %s\n", inv.Hypothesis))
-				}
-				builder.WriteString(fmt.Sprintf("**Findings:** %d recorded\n\n", inv.FindingsCount))
+			r.writeInvestigationSection(&builder)
+			filters := r.writeFiltersSection(&builder)
+			r.writeLastQuerySection(&builder)
+			r.writePreferencesSection(&builder)
+			recentTools := r.writeRecentActivitySection(&builder)
 
-				// Suggest next steps based on tools already used
-				usedTools := make(map[string]bool)
-				for _, t := range inv.ToolsUsed {
-					usedTools[t] = true
-				}
-
-				builder.WriteString("**Suggested Next Steps:**\n")
-				investigationTools := []struct {
-					name string
-					desc string
-				}{
-					{"query_logs", "Search for more evidence"},
-					{"suggest_alert", "Create alerts based on findings"},
-					{"create_dashboard", "Visualize patterns"},
-					{"session_context", "Record a finding"},
-				}
-				for _, tool := range investigationTools {
-					if !usedTools[tool.name] {
-						builder.WriteString(fmt.Sprintf("- `%s` - %s\n", tool.name, tool.desc))
-					}
-				}
-				builder.WriteString("\n")
-			}
-
-			// Show active filters
-			filters := r.contextProvider.GetAllFilters()
-			if len(filters) > 0 {
-				builder.WriteString("## 🎯 Active Filters\n\n")
-				builder.WriteString("These filters are automatically applied to your queries:\n")
-				for key, value := range filters {
-					builder.WriteString(fmt.Sprintf("- **%s:** `%s`\n", key, value))
-				}
-				builder.WriteString("\n*Use `session_context` with action `clear_filter` to remove filters.*\n\n")
-			}
-
-			// Show last query
-			if lastQuery := r.contextProvider.GetLastQuery(); lastQuery != "" {
-				builder.WriteString("## 📝 Last Query\n\n")
-				builder.WriteString("```\n")
-				builder.WriteString(lastQuery)
-				builder.WriteString("\n```\n")
-				builder.WriteString("*Use `explain_query` to understand this query or `build_query` to modify it.*\n\n")
-			}
-
-			// Show user preferences
-			if prefs := r.contextProvider.GetPreferences(); prefs != nil {
-				hasPrefs := prefs.PreferredTimeRange != "" || len(prefs.FrequentApplications) > 0 || prefs.PreferredLimit > 0
-				if hasPrefs {
-					builder.WriteString("## ⚙️ Learned Preferences\n\n")
-					builder.WriteString("Based on your usage patterns:\n")
-					if prefs.PreferredTimeRange != "" {
-						builder.WriteString(fmt.Sprintf("- **Default time range:** %s\n", prefs.PreferredTimeRange))
-					}
-					if len(prefs.FrequentApplications) > 0 {
-						builder.WriteString(fmt.Sprintf("- **Frequent applications:** %s\n", strings.Join(prefs.FrequentApplications, ", ")))
-					}
-					if prefs.PreferredLimit > 0 {
-						builder.WriteString(fmt.Sprintf("- **Default result limit:** %d\n", prefs.PreferredLimit))
-					}
-					builder.WriteString("\n")
-				}
-			}
-
-			// Show recent tools and suggest next
-			recentTools := r.contextProvider.GetRecentTools(5)
-			if len(recentTools) > 0 {
-				builder.WriteString("## 🕐 Recent Activity\n\n")
-				builder.WriteString("Your recent tool usage:\n")
-				for _, t := range recentTools {
-					status := "✅"
-					if !t.Success {
-						status = "❌"
-					}
-					builder.WriteString(fmt.Sprintf("- %s `%s` (%s ago)\n", status, t.Tool, time.Since(t.Timestamp).Round(time.Second)))
-				}
-				builder.WriteString("\n")
-
-				// Show suggested next tools
-				if suggested := r.contextProvider.GetSuggestedNextTools(); len(suggested) > 0 {
-					builder.WriteString("**Based on your patterns, you might want to use:**\n")
-					for _, tool := range suggested {
-						builder.WriteString(fmt.Sprintf("- `%s`\n", tool))
-					}
-					builder.WriteString("\n")
-				}
-			}
-
-			// If no context, provide general guidance
 			if len(filters) == 0 && r.contextProvider.GetLastQuery() == "" && len(recentTools) == 0 {
-				builder.WriteString("## 🚀 Getting Started\n\n")
-				builder.WriteString("No session context yet. Here are some ways to begin:\n\n")
-				builder.WriteString("1. **Check system health:** `health_check`\n")
-				builder.WriteString("2. **Discover tools:** `discover_tools` with your intent\n")
-				builder.WriteString("3. **Search logs:** `query_logs` with your search criteria\n")
-				builder.WriteString("4. **Start an investigation:** `investigate_incident`\n")
+				r.writeGettingStartedSection(&builder)
 			}
 
 			return createPromptResult("Context-aware assistance based on your session", builder.String()), nil
 		},
 	}
+}
+
+func (r *Registry) writeNoContextGuidance(builder *strings.Builder) {
+	builder.WriteString("*Session context not available. Here's general guidance:*\n\n")
+	builder.WriteString("## Getting Started\n")
+	builder.WriteString("- Use `health_check` to see your system status\n")
+	builder.WriteString("- Use `discover_tools` to find relevant tools for your task\n")
+	builder.WriteString("- Use `query_logs` to search your logs\n")
+}
+
+func (r *Registry) writeInvestigationSection(builder *strings.Builder) {
+	inv := r.contextProvider.GetInvestigation()
+	if inv == nil {
+		return
+	}
+
+	builder.WriteString("## 🔍 Active Investigation\n\n")
+	fmt.Fprintf(builder, "**Investigation ID:** %s\n", inv.ID)
+	fmt.Fprintf(builder, "**Started:** %s ago\n", time.Since(inv.StartTime).Round(time.Minute))
+	if inv.Application != "" {
+		fmt.Fprintf(builder, "**Application:** %s\n", inv.Application)
+	}
+	if inv.Hypothesis != "" {
+		fmt.Fprintf(builder, "**Current Hypothesis:** %s\n", inv.Hypothesis)
+	}
+	fmt.Fprintf(builder, "**Findings:** %d recorded\n\n", inv.FindingsCount)
+
+	usedTools := make(map[string]bool)
+	for _, t := range inv.ToolsUsed {
+		usedTools[t] = true
+	}
+
+	builder.WriteString("**Suggested Next Steps:**\n")
+	investigationTools := []struct{ name, desc string }{
+		{"query_logs", "Search for more evidence"},
+		{"suggest_alert", "Create alerts based on findings"},
+		{"create_dashboard", "Visualize patterns"},
+		{"session_context", "Record a finding"},
+	}
+	for _, tool := range investigationTools {
+		if !usedTools[tool.name] {
+			fmt.Fprintf(builder, "- `%s` - %s\n", tool.name, tool.desc)
+		}
+	}
+	builder.WriteString("\n")
+}
+
+func (r *Registry) writeFiltersSection(builder *strings.Builder) map[string]string {
+	filters := r.contextProvider.GetAllFilters()
+	if len(filters) == 0 {
+		return filters
+	}
+
+	builder.WriteString("## 🎯 Active Filters\n\n")
+	builder.WriteString("These filters are automatically applied to your queries:\n")
+	for key, value := range filters {
+		fmt.Fprintf(builder, "- **%s:** `%s`\n", key, value)
+	}
+	builder.WriteString("\n*Use `session_context` with action `clear_filter` to remove filters.*\n\n")
+	return filters
+}
+
+func (r *Registry) writeLastQuerySection(builder *strings.Builder) {
+	lastQuery := r.contextProvider.GetLastQuery()
+	if lastQuery == "" {
+		return
+	}
+
+	builder.WriteString("## 📝 Last Query\n\n")
+	builder.WriteString("```\n")
+	builder.WriteString(lastQuery)
+	builder.WriteString("\n```\n")
+	builder.WriteString("*Use `explain_query` to understand this query or `build_query` to modify it.*\n\n")
+}
+
+func (r *Registry) writePreferencesSection(builder *strings.Builder) {
+	prefs := r.contextProvider.GetPreferences()
+	if prefs == nil {
+		return
+	}
+
+	hasPrefs := prefs.PreferredTimeRange != "" || len(prefs.FrequentApplications) > 0 || prefs.PreferredLimit > 0
+	if !hasPrefs {
+		return
+	}
+
+	builder.WriteString("## ⚙️ Learned Preferences\n\n")
+	builder.WriteString("Based on your usage patterns:\n")
+	if prefs.PreferredTimeRange != "" {
+		fmt.Fprintf(builder, "- **Default time range:** %s\n", prefs.PreferredTimeRange)
+	}
+	if len(prefs.FrequentApplications) > 0 {
+		fmt.Fprintf(builder, "- **Frequent applications:** %s\n", strings.Join(prefs.FrequentApplications, ", "))
+	}
+	if prefs.PreferredLimit > 0 {
+		fmt.Fprintf(builder, "- **Default result limit:** %d\n", prefs.PreferredLimit)
+	}
+	builder.WriteString("\n")
+}
+
+func (r *Registry) writeRecentActivitySection(builder *strings.Builder) []RecentToolInfo {
+	recentTools := r.contextProvider.GetRecentTools(5)
+	if len(recentTools) == 0 {
+		return recentTools
+	}
+
+	builder.WriteString("## 🕐 Recent Activity\n\n")
+	builder.WriteString("Your recent tool usage:\n")
+	for _, t := range recentTools {
+		status := "✅"
+		if !t.Success {
+			status = "❌"
+		}
+		fmt.Fprintf(builder, "- %s `%s` (%s ago)\n", status, t.Tool, time.Since(t.Timestamp).Round(time.Second))
+	}
+	builder.WriteString("\n")
+
+	if suggested := r.contextProvider.GetSuggestedNextTools(); len(suggested) > 0 {
+		builder.WriteString("**Based on your patterns, you might want to use:**\n")
+		for _, tool := range suggested {
+			fmt.Fprintf(builder, "- `%s`\n", tool)
+		}
+		builder.WriteString("\n")
+	}
+	return recentTools
+}
+
+func (r *Registry) writeGettingStartedSection(builder *strings.Builder) {
+	builder.WriteString("## 🚀 Getting Started\n\n")
+	builder.WriteString("No session context yet. Here are some ways to begin:\n\n")
+	builder.WriteString("1. **Check system health:** `health_check`\n")
+	builder.WriteString("2. **Discover tools:** `discover_tools` with your intent\n")
+	builder.WriteString("3. **Search logs:** `query_logs` with your search criteria\n")
+	builder.WriteString("4. **Start an investigation:** `investigate_incident`\n")
 }
 
 // smartSuggestPrompt creates a prompt that provides intelligent suggestions

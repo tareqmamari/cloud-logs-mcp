@@ -80,15 +80,7 @@ func fetchTCOConfig(ctx context.Context, c *client.Client, logger *zap.Logger) (
 
 // parseTCOPolicies analyzes the policies response and extracts TCO configuration
 func parseTCOPolicies(result map[string]interface{}, logger *zap.Logger) *TCOConfig {
-	config := &TCOConfig{
-		HasPolicies:       false,
-		HasArchive:        true,
-		HasFrequentSearch: true,              // No policies = logs go to both tiers
-		DefaultTier:       "frequent_search", // Use frequent_search for faster queries
-		PolicyCount:       0,
-		LastUpdated:       time.Now(),
-		Policies:          []TCOPolicyRule{},
-	}
+	config := newDefaultTCOConfig()
 
 	policies, ok := result["policies"].([]interface{})
 	if !ok || len(policies) == 0 {
@@ -98,12 +90,38 @@ func parseTCOPolicies(result map[string]interface{}, logger *zap.Logger) *TCOCon
 		return config
 	}
 
+	initConfigForPolicies(config, len(policies))
+	processPolicies(config, policies)
+	determineDefaultTier(config)
+	logTCOConfig(config, logger)
+
+	return config
+}
+
+// newDefaultTCOConfig creates a TCOConfig with default values for when no policies exist
+func newDefaultTCOConfig() *TCOConfig {
+	return &TCOConfig{
+		HasPolicies:       false,
+		HasArchive:        true,
+		HasFrequentSearch: true,              // No policies = logs go to both tiers
+		DefaultTier:       "frequent_search", // Use frequent_search for faster queries
+		PolicyCount:       0,
+		LastUpdated:       time.Now(),
+		Policies:          []TCOPolicyRule{},
+	}
+}
+
+// initConfigForPolicies initializes the config when policies exist
+func initConfigForPolicies(config *TCOConfig, policyCount int) {
 	config.HasPolicies = true
-	config.PolicyCount = len(policies)
+	config.PolicyCount = policyCount
 	// When policies exist, reset defaults - policies determine tier availability
 	config.HasFrequentSearch = false
 	config.DefaultTier = "archive" // Will be updated based on policy analysis
+}
 
+// processPolicies processes each policy and updates the config
+func processPolicies(config *TCOConfig, policies []interface{}) {
 	// Analyze each policy to determine tier routing
 	// Order matters - policies are processed in order, first match wins
 	for _, p := range policies {
@@ -117,60 +135,74 @@ func parseTCOPolicies(result map[string]interface{}, logger *zap.Logger) *TCOCon
 			continue // Skip disabled policies
 		}
 
-		// Check priority field to determine tier
-		// type_high and type_medium route to frequent_search (Priority Insights)
-		// type_low routes to archive (COS)
-		priority, _ := policy["priority"].(string)
+		processPolicy(config, policy)
+	}
+}
 
-		// Check archive_retention configuration
-		if archiveRetention, ok := policy["archive_retention"].(map[string]interface{}); ok {
-			if id, ok := archiveRetention["id"].(string); ok && id != "" {
-				config.HasArchive = true
-			}
-		}
+// processPolicy processes a single policy and adds it to the config
+func processPolicy(config *TCOConfig, policy map[string]interface{}) {
+	// Check priority field to determine tier
+	// type_high and type_medium route to frequent_search (Priority Insights)
+	// type_low routes to archive (COS)
+	priority, _ := policy["priority"].(string)
 
-		// Determine tier based on priority
-		tier := "archive" // Default
-		switch priority {
-		case "type_high", "type_medium":
-			config.HasFrequentSearch = true
-			tier = "frequent_search"
-		case "type_low", "type_unspecified", "":
-			tier = "archive"
-		}
+	checkArchiveRetention(config, policy)
+	tier := determineTier(config, priority)
 
-		// Build policy rule
-		policyRule := TCOPolicyRule{
-			Tier:     tier,
-			Priority: priority,
-		}
-
-		// Extract application rule if present
-		if appRule, ok := policy["application_rule"].(map[string]interface{}); ok {
-			if appName, ok := appRule["name"].(string); ok && appName != "" {
-				ruleType, _ := appRule["rule_type_id"].(string)
-				policyRule.ApplicationRule = &TCOMatchRule{
-					Name:     appName,
-					RuleType: ruleType,
-				}
-			}
-		}
-
-		// Extract subsystem rule if present
-		if subRule, ok := policy["subsystem_rule"].(map[string]interface{}); ok {
-			if subName, ok := subRule["name"].(string); ok && subName != "" {
-				ruleType, _ := subRule["rule_type_id"].(string)
-				policyRule.SubsystemRule = &TCOMatchRule{
-					Name:     subName,
-					RuleType: ruleType,
-				}
-			}
-		}
-
-		config.Policies = append(config.Policies, policyRule)
+	policyRule := TCOPolicyRule{
+		Tier:     tier,
+		Priority: priority,
 	}
 
-	// Determine default tier based on analysis
+	policyRule.ApplicationRule = extractMatchRule(policy, "application_rule")
+	policyRule.SubsystemRule = extractMatchRule(policy, "subsystem_rule")
+
+	config.Policies = append(config.Policies, policyRule)
+}
+
+// checkArchiveRetention checks if archive retention is configured
+func checkArchiveRetention(config *TCOConfig, policy map[string]interface{}) {
+	if archiveRetention, ok := policy["archive_retention"].(map[string]interface{}); ok {
+		if id, ok := archiveRetention["id"].(string); ok && id != "" {
+			config.HasArchive = true
+		}
+	}
+}
+
+// determineTier determines the tier based on priority
+func determineTier(config *TCOConfig, priority string) string {
+	switch priority {
+	case "type_high", "type_medium":
+		config.HasFrequentSearch = true
+		return "frequent_search"
+	case "type_low", "type_unspecified", "":
+		return "archive"
+	default:
+		return "archive"
+	}
+}
+
+// extractMatchRule extracts a match rule (application or subsystem) from a policy
+func extractMatchRule(policy map[string]interface{}, ruleKey string) *TCOMatchRule {
+	rule, ok := policy[ruleKey].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	name, ok := rule["name"].(string)
+	if !ok || name == "" {
+		return nil
+	}
+
+	ruleType, _ := rule["rule_type_id"].(string)
+	return &TCOMatchRule{
+		Name:     name,
+		RuleType: ruleType,
+	}
+}
+
+// determineDefaultTier sets the default tier based on analysis
+func determineDefaultTier(config *TCOConfig) {
 	// Prefer frequent_search (faster queries) unless logs are only in archive
 	if config.HasFrequentSearch {
 		config.DefaultTier = "frequent_search"
@@ -178,7 +210,10 @@ func parseTCOPolicies(result map[string]interface{}, logger *zap.Logger) *TCOCon
 		// Only archive tier has logs
 		config.DefaultTier = "archive"
 	}
+}
 
+// logTCOConfig logs the TCO configuration
+func logTCOConfig(config *TCOConfig, logger *zap.Logger) {
 	if logger != nil {
 		logger.Debug("TCO configuration analyzed",
 			zap.Int("policy_count", config.PolicyCount),
@@ -187,8 +222,6 @@ func parseTCOPolicies(result map[string]interface{}, logger *zap.Logger) *TCOCon
 			zap.String("default_tier", config.DefaultTier),
 			zap.Int("policy_rules", len(config.Policies)))
 	}
-
-	return config
 }
 
 // GetTCOSummary returns a human-readable summary of TCO configuration
