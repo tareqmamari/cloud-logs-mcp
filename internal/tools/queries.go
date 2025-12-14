@@ -269,12 +269,8 @@ func (t *QueryTool) InputSchema() interface{} {
 	}
 }
 
-// Execute executes the tool
-func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	// Get session context for filters and tracking
-	session := GetSession()
-
-	// Validate that all provided fields are recognized
+// validateQueryFields checks for unknown fields in the arguments
+func validateQueryFields(arguments map[string]interface{}) error {
 	var unknownFields []string
 	for field := range arguments {
 		if !validQueryFields[field] {
@@ -282,8 +278,127 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		}
 	}
 	if len(unknownFields) > 0 {
-		return NewToolResultError(fmt.Sprintf("Unknown field(s): %s. Valid fields are: query, tier, syntax, start_date, end_date, limit, default_source, strict_fields_validation, now_date, applicationName (or aliases: namespace, app, application, service), subsystemName (or aliases: component, resource, module)",
-			strings.Join(unknownFields, ", "))), nil
+		return fmt.Errorf("unknown field(s): %s (valid fields: query, tier, syntax, start_date, end_date, limit, default_source, strict_fields_validation, now_date, applicationName, subsystemName)",
+			strings.Join(unknownFields, ", "))
+	}
+	return nil
+}
+
+// applyQueryFilters adds application/subsystem filters to the query
+func applyQueryFilters(query string, arguments map[string]interface{}) string {
+	var filters []string
+
+	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); found {
+		filters = append(filters, `$l.applicationname == '`+escapeDataPrimeString(appName)+`'`)
+	}
+
+	if subsysName, found := resolveAliasedParam(arguments, "subsystemName", subsystemAliases); found {
+		filters = append(filters, `$l.subsystemname == '`+escapeDataPrimeString(subsysName)+`'`)
+	}
+
+	if len(filters) == 0 {
+		return query
+	}
+
+	filterExpr := strings.Join(filters, " && ")
+	if strings.Contains(strings.ToLower(query), "| filter") {
+		return query + " && " + filterExpr
+	}
+	return query + " | filter " + filterExpr
+}
+
+// buildQueryMetadata builds the metadata object for the query API
+func buildQueryMetadata(arguments map[string]interface{}) (map[string]interface{}, string, string, error) {
+	metadata := make(map[string]interface{})
+
+	// Tier with default and normalization
+	tier, _ := GetStringParam(arguments, "tier", false)
+	if tier == "" {
+		tier = "archive"
+	} else {
+		tier = normalizeTier(tier)
+	}
+	metadata["tier"] = tier
+
+	// Syntax with default and validation
+	syntax, _ := GetStringParam(arguments, "syntax", false)
+	if syntax == "" {
+		syntax = "dataprime"
+	}
+	validSyntax := map[string]bool{
+		"unspecified": true, "lucene": true, "dataprime": true,
+		"lucene_utf8_base64": true, "dataprime_utf8_base64": true,
+	}
+	if !validSyntax[syntax] {
+		return nil, "", "", fmt.Errorf("invalid syntax '%s' (valid: unspecified, lucene, dataprime, lucene_utf8_base64, dataprime_utf8_base64)", syntax)
+	}
+	metadata["syntax"] = syntax
+
+	// Required date range
+	startDate, err := GetStringParam(arguments, "start_date", true)
+	if err != nil {
+		return nil, "", "", err
+	}
+	metadata["start_date"] = startDate
+
+	endDate, err := GetStringParam(arguments, "end_date", true)
+	if err != nil {
+		return nil, "", "", err
+	}
+	metadata["end_date"] = endDate
+
+	// Limit with validation
+	limit, _ := GetIntParam(arguments, "limit", false)
+	if limit > 0 {
+		maxLimit := 50000
+		if tier == "frequent_search" {
+			maxLimit = 12000
+		}
+		if limit > maxLimit {
+			return nil, "", "", fmt.Errorf("limit %d exceeds maximum for tier '%s' (max: %d)", limit, tier, maxLimit)
+		}
+		metadata["limit"] = limit
+	} else {
+		metadata["limit"] = 200
+	}
+
+	// Optional fields
+	if defaultSource, _ := GetStringParam(arguments, "default_source", false); defaultSource != "" {
+		metadata["default_source"] = defaultSource
+	}
+	if strictValidation, err := GetBoolParam(arguments, "strict_fields_validation", false); err == nil && strictValidation {
+		metadata["strict_fields_validation"] = strictValidation
+	}
+	if nowDate, _ := GetStringParam(arguments, "now_date", false); nowDate != "" {
+		metadata["now_date"] = nowDate
+	}
+
+	return metadata, tier, syntax, nil
+}
+
+// addQueryMetadataToResult adds query execution metadata to the result
+func addQueryMetadataToResult(result map[string]interface{}, metadata map[string]interface{}, tier, syntax, query string, corrections []string) {
+	queryMeta := map[string]interface{}{
+		"tier":       tier,
+		"syntax":     syntax,
+		"start_date": metadata["start_date"],
+		"end_date":   metadata["end_date"],
+		"limit":      metadata["limit"],
+	}
+	if len(corrections) > 0 {
+		queryMeta["auto_corrections"] = corrections
+		queryMeta["corrected_query"] = query
+	}
+	result["_query_metadata"] = queryMeta
+}
+
+// Execute executes the tool
+func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	session := GetSession()
+
+	// Validate fields
+	if err := validateQueryFields(arguments); err != nil {
+		return NewToolResultError(err.Error()), nil
 	}
 
 	query, err := GetStringParam(arguments, "query", true)
@@ -293,131 +408,36 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 
 	// Apply session filters if not explicitly specified
 	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); !found {
-		// Check session for application filter
 		if sessionApp := session.GetFilter("application"); sessionApp != "" {
 			arguments["applicationName"] = sessionApp
 		}
 	} else {
-		// Update session with the application being queried
 		session.SetFilter("last_queried_app", appName)
 	}
 
-	// Validate query length per API spec
 	if len(query) > 4096 {
 		return NewToolResultError(fmt.Sprintf("Query too long: %d characters (max 4096)", len(query))), nil
 	}
 
-	// Resolve aliased filter parameters and append to query
-	// This allows users to use namespace/component instead of applicationName/subsystemName
-	var filters []string
+	// Apply filters to query
+	query = applyQueryFilters(query, arguments)
 
-	if appName, found := resolveAliasedParam(arguments, "applicationName", applicationAliases); found {
-		// Escape the value to prevent query injection
-		filters = append(filters, `$l.applicationname == '`+escapeDataPrimeString(appName)+`'`)
-	}
-
-	if subsysName, found := resolveAliasedParam(arguments, "subsystemName", subsystemAliases); found {
-		// Escape the value to prevent query injection
-		filters = append(filters, `$l.subsystemname == '`+escapeDataPrimeString(subsysName)+`'`)
-	}
-
-	// Append filters to query if any were specified
-	if len(filters) > 0 {
-		filterExpr := strings.Join(filters, " && ")
-		// Check if query already has a filter clause
-		if strings.Contains(strings.ToLower(query), "| filter") {
-			// Append to existing filter
-			query = query + " && " + filterExpr
-		} else {
-			// Add new filter clause
-			query = query + " | filter " + filterExpr
-		}
-	}
-
-	// Build metadata object with all optional parameters
-	metadata := make(map[string]interface{})
-
-	// Apply defaults for tier and syntax with intelligent alias mapping
-	tier, _ := GetStringParam(arguments, "tier", false)
-	if tier == "" {
-		tier = "archive" // Default to archive tier
-	} else {
-		// Normalize user-friendly aliases (PI, archive, COS, etc.)
-		tier = normalizeTier(tier)
-	}
-	metadata["tier"] = tier
-
-	syntax, _ := GetStringParam(arguments, "syntax", false)
-	if syntax == "" {
-		syntax = "dataprime"
-	}
-	// Validate syntax value
-	validSyntax := map[string]bool{
-		"unspecified": true, "lucene": true, "dataprime": true,
-		"lucene_utf8_base64": true, "dataprime_utf8_base64": true,
-	}
-	if !validSyntax[syntax] {
-		return NewToolResultError(fmt.Sprintf("Invalid syntax '%s'. Valid values: unspecified, lucene, dataprime, lucene_utf8_base64, dataprime_utf8_base64", syntax)), nil
-	}
-	metadata["syntax"] = syntax
-
-	// Add date range (required for efficient queries)
-	startDate, err := GetStringParam(arguments, "start_date", true)
+	// Build metadata
+	metadata, tier, syntax, err := buildQueryMetadata(arguments)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	metadata["start_date"] = startDate
 
-	endDate, err := GetStringParam(arguments, "end_date", true)
-	if err != nil {
-		return NewToolResultError(err.Error()), nil
-	}
-	metadata["end_date"] = endDate
-
-	// Add limit with proper default and validation
-	// Default to 500 to prevent hitting MCP's 1MB response limit
-	// Users can increase up to API max if needed
-	limit, _ := GetIntParam(arguments, "limit", false)
-	if limit > 0 {
-		// Validate limit based on tier
-		maxLimit := 50000
-		if tier == "frequent_search" {
-			maxLimit = 12000
-		}
-		if limit > maxLimit {
-			return NewToolResultError(fmt.Sprintf("Limit %d exceeds maximum for tier '%s' (max: %d)", limit, tier, maxLimit)), nil
-		}
-		metadata["limit"] = limit
-	} else {
-		metadata["limit"] = 200 // Conservative default to prevent 1MB limit issues
-	}
-
-	// Add optional API fields if provided
-	if defaultSource, _ := GetStringParam(arguments, "default_source", false); defaultSource != "" {
-		metadata["default_source"] = defaultSource
-	}
-
-	if strictValidation, err := GetBoolParam(arguments, "strict_fields_validation", false); err == nil && strictValidation {
-		metadata["strict_fields_validation"] = strictValidation
-	}
-
-	if nowDate, _ := GetStringParam(arguments, "now_date", false); nowDate != "" {
-		metadata["now_date"] = nowDate
-	}
-
-	// Auto-correct and validate DataPrime query before sending to API
+	// Auto-correct and validate DataPrime query
 	var queryCorrections []string
 	if syntax == "dataprime" || syntax == "dataprime_utf8_base64" {
-		// Auto-correct common issues (e.g., numeric severity → named severity)
 		query, queryCorrections = AutoCorrectDataPrimeQuery(query)
-
-		// Validate after auto-correction
 		if validationErr := ValidateDataPrimeQuery(query); validationErr != nil {
 			return NewToolResultError(validationErr.Error()), nil
 		}
 	}
 
-	// Build request body with query at top level and metadata nested
+	// Execute request
 	body := map[string]interface{}{
 		"query":    query,
 		"metadata": metadata,
@@ -427,57 +447,39 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		Method:    "POST",
 		Path:      "/v1/query",
 		Body:      body,
-		AcceptSSE: true,                // Sync query returns Server-Sent Events stream
-		Timeout:   DefaultQueryTimeout, // Longer timeout for SSE streaming (60s)
+		AcceptSSE: true,
+		Timeout:   DefaultQueryTimeout,
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
-		// Record failed tool usage
 		session.RecordToolUse(t.Name(), false, map[string]interface{}{
 			"query": query,
 			"error": err.Error(),
 		})
-		// Enhance error with query-specific suggestions
-		errorMsg := FormatQueryError(query, err.Error())
-		return NewToolResultError(errorMsg), nil
+		return NewToolResultError(FormatQueryError(query, err.Error())), nil
 	}
 
-	// Record successful tool usage with query info
+	// Record success and update session
 	session.RecordToolUse(t.Name(), true, map[string]interface{}{
 		"query":      query,
 		"start_date": metadata["start_date"],
 		"end_date":   metadata["end_date"],
 		"tier":       tier,
 	})
-
-	// Update session with query context for future reference
 	session.SetLastQuery(query)
 
-	// Learn user preferences from this query
-	if limit > 0 {
+	if limit, _ := GetIntParam(arguments, "limit", false); limit > 0 {
 		session.GetPreferences().PreferredLimit = limit
 	}
 
-	// Add query metadata to result for transparency
+	// Add metadata to result
 	if result == nil {
 		result = make(map[string]interface{})
 	}
-	queryMeta := map[string]interface{}{
-		"tier":       tier,
-		"syntax":     syntax,
-		"start_date": metadata["start_date"],
-		"end_date":   metadata["end_date"],
-		"limit":      metadata["limit"],
-	}
-	// Include auto-corrections made to the query (helps LLM learn)
-	if len(queryCorrections) > 0 {
-		queryMeta["auto_corrections"] = queryCorrections
-		queryMeta["corrected_query"] = query
-	}
-	result["_query_metadata"] = queryMeta
+	addQueryMetadataToResult(result, metadata, tier, syntax, query, queryCorrections)
 
-	// Check if summary_only mode is requested (token optimization)
+	// Return response
 	summaryOnly, _ := GetBoolParam(arguments, "summary_only", false)
 	if summaryOnly {
 		return t.FormatCompactSummary(result, "query_logs")

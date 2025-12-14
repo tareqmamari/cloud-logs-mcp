@@ -301,6 +301,49 @@ func TestAutoCorrectDataPrimeQuery(t *testing.T) {
 			expectedQuery:       "source logs | filter $m.severity >= ERROR",
 			expectedCorrections: 0,
 		},
+		// Mixed-type field string method corrections
+		{
+			name:                "$d.message.contains needs type cast",
+			query:               "source logs | filter $d.message.contains('error')",
+			expectedQuery:       "source logs | filter $d.message:string.contains('error')",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "$d.msg.startsWith needs type cast",
+			query:               "source logs | filter $d.msg.startsWith('ERROR')",
+			expectedQuery:       "source logs | filter $d.msg:string.startsWith('ERROR')",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "$d.log.matches needs type cast",
+			query:               "source logs | filter $d.log.matches(/timeout/)",
+			expectedQuery:       "source logs | filter $d.log:string.matches(/timeout/)",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "$d.error.contains needs type cast",
+			query:               "source logs | filter $d.error.contains('connection refused')",
+			expectedQuery:       "source logs | filter $d.error:string.contains('connection refused')",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "multiple mixed-type field corrections",
+			query:               "source logs | filter $d.message.contains('error') && $d.details.contains('timeout')",
+			expectedQuery:       "source logs | filter $d.message:string.contains('error') && $d.details:string.contains('timeout')",
+			expectedCorrections: 2,
+		},
+		{
+			name:                "already has type cast - no change",
+			query:               "source logs | filter $d.message:string.contains('error')",
+			expectedQuery:       "source logs | filter $d.message:string.contains('error')",
+			expectedCorrections: 0,
+		},
+		{
+			name:                "non-mixed-type field unchanged",
+			query:               "source logs | filter $d.custom_field.contains('value')",
+			expectedQuery:       "source logs | filter $d.custom_field.contains('value')",
+			expectedCorrections: 0,
+		},
 		{
 			name:                "numeric severity 5 to CRITICAL",
 			query:               "source logs | filter $m.severity >= 5",
