@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -304,3 +305,4 @@ func (m *mockTool) Execute(_ context.Context, _ map[string]interface{}) (*mcp.Ca
 	}, nil
 }
 func (m *mockTool) Annotations() *mcp.ToolAnnotations { return nil }
+func (m *mockTool) DefaultTimeout() time.Duration     { return 0 }

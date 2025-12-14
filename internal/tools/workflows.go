@@ -33,6 +33,12 @@ func (t *InvestigateIncidentTool) Annotations() *mcp.ToolAnnotations {
 	return WorkflowAnnotations("Investigate Incident")
 }
 
+// DefaultTimeout returns the timeout for incident investigation.
+// Workflow tools use a longer timeout due to multiple API calls.
+func (t *InvestigateIncidentTool) DefaultTimeout() time.Duration {
+	return DefaultWorkflowTimeout
+}
+
 // Description returns the tool description
 func (t *InvestigateIncidentTool) Description() string {
 	return `Comprehensive incident investigation workflow that analyzes logs, checks alerts, and provides root cause suggestions.
@@ -490,6 +496,12 @@ func (t *HealthCheckTool) Name() string { return "health_check" }
 // Annotations returns tool hints for LLMs
 func (t *HealthCheckTool) Annotations() *mcp.ToolAnnotations {
 	return WorkflowAnnotations("Health Check")
+}
+
+// DefaultTimeout returns the timeout for health check operations.
+// Health check uses a moderate timeout for multiple API calls.
+func (t *HealthCheckTool) DefaultTimeout() time.Duration {
+	return DefaultHealthCheckTimeout
 }
 
 // Description returns the tool description
