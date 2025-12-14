@@ -113,40 +113,21 @@ func (t *QueryTool) Annotations() *mcp.ToolAnnotations {
 
 // Description returns the tool description
 func (t *QueryTool) Description() string {
-	return `Execute a synchronous streaming query against IBM Cloud Logs (also known as ICL or Cloud Logs). This is the DEFAULT and PREFERRED method for querying logs.
+	return `Execute a synchronous query against IBM Cloud Logs. This is the DEFAULT method for querying logs.
 
-**Related tools:** submit_background_query (for large/slow queries), build_query (construct queries without knowing syntax), list_alerts (check triggered alerts)
+Returns results via SSE streaming - wait for completion before processing.
 
-**DataPrime Query Syntax - Field Prefixes:**
-- $l. (labels): applicationname, subsystemname, namespace, pod, container, hostname, environment, region, cluster
-- $m. (metadata): severity (1-6: debug, verbose, info, warning, error, critical), timestamp, priority
-- $d. (data): JSON fields from log content (e.g., $d.status_code, $d.user_id, $d.message)
+**Quick syntax:** source logs | filter <condition> | limit N
+- $l.applicationname, $l.subsystemname (labels)
+- $m.severity: DEBUG/INFO/WARNING/ERROR/CRITICAL (metadata)
+- $d.field (data fields from log payload)
 
-**Example queries:**
-- Filter by app: source logs | filter $l.applicationname == 'my-app'
-- Filter by severity: source logs | filter $m.severity >= 5
-- Search text: source logs | filter $d.message.contains('error')
-- Combined: source logs | filter $l.applicationname == 'api' && $m.severity >= 4
+**Related tools:**
+- get_dataprime_reference: Full syntax documentation
+- build_query: Construct queries without knowing syntax
+- submit_background_query: For large/slow queries that may timeout
 
-Use this tool for:
-- Interactive log searches and analysis
-- Debugging and troubleshooting
-- Real-time log inspection
-
-**Pagination for large results:**
-When results exceed limits, the response includes pagination info with the last timestamp. To fetch more:
-1. Copy the 'last_timestamp' from the pagination info
-2. Use it as 'start_date' in your next query (keep the same 'end_date')
-3. Repeat until no more results
-
-Example pagination flow:
-- First call: start_date='2024-01-01T00:00:00Z', end_date='2024-01-02T00:00:00Z'
-- Response shows last_timestamp='2024-01-01T12:30:00Z' with more available
-- Next call: start_date='2024-01-01T12:30:00Z', end_date='2024-01-02T00:00:00Z'
-
-Only use background queries (submit_background_query) when explicitly requested or for very large historical queries that may timeout.
-
-Note: A 'keypath does not exist' error may indicate either an invalid field name OR that no data with that field exists in the specified time range - try expanding the time range or verifying the field name exists in your logs.`
+**Pagination:** Response includes 'last_timestamp' when more results exist. Use it as next 'start_date'.`
 }
 
 // validQueryFields defines all valid fields for the query_logs tool

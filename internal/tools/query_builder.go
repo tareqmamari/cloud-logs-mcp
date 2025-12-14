@@ -615,3 +615,201 @@ func escapeJSON(s string) string {
 	s = strings.ReplaceAll(s, "\t", "\\t")
 	return s
 }
+
+// DataPrimeReferenceTool provides comprehensive DataPrime query language documentation.
+type DataPrimeReferenceTool struct {
+	*BaseTool
+}
+
+// NewDataPrimeReferenceTool creates a new DataPrimeReferenceTool instance.
+func NewDataPrimeReferenceTool(client *client.Client, logger *zap.Logger) *DataPrimeReferenceTool {
+	return &DataPrimeReferenceTool{
+		BaseTool: NewBaseTool(client, logger),
+	}
+}
+
+// Name returns the tool name for MCP registration.
+func (t *DataPrimeReferenceTool) Name() string {
+	return "get_dataprime_reference"
+}
+
+// Annotations returns tool hints for LLMs
+func (t *DataPrimeReferenceTool) Annotations() *mcp.ToolAnnotations {
+	return ReadOnlyAnnotations("DataPrime Reference")
+}
+
+// Description returns a human-readable description of the tool.
+func (t *DataPrimeReferenceTool) Description() string {
+	return `Get DataPrime query language reference documentation.
+
+Returns syntax, commands, functions, operators, and best practices for writing DataPrime queries.
+
+**Use this when you need:**
+- Field prefix reference ($l., $m., $d.)
+- Command syntax (filter, groupby, aggregate, etc.)
+- Function documentation (string, time, aggregation)
+- Operator reference (==, !=, &&, ||)
+- Common mistake corrections`
+}
+
+// InputSchema returns the input schema for the tool.
+func (t *DataPrimeReferenceTool) InputSchema() interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"section": map[string]interface{}{
+				"type":        "string",
+				"description": "Optional: specific section to retrieve (quick, commands, functions, operators, best_practices). Default: quick reference.",
+				"enum":        []string{"quick", "commands", "functions", "operators", "best_practices", "full"},
+			},
+		},
+	}
+}
+
+// Execute returns the DataPrime reference documentation.
+func (t *DataPrimeReferenceTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	section, _ := GetStringParam(args, "section", false)
+	if section == "" {
+		section = "quick"
+	}
+
+	var content string
+	switch section {
+	case "quick":
+		content = GetDataPrimeQuickReference()
+	case "commands":
+		content = getDataPrimeCommandsReference()
+	case "functions":
+		content = getDataPrimeFunctionsReference()
+	case "operators":
+		content = getDataPrimeOperatorsReference()
+	case "best_practices":
+		content = getDataPrimeBestPracticesReference()
+	case "full":
+		content = GetDataPrimeHelp()
+	default:
+		content = GetDataPrimeQuickReference()
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Text: content,
+			},
+		},
+	}, nil
+}
+
+func getDataPrimeCommandsReference() string {
+	var sb strings.Builder
+	sb.WriteString("# DataPrime Commands\n\n")
+
+	sb.WriteString("## Source Commands\n")
+	sb.WriteString("- `source logs` - Query log data\n")
+	sb.WriteString("- `source spans` - Query trace spans\n")
+	sb.WriteString("- `last 1h` - Query last hour\n")
+	sb.WriteString("- `between @'2024-01-01' and @'2024-01-02'` - Time range\n\n")
+
+	sb.WriteString("## Filter & Transform\n")
+	sb.WriteString("- `filter <condition>` - Filter rows (aliases: f, where)\n")
+	sb.WriteString("- `create <field> from <expr>` - Add computed field\n")
+	sb.WriteString("- `extract <field> into <target> using <extractor>` - Parse data\n")
+	sb.WriteString("- `choose <fields>` - Select fields to include\n")
+	sb.WriteString("- `remove <fields>` - Remove fields\n\n")
+
+	sb.WriteString("## Aggregation\n")
+	sb.WriteString("- `groupby <field> aggregate <func>` - Group and aggregate\n")
+	sb.WriteString("- `aggregate <func>` - Aggregate all rows\n")
+	sb.WriteString("- `countby <field>` - Count by field\n")
+	sb.WriteString("- `distinct <field>` - Unique values\n\n")
+
+	sb.WriteString("## Ordering & Limits\n")
+	sb.WriteString("- `orderby <field> [asc|desc]` - Sort results\n")
+	sb.WriteString("- `limit <n>` - Limit results\n")
+	sb.WriteString("- `top <n> <field> by <order>` - Top N values\n")
+
+	return sb.String()
+}
+
+func getDataPrimeFunctionsReference() string {
+	var sb strings.Builder
+	sb.WriteString("# DataPrime Functions\n\n")
+
+	sb.WriteString("## Aggregation\n")
+	sb.WriteString("- `count()` - Count rows\n")
+	sb.WriteString("- `sum(field)`, `avg(field)`, `min(field)`, `max(field)`\n")
+	sb.WriteString("- `distinct_count(field)` - Count unique values\n")
+	sb.WriteString("- `percentile(field, p)` - Percentile value\n\n")
+
+	sb.WriteString("## String (use method or function notation)\n")
+	sb.WriteString("- `field.contains('text')` or `contains(field, 'text')`\n")
+	sb.WriteString("- `field.startsWith('prefix')`, `field.endsWith('suffix')`\n")
+	sb.WriteString("- `field.matches(/regex/)` - Regex matching\n")
+	sb.WriteString("- `field.toLowerCase()`, `field.toUpperCase()`\n")
+	sb.WriteString("- `concat(s1, s2, ...)`, `substr(s, start, len)`\n\n")
+
+	sb.WriteString("## Time\n")
+	sb.WriteString("- `now()` - Current timestamp\n")
+	sb.WriteString("- `parseTimestamp(str, format)`, `formatTimestamp(ts, format)`\n")
+	sb.WriteString("- `diffTime(ts1, ts2)` - Time difference\n\n")
+
+	sb.WriteString("## Conditional\n")
+	sb.WriteString("- `if(condition, then, else)`\n")
+	sb.WriteString("- `coalesce(val1, val2, ...)` - First non-null\n")
+	sb.WriteString("- `case { cond1 -> val1, cond2 -> val2 }`\n")
+
+	return sb.String()
+}
+
+func getDataPrimeOperatorsReference() string {
+	var sb strings.Builder
+	sb.WriteString("# DataPrime Operators\n\n")
+
+	sb.WriteString("## Comparison\n")
+	sb.WriteString("- `==` Equal, `!=` Not equal\n")
+	sb.WriteString("- `>`, `<`, `>=`, `<=` Numeric comparison\n")
+	sb.WriteString("- `~` Contains (string), `!~` Does not contain\n\n")
+
+	sb.WriteString("## Logical (NOT 'AND'/'OR' keywords!)\n")
+	sb.WriteString("- `&&` Logical AND\n")
+	sb.WriteString("- `||` Logical OR\n")
+	sb.WriteString("- `!` Logical NOT\n\n")
+
+	sb.WriteString("## Important Notes\n")
+	sb.WriteString("- Use `==` not `=` for equality\n")
+	sb.WriteString("- Use `&&` not `AND`\n")
+	sb.WriteString("- Use `||` not `OR`\n")
+	sb.WriteString("- Use single quotes: `'value'` not `\"value\"`\n")
+	sb.WriteString("- `~~` is NOT supported - use `matches(/regex/)`\n")
+
+	return sb.String()
+}
+
+func getDataPrimeBestPracticesReference() string {
+	var sb strings.Builder
+	sb.WriteString("# DataPrime Best Practices\n\n")
+
+	sb.WriteString("## Performance\n")
+	sb.WriteString("- Always specify time range to limit data scanned\n")
+	sb.WriteString("- Use exact matches (==) over contains() when possible\n")
+	sb.WriteString("- Filter early in query to reduce data before expensive ops\n")
+	sb.WriteString("- Avoid groupby on high-cardinality fields without limits\n\n")
+
+	sb.WriteString("## Common Patterns\n")
+	sb.WriteString("- Total count: `groupby true aggregate count()`\n")
+	sb.WriteString("- Case-insensitive: `field.toLowerCase().contains('text')`\n")
+	sb.WriteString("- Free-text search: `lucene 'error AND timeout'`\n\n")
+
+	sb.WriteString("## Field Access\n")
+	sb.WriteString("- `$d.` prefix optional for data fields\n")
+	sb.WriteString("- Labels: `$l.applicationname`, `$l.subsystemname`\n")
+	sb.WriteString("- Metadata: `$m.severity`, `$m.timestamp`\n\n")
+
+	sb.WriteString("## Common Mistakes\n")
+	sb.WriteString("- Using AND/OR instead of &&/||\n")
+	sb.WriteString("- Using = instead of ==\n")
+	sb.WriteString("- Using double quotes instead of single\n")
+	sb.WriteString("- Using ~~ (not supported) instead of matches()\n")
+
+	return sb.String()
+}
