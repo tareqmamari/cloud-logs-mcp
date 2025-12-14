@@ -41,9 +41,74 @@ type RegisteredResource struct {
 // GetResources returns all registered resources with their handlers
 func (r *Registry) GetResources() []RegisteredResource {
 	return []RegisteredResource{
+		r.aboutResource(),
 		r.configResource(),
 		r.metricsResource(),
 		r.healthResource(),
+	}
+}
+
+// aboutResource returns the about://service resource with service aliases and description
+func (r *Registry) aboutResource() RegisteredResource {
+	return RegisteredResource{
+		Resource: &mcp.Resource{
+			URI:         "about://service",
+			Name:        "about://service",
+			Title:       "About IBM Cloud Logs",
+			Description: "Service information, aliases, and capabilities",
+			MIMEType:    "application/json",
+		},
+		Handler: func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			aboutInfo := map[string]interface{}{
+				"service": map[string]interface{}{
+					"name":        "IBM Cloud Logs",
+					"description": "Fully managed cloud-native log management service for IBM Cloud",
+					"aliases": []string{
+						"IBM Cloud Logs",
+						"ICL",
+						"Cloud Logs",
+						"Logs",
+					},
+					"powered_by": "Coralogix",
+				},
+				"query_language": map[string]interface{}{
+					"name":    "DataPrime",
+					"type":    "Piped syntax query language",
+					"example": "source logs | filter $m.severity >= ERROR | limit 100",
+				},
+				"data_tiers": map[string]interface{}{
+					"archive": map[string]string{
+						"aliases":     "COS, cold storage, archive tier",
+						"description": "Long-term storage with lower cost, slightly higher query latency",
+					},
+					"frequent_search": map[string]string{
+						"aliases":     "Priority Insights, PI, hot tier, real-time",
+						"description": "Fast queries for recent data, limited retention",
+					},
+				},
+				"mcp_server": map[string]interface{}{
+					"version":      r.version,
+					"tool_count":   86,
+					"capabilities": []string{"tools", "prompts", "resources"},
+				},
+			}
+
+			content, err := json.MarshalIndent(aboutInfo, "", "  ")
+			if err != nil {
+				r.logger.Error("Failed to marshal about info", zap.Error(err))
+				return nil, err
+			}
+
+			return &mcp.ReadResourceResult{
+				Contents: []*mcp.ResourceContents{
+					{
+						URI:      "about://service",
+						MIMEType: "application/json",
+						Text:     string(content),
+					},
+				},
+			}, nil
+		},
 	}
 }
 
