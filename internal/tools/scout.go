@@ -212,19 +212,13 @@ func (t *ScoutLogsTool) Execute(ctx context.Context, args map[string]interface{}
 		Method: "POST",
 		Path:   "/v1/query",
 		Body: map[string]interface{}{
-			"query": map[string]interface{}{
-				"logs": map[string]interface{}{
-					"dataprime": map[string]interface{}{
-						"query": query,
-					},
-				},
-			},
+			"query": query,
 			"metadata": map[string]interface{}{
-				"tier":          tier,
-				"syntax":        "dataprime",
-				"startDate":     startDate,
-				"endDate":       endDate,
-				"defaultSource": "logs",
+				"tier":       tier,
+				"syntax":     "dataprime",
+				"start_date": startDate,
+				"end_date":   endDate,
+				"limit":      500, // Aggregation queries need more results
 			},
 		},
 		AcceptSSE: true,
