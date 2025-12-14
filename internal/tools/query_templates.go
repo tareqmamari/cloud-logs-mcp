@@ -54,6 +54,7 @@ func (t *QueryTemplatesTool) Description() string {
 **Best for:** Learning query patterns, quick-starting analysis, discovering best practices.
 
 **Categories available:**
+- discovery: Pattern discovery and root cause analysis (use with scout_logs)
 - error: Error investigation and debugging
 - performance: Latency and performance analysis
 - security: Security auditing and threat detection
@@ -77,7 +78,7 @@ func (t *QueryTemplatesTool) InputSchema() interface{} {
 			"category": map[string]interface{}{
 				"type":        "string",
 				"description": "Filter templates by category",
-				"enum":        []string{"error", "performance", "security", "health", "usage", "audit"},
+				"enum":        []string{"discovery", "error", "performance", "security", "health", "usage", "audit"},
 			},
 			"name": map[string]interface{}{
 				"type":        "string",
@@ -195,6 +196,105 @@ func formatTemplateList(templates []QueryTemplate) (*mcp.CallToolResult, error) 
 // getQueryTemplates returns all available query templates
 func getQueryTemplates() []QueryTemplate {
 	return []QueryTemplate{
+		// Discovery Templates (Root Cause Analysis)
+		// These help find patterns when you don't know what to look for
+		{
+			Name:        "error_hotspots",
+			Category:    "discovery",
+			Description: "Find which services have the most errors - start investigations here",
+			Query:       "source logs | filter $m.severity >= ERROR | groupby $l.applicationname, $l.subsystemname calculate count() as error_count | orderby error_count desc | limit 20",
+			UseCases: []string{
+				"Start incident investigation without prior knowledge",
+				"Identify the source of problems",
+				"Prioritize which service to investigate first",
+			},
+			Tips: []string{
+				"This is often the first query in an investigation",
+				"High error counts indicate the problem area",
+				"Follow up with error_details on top services",
+			},
+		},
+		{
+			Name:        "anomaly_detection",
+			Category:    "discovery",
+			Description: "Find services with unusually high error rates",
+			Query:       "source logs | groupby $l.applicationname calculate count() as total, countif($m.severity >= ERROR) as errors | create error_rate = errors * 100.0 / total | filter error_rate > 1.0 || errors > 10 | orderby error_rate desc | limit 20",
+			UseCases: []string{
+				"Detect services behaving abnormally",
+				"Find issues even in low-traffic services",
+				"Identify degradation before it becomes critical",
+			},
+			Tips: []string{
+				"Error rate > 1% typically indicates problems",
+				"Look at both rate AND absolute count",
+				"Compare with historical baseline",
+			},
+		},
+		{
+			Name:        "top_error_messages",
+			Category:    "discovery",
+			Description: "Group similar errors to find the most common problems",
+			Query:       "source logs | filter $m.severity >= ERROR | groupby $d.message:string calculate count() as occurrences, min($m.timestamp) as first_seen, max($m.timestamp) as last_seen | filter occurrences >= 3 | orderby occurrences desc | limit 30",
+			UseCases: []string{
+				"Find the most impactful errors",
+				"Identify systemic issues vs one-offs",
+				"Prioritize fixes by impact",
+			},
+			Tips: []string{
+				"High occurrence count = high impact",
+				"Check first_seen vs last_seen for duration",
+				"Similar messages indicate same root cause",
+			},
+		},
+		{
+			Name:        "noise_filtered_errors",
+			Category:    "discovery",
+			Description: "Error analysis excluding health checks and known noise",
+			Query:       "source logs | filter $m.severity >= ERROR && !$d.message:string.toLowerCase().contains('health') && !$d.message:string.toLowerCase().contains('ping') && !$d.message:string.toLowerCase().contains('heartbeat') && !$d.message:string.toLowerCase().contains('metrics') | groupby $l.applicationname calculate count() as errors | orderby errors desc | limit 20",
+			UseCases: []string{
+				"Find real errors without health check noise",
+				"Cleaner investigation starting point",
+				"Focus on application errors only",
+			},
+			Tips: []string{
+				"Add more exclusions for your environment",
+				"Good for production systems with monitoring",
+				"Compare with unfiltered to verify exclusions",
+			},
+		},
+		{
+			Name:        "traffic_overview",
+			Category:    "discovery",
+			Description: "See overall traffic patterns by service",
+			Query:       "source logs | groupby $l.applicationname calculate count() as volume, countdistinct($l.subsystemname) as components, countif($m.severity >= ERROR) as errors | orderby volume desc | limit 20",
+			UseCases: []string{
+				"Understand system topology",
+				"Find unexpected traffic patterns",
+				"Identify services to investigate",
+			},
+			Tips: []string{
+				"Unexpected high volume may indicate problems",
+				"Compare with normal patterns",
+				"Use before drilling into specific services",
+			},
+		},
+		{
+			Name:        "recent_changes",
+			Category:    "discovery",
+			Description: "Detect recent deployments or restarts that might explain issues",
+			Query:       "source logs | filter $d.message:string.contains('start') || $d.message:string.contains('deploy') || $d.message:string.contains('version') || $d.message:string.contains('initializ') || $d.message:string.contains('shutdown') | groupby $l.applicationname calculate count() as events, min($m.timestamp) as earliest, max($m.timestamp) as latest | filter events >= 2 | orderby latest desc | limit 20",
+			UseCases: []string{
+				"Correlate issues with recent changes",
+				"Find which services were recently deployed",
+				"Identify crash loops or restarts",
+			},
+			Tips: []string{
+				"Issues often follow deployments",
+				"Multiple events may indicate crash loops",
+				"Compare timing with error onset",
+			},
+		},
+
 		// Error Investigation Templates
 		{
 			Name:        "error_spike",

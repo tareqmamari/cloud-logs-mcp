@@ -377,7 +377,7 @@ func TestGetQueryTemplates(t *testing.T) {
 
 	// Check categories are valid
 	validCategories := map[string]bool{
-		"error": true, "performance": true, "security": true,
+		"discovery": true, "error": true, "performance": true, "security": true,
 		"health": true, "usage": true, "audit": true,
 	}
 	for _, tmpl := range templates {

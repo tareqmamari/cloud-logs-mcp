@@ -105,13 +105,153 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 	return s, nil
 }
 
-// registerTools registers all available MCP tools using the centralized registry.
+// registerTools registers all available MCP tools
 func (s *Server) registerTools() error {
-	allTools := tools.GetAllTools(s.apiClient, s.logger)
-	for _, t := range allTools {
-		s.registerTool(t)
-	}
-	s.logger.Info("Registered all MCP tools", zap.Int("count", len(allTools)))
+	// Alert tools
+	s.registerTool(tools.NewGetAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListAlertsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteAlertTool(s.apiClient, s.logger))
+
+	// Alert Definition tools
+	s.registerTool(tools.NewGetAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListAlertDefinitionsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateAlertDefinitionTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteAlertDefinitionTool(s.apiClient, s.logger))
+
+	// Rule Group tools
+	s.registerTool(tools.NewGetRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListRuleGroupsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateRuleGroupTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteRuleGroupTool(s.apiClient, s.logger))
+
+	// Outgoing Webhook tools
+	s.registerTool(tools.NewGetOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListOutgoingWebhooksTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateOutgoingWebhookTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteOutgoingWebhookTool(s.apiClient, s.logger))
+
+	// Policy tools
+	s.registerTool(tools.NewGetPolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListPoliciesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreatePolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdatePolicyTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeletePolicyTool(s.apiClient, s.logger))
+
+	// Events to Metrics (E2M) tools
+	s.registerTool(tools.NewGetE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceE2MTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteE2MTool(s.apiClient, s.logger))
+
+	// Query tools
+	s.registerTool(tools.NewQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewBuildQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDataPrimeReferenceTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSubmitBackgroundQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetBackgroundQueryStatusTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCancelBackgroundQueryTool(s.apiClient, s.logger))
+
+	// Log Ingestion tools
+	s.registerTool(tools.NewIngestLogsTool(s.apiClient, s.logger))
+
+	// Data Access Rule tools
+	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDataAccessRuleTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDataAccessRuleTool(s.apiClient, s.logger))
+
+	// Enrichment tools
+	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetEnrichmentsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteEnrichmentTool(s.apiClient, s.logger))
+
+	// View tools
+	s.registerTool(tools.NewListViewsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceViewTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteViewTool(s.apiClient, s.logger))
+
+	// View Folder tools
+	s.registerTool(tools.NewListViewFoldersTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewReplaceViewFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteViewFolderTool(s.apiClient, s.logger))
+
+	// Data Usage tools
+	s.registerTool(tools.NewExportDataUsageTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDataUsageMetricsExportStatusTool(s.apiClient, s.logger))
+
+	// Event Stream Target tools
+	s.registerTool(tools.NewGetEventStreamTargetsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateEventStreamTargetTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateEventStreamTargetTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteEventStreamTargetTool(s.apiClient, s.logger))
+
+	// Dashboard tools
+	s.registerTool(tools.NewListDashboardsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDashboardTool(s.apiClient, s.logger))
+
+	// Dashboard Folder and Management tools
+	s.registerTool(tools.NewListDashboardFoldersTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteDashboardFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewMoveDashboardToFolderTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewPinDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUnpinDashboardTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSetDefaultDashboardTool(s.apiClient, s.logger))
+
+	// Stream tools
+	s.registerTool(tools.NewListStreamsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewCreateStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewUpdateStreamTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDeleteStreamTool(s.apiClient, s.logger))
+
+	// AI Helper tools
+	s.registerTool(tools.NewExplainQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSuggestAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetAuditLogTool(s.apiClient, s.logger))
+
+	// Query Intelligence tools
+	s.registerTool(tools.NewQueryTemplatesTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewValidateQueryTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewQueryCostEstimateTool(s.apiClient, s.logger))
+
+	// Pattern Discovery tools (Investigation Mode)
+	s.registerTool(tools.NewScoutLogsTool(s.apiClient, s.logger))
+
+	// Workflow Automation tools
+	s.registerTool(tools.NewInvestigateIncidentTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewHealthCheckTool(s.apiClient, s.logger))
+
+	// Meta tools (discovery and session management)
+	s.registerTool(tools.NewDiscoverToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewSessionContextTool(s.apiClient, s.logger))
+
+	// Dynamic toolset meta-tools (token-efficient discovery pattern)
+	// These enable: search_tools → describe_tools → execute workflow
+	s.registerTool(tools.NewSearchToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewDescribeToolsTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewListToolCategoriesBrief(s.apiClient, s.logger))
+
+	s.logger.Info("Registered all MCP tools")
 	return nil
 }
 
@@ -134,15 +274,6 @@ func (s *Server) registerTool(t tools.Tool) {
 	// Create handler that calls the tool's Execute method with metrics tracking
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
-
-		// Apply tool-specific timeout if defined
-		// This allows different tool categories (queries, workflows, etc.)
-		// to have appropriate timeout values based on their expected execution time
-		if timeout := t.DefaultTimeout(); timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
 
 		// Add client to context for tool execution
 		// This enables per-request client injection for future HTTP transport
