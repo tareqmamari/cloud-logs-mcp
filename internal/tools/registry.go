@@ -139,6 +139,9 @@ func GetAllTools(c *client.Client, logger *zap.Logger) []Tool {
 		NewValidateQueryTool(c, logger),
 		NewQueryCostEstimateTool(c, logger),
 
+		// Pattern Discovery tools (Investigation Mode)
+		NewScoutLogsTool(c, logger),
+
 		// Workflow Automation tools
 		NewInvestigateIncidentTool(c, logger),
 		NewHealthCheckTool(c, logger),
@@ -158,5 +161,5 @@ func GetAllTools(c *client.Client, logger *zap.Logger) []Tool {
 // GetToolCount returns the total number of registered tools.
 // Useful for metrics and logging.
 func GetToolCount() int {
-	return 86 // Update this when adding new tools
+	return 87 // Update this when adding new tools
 }
