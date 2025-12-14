@@ -108,6 +108,12 @@ func (t *ScoutLogsTool) InputSchema() interface{} {
 				"minimum":     5,
 				"maximum":     100,
 			},
+			"tier": map[string]interface{}{
+				"type":        "string",
+				"description": "Log tier to query. archive (default - logs always land here unless TCO policy excludes them), frequent_search (Priority Insights - only if TCO policy routes logs there). Use list_policies to see TCO routing rules.",
+				"enum":        []string{"archive", "frequent_search"},
+				"default":     "archive",
+			},
 		},
 		"examples": []interface{}{
 			map[string]interface{}{
@@ -169,6 +175,15 @@ func (t *ScoutLogsTool) Execute(ctx context.Context, args map[string]interface{}
 		topN = int(val)
 	}
 
+	// Tier with default and normalization
+	// Default to archive since logs always land there unless TCO policy excludes them
+	tier, _ := GetStringParam(args, "tier", false)
+	if tier == "" {
+		tier = "archive"
+	} else {
+		tier = normalizeTier(tier)
+	}
+
 	// Build the discovery query
 	query := t.buildDiscoveryQuery(mode, excludeNoise, customExclusions, application, minCount, topN)
 
@@ -193,7 +208,7 @@ func (t *ScoutLogsTool) Execute(ctx context.Context, args map[string]interface{}
 				},
 			},
 			"metadata": map[string]interface{}{
-				"tier":          "frequent_search",
+				"tier":          tier,
 				"syntax":        "dataprime",
 				"startDate":     startDate,
 				"endDate":       endDate,

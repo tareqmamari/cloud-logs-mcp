@@ -57,6 +57,34 @@ func TestBuildNoiseExclusionFilter(t *testing.T) {
 	}
 }
 
+func TestScoutLogsTool_TierParameter(t *testing.T) {
+	tool := NewScoutLogsTool(nil, nil)
+	schema := tool.InputSchema().(map[string]interface{})
+	props := schema["properties"].(map[string]interface{})
+
+	// Check tier property exists
+	tierProp, ok := props["tier"].(map[string]interface{})
+	if !ok {
+		t.Error("tier property should exist in schema")
+		return
+	}
+
+	// Verify default is archive (logs always land there unless TCO policy excludes)
+	if tierProp["default"] != "archive" {
+		t.Errorf("Expected tier default to be 'archive', got %v", tierProp["default"])
+	}
+
+	// Verify enum values include archive and frequent_search
+	enum, ok := tierProp["enum"].([]string)
+	if !ok {
+		t.Error("tier enum should be []string")
+		return
+	}
+	if len(enum) != 2 || enum[0] != "archive" || enum[1] != "frequent_search" {
+		t.Errorf("Expected tier enum to be [archive, frequent_search], got %v", enum)
+	}
+}
+
 func TestCalculateTimeRange(t *testing.T) {
 	tests := []struct {
 		name           string
