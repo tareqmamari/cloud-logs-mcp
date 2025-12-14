@@ -4,12 +4,12 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -119,6 +119,29 @@ func (c *Client) GetRateLimitInfo() RateLimitInfo {
 	return info
 }
 
+// cryptoRandInt63 returns a non-negative random int64 using crypto/rand
+func cryptoRandInt63() int64 {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0
+	}
+	// Clear the sign bit to ensure non-negative result
+	b[7] &= 0x7F
+	var n int64
+	for i := 0; i < 8; i++ {
+		n |= int64(b[i]) << (8 * i)
+	}
+	return n
+}
+
+// cryptoRandDuration returns a random duration between 0 and maxVal using crypto/rand
+func cryptoRandDuration(maxVal int64) time.Duration {
+	if maxVal <= 0 {
+		return 0
+	}
+	return time.Duration(cryptoRandInt63() % maxVal)
+}
+
 // Request represents an HTTP request
 type Request struct {
 	Method         string
@@ -155,8 +178,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 
 			// Add jitter: random value between 0 and 25% of base wait time
 			// This spreads out retry attempts when multiple clients fail simultaneously
-			// Using math/rand is appropriate for jitter (not security-sensitive)
-			jitter := time.Duration(rand.Int63n(int64(baseWait) / 4)) //nolint:gosec // G404: jitter doesn't need cryptographic randomness
+			jitter := cryptoRandDuration(int64(baseWait) / 4)
 			waitTime := baseWait + jitter
 
 			c.logger.Debug("Retrying request",
