@@ -138,6 +138,13 @@ func loadFromFile(cfg *Config, path string) error {
 }
 
 func loadFromEnv(cfg *Config) {
+	loadStringEnvs(cfg)
+	loadDurationEnvs(cfg)
+	loadIntEnvs(cfg)
+	loadBoolEnvs(cfg)
+}
+
+func loadStringEnvs(cfg *Config) {
 	if v := os.Getenv("LOGS_SERVICE_URL"); v != "" {
 		cfg.ServiceURL = v
 	}
@@ -156,6 +163,18 @@ func loadFromEnv(cfg *Config) {
 	if v := os.Getenv("LOGS_IAM_URL"); v != "" {
 		cfg.IAMURL = v
 	}
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		cfg.LogLevel = v
+	}
+	if v := os.Getenv("LOG_FORMAT"); v != "" {
+		cfg.LogFormat = v
+	}
+	if v := os.Getenv("LOGS_HEALTH_BIND_ADDR"); v != "" {
+		cfg.HealthBindAddr = v
+	}
+}
+
+func loadDurationEnvs(cfg *Config) {
 	if v := os.Getenv("LOGS_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			cfg.Timeout = d
@@ -176,6 +195,14 @@ func loadFromEnv(cfg *Config) {
 			cfg.BulkOperationTimeout = d
 		}
 	}
+	if v := os.Getenv("LOGS_SHUTDOWN_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.ShutdownTimeout = d
+		}
+	}
+}
+
+func loadIntEnvs(cfg *Config) {
 	if v := os.Getenv("LOGS_MAX_RETRIES"); v != "" {
 		var retries int
 		if _, err := fmt.Sscanf(v, "%d", &retries); err == nil {
@@ -194,6 +221,15 @@ func loadFromEnv(cfg *Config) {
 			cfg.RateLimitBurst = burst
 		}
 	}
+	if v := os.Getenv("LOGS_HEALTH_PORT"); v != "" {
+		var port int
+		if _, err := fmt.Sscanf(v, "%d", &port); err == nil {
+			cfg.HealthPort = port
+		}
+	}
+}
+
+func loadBoolEnvs(cfg *Config) {
 	if v := os.Getenv("LOGS_ENABLE_RATE_LIMIT"); v != "" {
 		cfg.EnableRateLimit = v == "true" || v == "1"
 	}
@@ -208,26 +244,6 @@ func loadFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("LOGS_METRICS_ENDPOINT"); v != "" {
 		cfg.MetricsEndpoint = v == "true" || v == "1"
-	}
-	if v := os.Getenv("LOG_LEVEL"); v != "" {
-		cfg.LogLevel = v
-	}
-	if v := os.Getenv("LOG_FORMAT"); v != "" {
-		cfg.LogFormat = v
-	}
-	if v := os.Getenv("LOGS_HEALTH_PORT"); v != "" {
-		var port int
-		if _, err := fmt.Sscanf(v, "%d", &port); err == nil {
-			cfg.HealthPort = port
-		}
-	}
-	if v := os.Getenv("LOGS_HEALTH_BIND_ADDR"); v != "" {
-		cfg.HealthBindAddr = v
-	}
-	if v := os.Getenv("LOGS_SHUTDOWN_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.ShutdownTimeout = d
-		}
 	}
 }
 

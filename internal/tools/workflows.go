@@ -253,131 +253,17 @@ func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, _ s
 // formatInvestigationResults formats the investigation findings
 func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]interface{}, query, application, timeRange, severity string) (*mcp.CallToolResult, error) {
 	var response strings.Builder
-	session := GetSession()
 
 	response.WriteString("# 🔍 Incident Investigation Report\n\n")
+	t.writeParameters(&response, application, timeRange, severity)
 
-	// Investigation parameters
-	response.WriteString("## Parameters\n")
-	if application != "" {
-		response.WriteString(fmt.Sprintf("- **Application:** %s\n", application))
-	} else {
-		response.WriteString("- **Application:** All applications\n")
-	}
-	response.WriteString(fmt.Sprintf("- **Time Range:** Last %s\n", timeRange))
-	response.WriteString(fmt.Sprintf("- **Severity:** %s and above\n\n", severity))
-
-	// Analyze results
 	events, ok := result["events"].([]interface{})
 	if !ok || len(events) == 0 {
-		response.WriteString("## ✅ No Issues Found\n\n")
-		response.WriteString("No error logs matching the criteria were found in the specified time range.\n\n")
-		response.WriteString("### Possible Interpretations\n")
-		response.WriteString("- The system is operating normally\n")
-		response.WriteString("- Logs may not be reaching Cloud Logs\n")
-		response.WriteString("- The application name or filters may be incorrect\n\n")
-		response.WriteString("### Suggested Actions\n")
-		response.WriteString("- Expand the time range and try again\n")
-		response.WriteString("- Verify logging is configured correctly\n")
-		response.WriteString("- Check `list_alerts` for any triggered alerts\n")
+		t.writeNoIssuesFound(&response)
 	} else {
-		// Perform analysis
-		analysis := AnalyzeQueryResults(result)
-
-		response.WriteString("## 📊 Findings Summary\n\n")
-		response.WriteString(fmt.Sprintf("Found **%d error logs** in the specified time range.\n\n", len(events)))
-
-		// Add analysis
-		if analysis != nil {
-			if analysis.Statistics != nil && analysis.Statistics.ErrorRate > 0 {
-				response.WriteString(fmt.Sprintf("- **Error Rate:** %.1f%%\n", analysis.Statistics.ErrorRate))
-			}
-
-			// Top applications
-			if analysis.Statistics != nil && len(analysis.Statistics.TopValues["applications"]) > 0 {
-				response.WriteString("\n### Top Applications with Errors\n")
-				for i, app := range analysis.Statistics.TopValues["applications"] {
-					if i >= 5 {
-						break
-					}
-					response.WriteString(fmt.Sprintf("- %s: %d errors\n", app.Value, app.Count))
-				}
-			}
-
-			// Top subsystems
-			if analysis.Statistics != nil && len(analysis.Statistics.TopValues["subsystems"]) > 0 {
-				response.WriteString("\n### Top Subsystems with Errors\n")
-				for i, sub := range analysis.Statistics.TopValues["subsystems"] {
-					if i >= 5 {
-						break
-					}
-					response.WriteString(fmt.Sprintf("- %s: %d errors\n", sub.Value, sub.Count))
-				}
-			}
-
-			// Anomalies
-			if len(analysis.Anomalies) > 0 {
-				response.WriteString("\n### ⚠️ Anomalies Detected\n")
-				for _, a := range analysis.Anomalies {
-					response.WriteString(fmt.Sprintf("- **%s:** %s\n", a.Type, a.Description))
-				}
-			}
-
-			// Trends
-			if len(analysis.Trends) > 0 {
-				response.WriteString("\n### 📈 Trends\n")
-				for _, trend := range analysis.Trends {
-					response.WriteString(fmt.Sprintf("- %s\n", trend.Description))
-				}
-			}
-		}
-
-		// Sample error messages
-		response.WriteString("\n### Sample Error Messages\n")
-		shown := 0
-		for _, event := range events {
-			if shown >= 5 {
-				break
-			}
-			if eventMap, ok := event.(map[string]interface{}); ok {
-				msg := extractErrorMessage(eventMap)
-				if msg != "" {
-					response.WriteString(fmt.Sprintf("- `%s`\n", truncateString(msg, 100)))
-					shown++
-				}
-			}
-		}
-
-		// Root cause hypotheses
-		response.WriteString("\n## 🎯 Root Cause Hypotheses\n")
-		hypotheses := generateHypotheses(events)
-		for i, h := range hypotheses {
-			response.WriteString(fmt.Sprintf("%d. %s\n", i+1, h))
-			// Add hypothesis as finding to session
-			session.AddFinding(t.Name(), h, "info", "hypothesis")
-		}
-
-		// Record key findings to session
-		session.AddFinding(t.Name(), fmt.Sprintf("Found %d error logs in %s", len(events), timeRange), "info", "count")
-		if analysis != nil && analysis.Statistics != nil && analysis.Statistics.ErrorRate > 0 {
-			sev := "info"
-			if analysis.Statistics.ErrorRate > 10 {
-				sev = "critical"
-			} else if analysis.Statistics.ErrorRate > 5 {
-				sev = "warning"
-			}
-			session.AddFinding(t.Name(), fmt.Sprintf("Error rate: %.1f%%", analysis.Statistics.ErrorRate), sev, "metric")
-		}
-
-		// Recommended actions
-		response.WriteString("\n## 📋 Recommended Actions\n")
-		response.WriteString("1. **Drill down:** Use `query_logs` with specific filters to examine individual errors\n")
-		response.WriteString("2. **Check alerts:** Run `list_alerts` to see if any alerts have triggered\n")
-		response.WriteString("3. **Create monitoring:** Use `suggest_alert` to set up alerting for this pattern\n")
-		response.WriteString("4. **Build dashboard:** Use `create_dashboard` to visualize error trends\n")
+		t.writeFindings(&response, result, events, timeRange)
 	}
 
-	// Query used
 	response.WriteString(fmt.Sprintf("\n---\n### Query Used\n```dataprime\n%s\n```\n", query))
 
 	return &mcp.CallToolResult{
@@ -385,6 +271,135 @@ func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]i
 			&mcp.TextContent{Text: response.String()},
 		},
 	}, nil
+}
+
+func (t *InvestigateIncidentTool) writeParameters(response *strings.Builder, application, timeRange, severity string) {
+	response.WriteString("## Parameters\n")
+	if application != "" {
+		fmt.Fprintf(response, "- **Application:** %s\n", application)
+	} else {
+		response.WriteString("- **Application:** All applications\n")
+	}
+	fmt.Fprintf(response, "- **Time Range:** Last %s\n", timeRange)
+	fmt.Fprintf(response, "- **Severity:** %s and above\n\n", severity)
+}
+
+func (t *InvestigateIncidentTool) writeNoIssuesFound(response *strings.Builder) {
+	response.WriteString("## ✅ No Issues Found\n\n")
+	response.WriteString("No error logs matching the criteria were found in the specified time range.\n\n")
+	response.WriteString("### Possible Interpretations\n")
+	response.WriteString("- The system is operating normally\n")
+	response.WriteString("- Logs may not be reaching Cloud Logs\n")
+	response.WriteString("- The application name or filters may be incorrect\n\n")
+	response.WriteString("### Suggested Actions\n")
+	response.WriteString("- Expand the time range and try again\n")
+	response.WriteString("- Verify logging is configured correctly\n")
+	response.WriteString("- Check `list_alerts` for any triggered alerts\n")
+}
+
+func (t *InvestigateIncidentTool) writeFindings(response *strings.Builder, result map[string]interface{}, events []interface{}, timeRange string) {
+	session := GetSession()
+	analysis := AnalyzeQueryResults(result)
+
+	response.WriteString("## 📊 Findings Summary\n\n")
+	fmt.Fprintf(response, "Found **%d error logs** in the specified time range.\n\n", len(events))
+
+	t.writeAnalysis(response, analysis)
+	t.writeSampleErrors(response, events)
+	t.writeHypotheses(response, events, session)
+	t.recordFindings(session, events, analysis, timeRange)
+	t.writeRecommendedActions(response)
+}
+
+func (t *InvestigateIncidentTool) writeAnalysis(response *strings.Builder, analysis *ResultAnalysis) {
+	if analysis == nil || analysis.Statistics == nil {
+		return
+	}
+
+	if analysis.Statistics.ErrorRate > 0 {
+		fmt.Fprintf(response, "- **Error Rate:** %.1f%%\n", analysis.Statistics.ErrorRate)
+	}
+
+	if len(analysis.Statistics.TopValues["applications"]) > 0 {
+		response.WriteString("\n### Top Applications with Errors\n")
+		for i, app := range analysis.Statistics.TopValues["applications"] {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(response, "- %s: %d errors\n", app.Value, app.Count)
+		}
+	}
+
+	if len(analysis.Statistics.TopValues["subsystems"]) > 0 {
+		response.WriteString("\n### Top Subsystems with Errors\n")
+		for i, sub := range analysis.Statistics.TopValues["subsystems"] {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(response, "- %s: %d errors\n", sub.Value, sub.Count)
+		}
+	}
+
+	if len(analysis.Anomalies) > 0 {
+		response.WriteString("\n### ⚠️ Anomalies Detected\n")
+		for _, a := range analysis.Anomalies {
+			fmt.Fprintf(response, "- **%s:** %s\n", a.Type, a.Description)
+		}
+	}
+
+	if len(analysis.Trends) > 0 {
+		response.WriteString("\n### 📈 Trends\n")
+		for _, trend := range analysis.Trends {
+			fmt.Fprintf(response, "- %s\n", trend.Description)
+		}
+	}
+}
+
+func (t *InvestigateIncidentTool) writeSampleErrors(response *strings.Builder, events []interface{}) {
+	response.WriteString("\n### Sample Error Messages\n")
+	shown := 0
+	for _, event := range events {
+		if shown >= 5 {
+			break
+		}
+		if eventMap, ok := event.(map[string]interface{}); ok {
+			msg := extractErrorMessage(eventMap)
+			if msg != "" {
+				fmt.Fprintf(response, "- `%s`\n", truncateString(msg, 100))
+				shown++
+			}
+		}
+	}
+}
+
+func (t *InvestigateIncidentTool) writeHypotheses(response *strings.Builder, events []interface{}, session *SessionContext) {
+	response.WriteString("\n## 🎯 Root Cause Hypotheses\n")
+	hypotheses := generateHypotheses(events)
+	for i, h := range hypotheses {
+		fmt.Fprintf(response, "%d. %s\n", i+1, h)
+		session.AddFinding(t.Name(), h, "info", "hypothesis")
+	}
+}
+
+func (t *InvestigateIncidentTool) recordFindings(session *SessionContext, events []interface{}, analysis *ResultAnalysis, timeRange string) {
+	session.AddFinding(t.Name(), fmt.Sprintf("Found %d error logs in %s", len(events), timeRange), "info", "count")
+	if analysis != nil && analysis.Statistics != nil && analysis.Statistics.ErrorRate > 0 {
+		sev := "info"
+		if analysis.Statistics.ErrorRate > 10 {
+			sev = "critical"
+		} else if analysis.Statistics.ErrorRate > 5 {
+			sev = "warning"
+		}
+		session.AddFinding(t.Name(), fmt.Sprintf("Error rate: %.1f%%", analysis.Statistics.ErrorRate), sev, "metric")
+	}
+}
+
+func (t *InvestigateIncidentTool) writeRecommendedActions(response *strings.Builder) {
+	response.WriteString("\n## 📋 Recommended Actions\n")
+	response.WriteString("1. **Drill down:** Use `query_logs` with specific filters to examine individual errors\n")
+	response.WriteString("2. **Check alerts:** Run `list_alerts` to see if any alerts have triggered\n")
+	response.WriteString("3. **Create monitoring:** Use `suggest_alert` to set up alerting for this pattern\n")
+	response.WriteString("4. **Build dashboard:** Use `create_dashboard` to visualize error trends\n")
 }
 
 // extractErrorMessage extracts the error message from an event

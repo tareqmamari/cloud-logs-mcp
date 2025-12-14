@@ -217,89 +217,29 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 }
 
 func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error) {
-	// Apply rate limiting
-	if c.rateLimiter != nil {
-		if err := c.rateLimiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("rate limit wait failed: %w", err)
-		}
+	if err := c.applyRateLimit(ctx); err != nil {
+		return nil, err
 	}
 
-	// Apply per-request timeout if specified (e.g., longer timeout for SSE queries)
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+	ctx, cancel := c.applyTimeout(ctx, req)
+	if cancel != nil {
 		defer cancel()
 	}
 
-	// Build URL - use ingress endpoint for log ingestion, API endpoint for everything else
-	baseURL := c.config.ServiceURL
-	if req.UseIngressHost {
-		// Convert API URL to ingress URL
-		// From: https://{instance-id}.api.{region}.logs.cloud.ibm.com
-		// To:   https://{instance-id}.ingress.{region}.logs.cloud.ibm.com
-		baseURL = convertToIngressURL(baseURL)
+	requestURL := c.buildRequestURL(req)
+
+	bodyReader, err := c.prepareBody(req)
+	if err != nil {
+		return nil, err
 	}
 
-	// Build URL with proper encoding
-	requestURL := fmt.Sprintf("%s%s", baseURL, req.Path)
-	if len(req.Query) > 0 {
-		params := url.Values{}
-		for k, v := range req.Query {
-			params.Add(k, v)
-		}
-		requestURL = fmt.Sprintf("%s?%s", requestURL, params.Encode())
-	}
-
-	// Prepare body
-	var bodyReader io.Reader
-	if req.Body != nil {
-		bodyBytes, err := json.Marshal(req.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %w", err)
-		}
-		bodyReader = bytes.NewReader(bodyBytes)
-	}
-
-	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, requestURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	if req.AcceptSSE {
-		httpReq.Header.Set("Accept", "text/event-stream")
-	} else {
-		httpReq.Header.Set("Accept", "application/json")
-	}
-	httpReq.Header.Set("User-Agent", fmt.Sprintf("logs-mcp-server/%s", c.version))
+	c.setHeaders(ctx, httpReq, req)
 
-	// Add MCP Protocol Version header (per MCP 2025-06-18 spec requirement)
-	httpReq.Header.Set("MCP-Protocol-Version", "2025-06-18")
-
-	// Add tracing headers if enabled
-	if c.enableTracing {
-		traceInfo := tracing.FromContext(ctx)
-		if traceInfo.TraceID == "" {
-			// Generate new trace if not present
-			traceInfo = tracing.NewTraceInfo()
-		}
-		for k, v := range traceInfo.Headers() {
-			httpReq.Header.Set(k, v)
-		}
-	}
-
-	// Add idempotency key if provided (overrides trace-generated request ID)
-	if req.RequestID != "" {
-		httpReq.Header.Set("X-Request-ID", req.RequestID)
-		// Some APIs use Idempotency-Key header for POST/PUT operations
-		if req.Method == "POST" || req.Method == "PUT" {
-			httpReq.Header.Set("Idempotency-Key", req.RequestID)
-		}
-	}
-
-	// Add IBM Cloud authentication (bearer token)
 	if err := c.authenticator.Authenticate(httpReq); err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
@@ -308,7 +248,91 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		httpReq.Header.Set(k, v)
 	}
 
-	// Execute request
+	return c.executeRequest(httpReq, req, requestURL)
+}
+
+func (c *Client) applyRateLimit(ctx context.Context) error {
+	if c.rateLimiter != nil {
+		if err := c.rateLimiter.Wait(ctx); err != nil {
+			return fmt.Errorf("rate limit wait failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func (c *Client) applyTimeout(ctx context.Context, req *Request) (context.Context, context.CancelFunc) {
+	if req.Timeout > 0 {
+		return context.WithTimeout(ctx, req.Timeout)
+	}
+	return ctx, nil
+}
+
+func (c *Client) buildRequestURL(req *Request) string {
+	baseURL := c.config.ServiceURL
+	if req.UseIngressHost {
+		baseURL = convertToIngressURL(baseURL)
+	}
+
+	requestURL := fmt.Sprintf("%s%s", baseURL, req.Path)
+	if len(req.Query) > 0 {
+		params := url.Values{}
+		for k, v := range req.Query {
+			params.Add(k, v)
+		}
+		requestURL = fmt.Sprintf("%s?%s", requestURL, params.Encode())
+	}
+	return requestURL
+}
+
+func (c *Client) prepareBody(req *Request) (io.Reader, error) {
+	if req.Body == nil {
+		return nil, nil
+	}
+	bodyBytes, err := json.Marshal(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	return bytes.NewReader(bodyBytes), nil
+}
+
+func (c *Client) setHeaders(ctx context.Context, httpReq *http.Request, req *Request) {
+	httpReq.Header.Set("Content-Type", "application/json")
+	if req.AcceptSSE {
+		httpReq.Header.Set("Accept", "text/event-stream")
+	} else {
+		httpReq.Header.Set("Accept", "application/json")
+	}
+	httpReq.Header.Set("User-Agent", fmt.Sprintf("logs-mcp-server/%s", c.version))
+	httpReq.Header.Set("MCP-Protocol-Version", "2025-06-18")
+
+	c.setTracingHeaders(ctx, httpReq)
+	c.setIdempotencyHeaders(httpReq, req)
+}
+
+func (c *Client) setTracingHeaders(ctx context.Context, httpReq *http.Request) {
+	if !c.enableTracing {
+		return
+	}
+	traceInfo := tracing.FromContext(ctx)
+	if traceInfo.TraceID == "" {
+		traceInfo = tracing.NewTraceInfo()
+	}
+	for k, v := range traceInfo.Headers() {
+		httpReq.Header.Set(k, v)
+	}
+}
+
+func (c *Client) setIdempotencyHeaders(httpReq *http.Request, req *Request) {
+	if req.RequestID == "" {
+		return
+	}
+	httpReq.Header.Set("X-Request-ID", req.RequestID)
+	if req.Method == "POST" || req.Method == "PUT" {
+		httpReq.Header.Set("Idempotency-Key", req.RequestID)
+	}
+}
+
+func (c *Client) executeRequest(httpReq *http.Request, req *Request, requestURL string) (*Response, error) {
 	c.logger.Debug("Executing HTTP request",
 		zap.String("method", req.Method),
 		zap.String("url", requestURL),
@@ -333,7 +357,6 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		}
 	}()
 
-	// Read response body
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
