@@ -232,7 +232,7 @@ func (s *Server) registerTools() error {
 
 	// AI Helper tools
 	s.registerTool(tools.NewExplainQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewSuggestAlertTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewAdvancedSuggestAlertTool(s.apiClient, s.logger)) // SRE-grade alert recommendations
 	s.registerTool(tools.NewGetAuditLogTool(s.apiClient, s.logger))
 
 	// Query Intelligence tools

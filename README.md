@@ -13,10 +13,10 @@ Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants t
 
 ## Overview
 
-This MCP server provides comprehensive access to IBM Cloud Logs through 87 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
+This MCP server provides comprehensive access to IBM Cloud Logs through 88 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (87 tools)
+- Complete IBM Cloud Logs API coverage (88 tools)
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
 - Configurable rate limiting
@@ -123,7 +123,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-87 tools organized by functionality:
+88 tools organized by functionality:
 
 #### Query Operations (5 tools)
 - `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
@@ -131,9 +131,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 #### Log Ingestion (1 tool)
 - `ingest_logs`
 
-#### Alert Management (10 tools)
+#### Alert Management (11 tools)
 - `list_alerts`, `get_alert`, `create_alert`, `update_alert`, `delete_alert`
 - `list_alert_definitions`, `get_alert_definition`, `create_alert_definition`, `update_alert_definition`, `delete_alert_definition`
+- `suggest_alert` - **SRE-grade alert recommendations** (see [Alert Intelligence](#alert-intelligence) below)
 
 #### Dashboard Management (14 tools)
 - `list_dashboards`, `get_dashboard`, `create_dashboard`, `update_dashboard`, `delete_dashboard`
@@ -186,11 +187,85 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ---
 
+## Alert Intelligence
+
+The `suggest_alert` tool provides **SRE-grade alert recommendations** based on industry best practices from Google SRE, the RED/USE methodologies, and academic research on alerting.
+
+### Why Use `suggest_alert`?
+
+| Problem | How `suggest_alert` Helps |
+|---------|---------------------------|
+| **Alert fatigue** | Uses burn rate alerting to reduce noise by 90%+ |
+| **False positives** | Multi-window validation prevents flapping alerts |
+| **Static thresholds** | Suggests dynamic baselines for seasonal metrics |
+| **Missing context** | Auto-generates runbook templates and actions |
+| **Wrong methodology** | Auto-selects RED (services) vs USE (resources) |
+
+### Quick Start
+
+```
+"Suggest an alert for high error rate on my API service with 99.9% SLO"
+"What alerts should I create for my Kafka cluster?"
+"Help me set up monitoring for my PostgreSQL database"
+```
+
+### Key Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `service_type` | Component type (auto-detected if not provided) | `web_service`, `database`, `message_queue` |
+| `slo_target` | SLO target (enables burn rate alerting) | `0.999` (99.9%) |
+| `is_user_facing` | Affects severity classification | `true` → P1 eligible |
+| `use_case` | Natural language description | `"high latency on checkout"` |
+
+### Supported Service Types
+
+**RED Method** (Rate, Errors, Duration) for services:
+- `web_service`, `api_gateway`, `worker`, `microservice`, `serverless`
+
+**USE Method** (Utilization, Saturation, Errors) for resources:
+- `database`, `cache`, `message_queue`, `kubernetes`, `storage`
+
+### Example Output
+
+```json
+{
+  "suggestions": [{
+    "name": "API Error Rate - Fast Burn (Page)",
+    "severity": "P1",
+    "methodology": "RED",
+    "burn_rate_condition": {
+      "slo_target": 0.999,
+      "burn_rate": 14.4,
+      "window_duration": "1h",
+      "consumption_percent": 2.0
+    },
+    "suggested_actions": [
+      "1. Check error logs for patterns",
+      "2. Review recent deployments",
+      "3. Verify dependent service health"
+    ],
+    "runbook_url": "/runbooks/web_service/error-rate"
+  }]
+}
+```
+
+### References
+
+The alerting engine implements recommendations from:
+- [Google SRE Handbook - Alerting](https://sre.google/sre-book/monitoring-distributed-systems/)
+- ["My Philosophy on Alerting"](https://docs.google.com/document/d/199PqyG3UsyXlwieHaqbGiWVa8eMWi8zzAn0YfcApr8Q) by Rob Ewaschuk
+- [SRE Workbook - Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
+
+---
+
 ## Usage Examples
 
 ```
 "Search logs for errors in the last hour"
 "Create an alert when error rate exceeds 100 per minute"
+"Suggest alerts for my web service with 99.9% SLO"
+"What monitoring should I set up for my Redis cache?"
 "List all my dashboards"
 "Ingest a test log message for my-app"
 "Show me all retention policies"
