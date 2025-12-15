@@ -34,17 +34,20 @@ func (t *SessionContextTool) Description() string {
 - Starting/ending structured investigations
 - Recording findings during investigation
 - Viewing session state and learned preferences
+- Checking token budget and cost status
 
 **Use Cases:**
 - "Set filter for application=api-gateway" - all subsequent queries will include this filter
 - "Start investigation for payment-service errors" - begins tracking findings
 - "Add finding: database connection timeout" - records evidence
 - "Show session" - displays current context, filters, and preferences
+- "Show budget" - displays token usage, cost, and compression level
 
 **Session State is Automatically Updated:**
 - Last query is remembered for context
 - Recent tools are tracked
-- User preferences are learned from usage patterns`
+- User preferences are learned from usage patterns
+- Token budget is tracked across all tool calls`
 }
 
 // InputSchema returns the input schema
@@ -57,6 +60,7 @@ func (t *SessionContextTool) InputSchema() interface{} {
 				"description": "Action to perform on session",
 				"enum": []string{
 					"show",          // Show current session state
+					"show_budget",   // Show token budget status
 					"set_filter",    // Set a persistent filter
 					"clear_filters", // Clear all filters
 					"start_investigation",
@@ -122,6 +126,9 @@ func (t *SessionContextTool) Execute(_ context.Context, args map[string]interfac
 	switch action {
 	case "show":
 		return t.showSession(session)
+
+	case "show_budget":
+		return t.showBudget()
 
 	case "set_filter":
 		key, _ := GetStringParam(args, "filter_key", false)
@@ -228,6 +235,68 @@ func (t *SessionContextTool) Execute(_ context.Context, args map[string]interfac
 	default:
 		return NewToolResultError("Unknown action: " + action), nil
 	}
+}
+
+// showBudget returns the current token budget status
+func (t *SessionContextTool) showBudget() (*mcp.CallToolResult, error) {
+	budget := GetBudgetContext()
+	summary := budget.GetSummary()
+
+	// Extract nested maps
+	tokens := summary["tokens"].(map[string]interface{})
+	cost := summary["cost"].(map[string]interface{})
+	execution := summary["execution"].(map[string]interface{})
+
+	// Convert millicents to USD for display
+	usedMillicents := cost["used_millicents"].(int)
+	maxMillicents := cost["max_millicents"].(int)
+
+	result := map[string]interface{}{
+		"budget_status": map[string]interface{}{
+			"tokens": map[string]interface{}{
+				"used":            tokens["used"],
+				"remaining":       tokens["remaining"],
+				"max":             tokens["max"],
+				"usage_percent":   tokens["usage_pct"],
+				"counting_method": tokens["counting_method"],
+				"accuracy":        tokens["accuracy"],
+			},
+			"cost": map[string]interface{}{
+				"used_usd":      float64(usedMillicents) / 100000,
+				"max_usd":       float64(maxMillicents) / 100000,
+				"remaining_pct": cost["remaining_pct"],
+			},
+			"execution":         execution,
+			"compression_level": budget.GetCompressionLevel(),
+		},
+		"recommendations": t.getBudgetRecommendations(budget),
+	}
+
+	return t.formatResult(result)
+}
+
+// getBudgetRecommendations provides actionable recommendations based on budget state
+func (t *SessionContextTool) getBudgetRecommendations(budget *BudgetContext) []string {
+	recommendations := []string{}
+	compression := budget.GetCompressionLevel()
+
+	switch compression {
+	case BudgetCompressionNone:
+		recommendations = append(recommendations, "Budget healthy - full results available")
+	case BudgetCompressionLight:
+		recommendations = append(recommendations, "Budget at 25-50% - consider using summary_only=true for large queries")
+	case BudgetCompressionMedium:
+		recommendations = append(recommendations, "Budget at 50-75% - results will be summarized automatically")
+		recommendations = append(recommendations, "Use specific filters to reduce result size")
+	case BudgetCompressionHeavy:
+		recommendations = append(recommendations, "Budget at 75-90% - only essential data returned")
+		recommendations = append(recommendations, "Consider ending session or focusing on specific issues")
+	case BudgetCompressionMinimal:
+		recommendations = append(recommendations, "Budget nearly exhausted (>90%) - minimal responses only")
+		recommendations = append(recommendations, "Complete current task or start new session")
+	}
+
+	return recommendations
 }
 
 // showSession returns the current session state
