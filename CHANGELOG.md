@@ -6,6 +6,35 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.8.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.7.0...v0.8.0) (2025-12-15)
+
+
+### Features
+
+* **server:** add about://service resource with service aliases ([2e072fc](https://github.com/tareqmamari/cloud-logs-mcp/commit/2e072fc2249877a2d6c2b3bbea1aaeff290e2982))
+* **server:** load TCO policies at startup for tier selection ([a52deac](https://github.com/tareqmamari/cloud-logs-mcp/commit/a52deacc987ff2a37b21c7e4dbd78dbd8a1e2b98))
+* **tools:** add budget-aware context management ([326701c](https://github.com/tareqmamari/cloud-logs-mcp/commit/326701c14a22001cb03e0b611da5bc089e76c267))
+* **tools:** add get_dataprime_reference tool and shorten descriptions ([fb56957](https://github.com/tareqmamari/cloud-logs-mcp/commit/fb56957bfd3d357e5c6a0bd9526aaf1ec04eae5a))
+* **tools:** add intent verification for destructive operations ([62d93a1](https://github.com/tareqmamari/cloud-logs-mcp/commit/62d93a1485e37d86066b67470861743ee4bda30b))
+* **tools:** add mixed-type field auto-correction and response cleanup ([5fb42c9](https://github.com/tareqmamari/cloud-logs-mcp/commit/5fb42c95925556c214faf5fc4effc24f370040bb))
+* **tools:** add scout_logs tool for pattern discovery and root cause analysis ([dcff66f](https://github.com/tareqmamari/cloud-logs-mcp/commit/dcff66fa0717589dd006c9e9713ac027fbdf0f02))
+* **tools:** add SmartInvestigateTool for automated root cause analysis ([fc10d47](https://github.com/tareqmamari/cloud-logs-mcp/commit/fc10d47b0380a15ebbf6312c2db2ce4744033296))
+* **tools:** add SRE-grade suggest_alert with burn rate alerting ([8485d43](https://github.com/tareqmamari/cloud-logs-mcp/commit/8485d4338049bc6e775caf54ee2e09521f3fc601))
+* **tools:** add tool registry factory and per-tool-type timeouts ([8502f96](https://github.com/tareqmamari/cloud-logs-mcp/commit/8502f96ae8eb431804103b1afe4186ba063f2c8e))
+* **tools:** auto-detect TCO policies for intelligent tier selection ([882af50](https://github.com/tareqmamari/cloud-logs-mcp/commit/882af50bff3577c7c508e553bbabc54df507aa70))
+
+
+### Bug Fixes
+
+* **client:** use crypto/rand for retry jitter ([71a59bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/71a59bbfbcdb60bc82a3f475aef0645a0cacf6c2))
+* **docs:** use correct CI workflow filename in badge URL ([562d9cc](https://github.com/tareqmamari/cloud-logs-mcp/commit/562d9ccf7dca1568931d3e90c618cce2ae7eaae1))
+* **tools:** add tier parameter to scout_logs with archive default ([0246b2e](https://github.com/tareqmamari/cloud-logs-mcp/commit/0246b2e8ded725b9e179623d1f45fbdde443c19a))
+* **tools:** correct TCO type_medium tier mapping ([730e3d0](https://github.com/tareqmamari/cloud-logs-mcp/commit/730e3d041208dd96429afc944be8a067b60ba069))
+* **tools:** improve sort-to-sortby auto-correction pattern ([24043c4](https://github.com/tareqmamari/cloud-logs-mcp/commit/24043c45a1ac2dd5f677950a761bf34e91f0e4cf))
+* **tools:** prevent concurrent map access in session summary ([7bf700f](https://github.com/tareqmamari/cloud-logs-mcp/commit/7bf700f0a5e5beeb4b0b67ce7952e3edfae19377))
+* **tools:** use correct query API request format for scout_logs ([2ddf5bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/2ddf5bb716f6671fc0aaa263df94eef54e0760fe))
+* **validator:** auto-correct 'sort' to 'orderby' in DataPrime queries ([aa567e2](https://github.com/tareqmamari/cloud-logs-mcp/commit/aa567e2a318e171d1c34c1bc479c48298718df1f))
+
 ## [0.7.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.6.0...v0.7.0) (2025-12-13)
 
 
