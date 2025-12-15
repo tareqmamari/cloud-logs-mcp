@@ -57,28 +57,9 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
+# Changelog is managed by Release Please - skip GoReleaser changelog generation
 changelog:
-  use: github
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
-      - '^ci:'
-      - typo
-  groups:
-    - title: Features
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-      order: 0
-    - title: 'Bug Fixes'
-      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-      order: 1
-    - title: 'Performance Improvements'
-      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
-      order: 2
-    - title: Others
-      order: 999
+  disable: true
 
 # Sign release artifacts using Sigstore cosign (keyless OIDC signing)
 # https://docs.sigstore.dev/signing/quickstart/
