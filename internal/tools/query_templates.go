@@ -54,7 +54,7 @@ func (t *QueryTemplatesTool) Description() string {
 **Best for:** Learning query patterns, quick-starting analysis, discovering best practices.
 
 **Categories available:**
-- discovery: Pattern discovery and root cause analysis (use with scout_logs)
+- discovery: Pattern discovery and root cause analysis
 - error: Error investigation and debugging
 - performance: Latency and performance analysis
 - security: Security auditing and threat detection

@@ -139,9 +139,6 @@ func GetAllTools(c *client.Client, logger *zap.Logger) []Tool {
 		NewValidateQueryTool(c, logger),
 		NewQueryCostEstimateTool(c, logger),
 
-		// Pattern Discovery tools (Investigation Mode)
-		NewScoutLogsTool(c, logger),
-
 		// Workflow Automation tools
 		NewInvestigateIncidentTool(c, logger),
 		NewHealthCheckTool(c, logger),
