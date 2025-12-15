@@ -206,7 +206,8 @@ func AutoCorrectDataPrimeQuery(query string) (string, []string) {
 	// Auto-correct 'sort' to 'orderby' (sort is not a valid DataPrime keyword)
 	// DataPrime uses: orderby, sortby, order by, sort by
 	// Handle: | sort field, | sort -field (descending)
-	sortPattern := regexp.MustCompile(`\|\s*sort\s+(-?)(\$[a-zA-Z_.]+)`)
+	// Supports both $-prefixed fields ($m.timestamp) and plain column names (error_count from aggregations)
+	sortPattern := regexp.MustCompile(`\|\s*sort\s+(-?)([a-zA-Z_$][a-zA-Z0-9_.]*)`)
 	if matches := sortPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
 		for _, match := range matches {
 			descending := match[1] // "-" for descending or "" for ascending
