@@ -170,11 +170,18 @@ func checkArchiveRetention(config *TCOConfig, policy map[string]interface{}) {
 }
 
 // determineTier determines the tier based on priority
+// IBM Cloud Logs TCO priority levels:
+// - type_high: Logs go to Priority Insights (frequent_search) AND archive
+// - type_medium: Logs go to archive ONLY (not frequent_search)
+// - type_low: Logs are blocked/dropped (not stored)
 func determineTier(config *TCOConfig, priority string) string {
 	switch priority {
-	case "type_high", "type_medium":
+	case "type_high":
 		config.HasFrequentSearch = true
 		return "frequent_search"
+	case "type_medium":
+		// Medium priority logs only go to archive, not frequent_search
+		return "archive"
 	case "type_low", "type_unspecified", "":
 		return "archive"
 	default:
