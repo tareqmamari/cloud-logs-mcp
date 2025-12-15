@@ -155,6 +155,44 @@ func TestParseTCOPolicies_WithHighPriorityPolicy(t *testing.T) {
 	}
 }
 
+func TestParseTCOPolicies_WithMediumPriorityPolicy(t *testing.T) {
+	// type_medium means logs go to archive ONLY, not frequent_search
+	result := map[string]interface{}{
+		"policies": []interface{}{
+			map[string]interface{}{
+				"name":     "Standard Logs",
+				"priority": "type_medium",
+				"application_rule": map[string]interface{}{
+					"name":         "standard-service",
+					"rule_type_id": "is",
+				},
+			},
+		},
+	}
+
+	config := parseTCOPolicies(result, nil)
+
+	if !config.HasPolicies {
+		t.Error("Expected HasPolicies to be true")
+	}
+	// Medium priority does NOT go to frequent_search
+	if config.HasFrequentSearch {
+		t.Error("Expected HasFrequentSearch to be false for medium priority policy")
+	}
+	if config.DefaultTier != "archive" {
+		t.Errorf("Expected default tier 'archive', got '%s'", config.DefaultTier)
+	}
+
+	// Check policy rule
+	if len(config.Policies) != 1 {
+		t.Errorf("Expected 1 policy rule, got %d", len(config.Policies))
+		return
+	}
+	if config.Policies[0].Tier != "archive" {
+		t.Errorf("Expected policy tier 'archive' for medium priority, got '%s'", config.Policies[0].Tier)
+	}
+}
+
 func TestParseTCOPolicies_WithLowPriorityPolicy(t *testing.T) {
 	result := map[string]interface{}{
 		"policies": []interface{}{
