@@ -405,6 +405,25 @@ func TestAutoCorrectDataPrimeQuery(t *testing.T) {
 			expectedQuery:       "source logs | orderby $d.response_time desc | limit 10",
 			expectedCorrections: 1,
 		},
+		// sort with aggregated column names (without $ prefix)
+		{
+			name:                "sort with aggregated column name descending",
+			query:               "source logs | groupby $l.applicationname aggregate count() as error_count | sort -error_count | limit 20",
+			expectedQuery:       "source logs | groupby $l.applicationname aggregate count() as error_count | orderby error_count desc | limit 20",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "sort with aggregated column name ascending",
+			query:               "source logs | groupby $l.applicationname aggregate count() as total | sort total | limit 10",
+			expectedQuery:       "source logs | groupby $l.applicationname aggregate count() as total | orderby total | limit 10",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "sort with underscore in column name",
+			query:               "source logs | groupby $l.applicationname aggregate avg($d.response_time) as avg_response_time | sort -avg_response_time",
+			expectedQuery:       "source logs | groupby $l.applicationname aggregate avg($d.response_time) as avg_response_time | orderby avg_response_time desc",
+			expectedCorrections: 1,
+		},
 	}
 
 	for _, tt := range tests {
