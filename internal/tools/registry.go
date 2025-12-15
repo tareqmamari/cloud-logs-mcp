@@ -131,7 +131,7 @@ func GetAllTools(c *client.Client, logger *zap.Logger) []Tool {
 
 		// AI Helper tools
 		NewExplainQueryTool(c, logger),
-		NewSuggestAlertTool(c, logger),
+		NewAdvancedSuggestAlertTool(c, logger), // SRE-grade alert recommendations
 		NewGetAuditLogTool(c, logger),
 
 		// Query Intelligence tools
