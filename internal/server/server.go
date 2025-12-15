@@ -91,6 +91,12 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 		s.healthServer = health.NewServer(healthChecker, logger, cfg.HealthPort, cfg.HealthBindAddr, cfg.MetricsEndpoint)
 	}
 
+	// Fetch and cache TCO policies for tier selection
+	// This helps tools determine which tier (archive vs frequent_search) to query
+	if err := tools.FetchAndCacheTCOConfig(context.Background(), apiClient, logger); err != nil {
+		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.Error(err))
+	}
+
 	// Register all tools
 	if err := s.registerTools(); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
@@ -288,9 +294,23 @@ func (s *Server) registerTool(t tools.Tool) {
 			}
 		}
 
+		// Estimate input tokens from arguments
+		inputTokens := tools.EstimateJSONTokens(args)
+
 		result, err := t.Execute(ctx, args)
 		success := err == nil && (result == nil || !result.IsError)
 		s.metrics.RecordToolExecution(toolName, success, time.Since(start))
+
+		// Estimate output tokens from result and record budget usage
+		outputTokens := 0
+		if result != nil && len(result.Content) > 0 {
+			for _, content := range result.Content {
+				if textContent, ok := content.(*mcp.TextContent); ok {
+					outputTokens += tools.EstimateTokens(textContent.Text)
+				}
+			}
+		}
+		tools.GetBudgetContext().RecordToolExecution(inputTokens, outputTokens)
 
 		return result, err
 	}
