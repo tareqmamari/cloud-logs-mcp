@@ -234,9 +234,6 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewValidateQueryTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewQueryCostEstimateTool(s.apiClient, s.logger))
 
-	// Pattern Discovery tools (Investigation Mode)
-	s.registerTool(tools.NewScoutLogsTool(s.apiClient, s.logger))
-
 	// Workflow Automation tools
 	s.registerTool(tools.NewInvestigateIncidentTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewHealthCheckTool(s.apiClient, s.logger))
