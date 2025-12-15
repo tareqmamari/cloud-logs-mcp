@@ -861,9 +861,18 @@ func (s *SessionContext) GetSessionSummary() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Make defensive copies of maps to avoid concurrent access issues
+	// when the returned map is serialized to JSON outside the lock.
+	// This is critical for thread safety - the map references would otherwise
+	// be accessed outside the lock during JSON serialization.
+	activeFiltersCopy := make(map[string]string, len(s.ActiveFilters))
+	for k, v := range s.ActiveFilters {
+		activeFiltersCopy[k] = v
+	}
+
 	summary := map[string]interface{}{
 		"has_active_filters": len(s.ActiveFilters) > 0,
-		"active_filters":     s.ActiveFilters,
+		"active_filters":     activeFiltersCopy,
 		"recent_tools_count": len(s.RecentTools),
 	}
 
@@ -890,16 +899,34 @@ func (s *SessionContext) GetSessionSummary() map[string]interface{} {
 	}
 
 	if s.Preferences != nil {
-		summary["learned_preferences"] = s.Preferences
+		// Copy preferences to avoid concurrent access
+		prefsCopy := *s.Preferences
+		// Copy the slice to avoid concurrent access
+		if len(s.Preferences.FrequentApplications) > 0 {
+			prefsCopy.FrequentApplications = make([]string, len(s.Preferences.FrequentApplications))
+			copy(prefsCopy.FrequentApplications, s.Preferences.FrequentApplications)
+		}
+		summary["learned_preferences"] = &prefsCopy
 	}
 
 	// Add persistent learned patterns
 	if s.LearnedPatterns != nil {
+		// Copy common filters map
+		commonFiltersCopy := make(map[string]string, len(s.LearnedPatterns.CommonFilters))
+		for k, v := range s.LearnedPatterns.CommonFilters {
+			commonFiltersCopy[k] = v
+		}
+		// Copy preferred workflows slice
+		var workflowsCopy []string
+		if len(s.LearnedPatterns.PreferredWorkflows) > 0 {
+			workflowsCopy = make([]string, len(s.LearnedPatterns.PreferredWorkflows))
+			copy(workflowsCopy, s.LearnedPatterns.PreferredWorkflows)
+		}
 		summary["learned_patterns"] = map[string]interface{}{
 			"total_tool_calls":     s.LearnedPatterns.TotalToolCalls,
 			"frequent_sequences":   len(s.LearnedPatterns.FrequentSequences),
-			"common_filters":       s.LearnedPatterns.CommonFilters,
-			"preferred_workflows":  s.LearnedPatterns.PreferredWorkflows,
+			"common_filters":       commonFiltersCopy,
+			"preferred_workflows":  workflowsCopy,
 			"last_patterns_update": s.LearnedPatterns.LastUpdated.Format(time.RFC3339),
 		}
 	}
