@@ -6,6 +6,21 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.9.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.8.0...v0.9.0) (2025-12-18)
+
+
+### Features
+
+* **client:** add Retry-After header support and instance info accessor ([6790dc3](https://github.com/tareqmamari/cloud-logs-mcp/commit/6790dc3267bfcbb55dd92cdf5e5e6301ff74f43e))
+* **tools:** add instance info to query responses ([33c4518](https://github.com/tareqmamari/cloud-logs-mcp/commit/33c4518ce90d3dc2e64580805d528a6b8c5ab8b8))
+* **validator:** add centralized DataPrime query validation pipeline ([f50de6a](https://github.com/tareqmamari/cloud-logs-mcp/commit/f50de6acf7e2b7ef24cc27d1d9d08423430b50d3))
+
+
+### Bug Fixes
+
+* **tools:** prevent context compaction failures and improve log formatting ([f2732ac](https://github.com/tareqmamari/cloud-logs-mcp/commit/f2732ac542c5e003e125f761137825ddb238144b))
+* **tools:** use roundTime() for time bucketing in queries ([b4fcc67](https://github.com/tareqmamari/cloud-logs-mcp/commit/b4fcc672a173a85a939eea8f623a0c8c68796205))
+
 ## [0.8.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.7.0...v0.8.0) (2025-12-15)
 
 
