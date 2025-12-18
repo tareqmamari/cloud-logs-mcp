@@ -202,7 +202,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "error_hotspots",
 			Category:    "discovery",
 			Description: "Find which services have the most errors - start investigations here",
-			Query:       "source logs | filter $m.severity >= ERROR | groupby $l.applicationname, $l.subsystemname calculate count() as error_count | orderby error_count desc | limit 20",
+			Query:       "source logs | filter $m.severity >= 5 | groupby $l.applicationname, $l.subsystemname | aggregate count() as error_count | sortby -error_count | limit 20",
 			UseCases: []string{
 				"Start incident investigation without prior knowledge",
 				"Identify the source of problems",
@@ -218,7 +218,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "anomaly_detection",
 			Category:    "discovery",
 			Description: "Find services with unusually high error rates",
-			Query:       "source logs | groupby $l.applicationname calculate count() as total, countif($m.severity >= ERROR) as errors | create error_rate = errors * 100.0 / total | filter error_rate > 1.0 || errors > 10 | orderby error_rate desc | limit 20",
+			Query:       "source logs | filter $m.severity >= 5 | groupby $l.applicationname | aggregate count() as error_count | filter error_count > 10 | sortby -error_count | limit 20",
 			UseCases: []string{
 				"Detect services behaving abnormally",
 				"Find issues even in low-traffic services",
@@ -234,7 +234,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "top_error_messages",
 			Category:    "discovery",
 			Description: "Group similar errors to find the most common problems",
-			Query:       "source logs | filter $m.severity >= ERROR | groupby $d.message:string calculate count() as occurrences, min($m.timestamp) as first_seen, max($m.timestamp) as last_seen | filter occurrences >= 3 | orderby occurrences desc | limit 30",
+			Query:       "source logs | filter $m.severity >= 5 | groupby $d.message:string | aggregate count() as occurrences, min($m.timestamp) as first_seen, max($m.timestamp) as last_seen | filter occurrences >= 3 | sortby -occurrences | limit 30",
 			UseCases: []string{
 				"Find the most impactful errors",
 				"Identify systemic issues vs one-offs",
@@ -250,7 +250,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "noise_filtered_errors",
 			Category:    "discovery",
 			Description: "Error analysis excluding health checks and known noise",
-			Query:       "source logs | filter $m.severity >= ERROR && !$d.message:string.toLowerCase().contains('health') && !$d.message:string.toLowerCase().contains('ping') && !$d.message:string.toLowerCase().contains('heartbeat') && !$d.message:string.toLowerCase().contains('metrics') | groupby $l.applicationname calculate count() as errors | orderby errors desc | limit 20",
+			Query:       "source logs | filter $m.severity >= 5 && !$d.message:string.toLowerCase().contains('health') && !$d.message:string.toLowerCase().contains('ping') && !$d.message:string.toLowerCase().contains('heartbeat') && !$d.message:string.toLowerCase().contains('metrics') | groupby $l.applicationname | aggregate count() as errors | sortby -errors | limit 20",
 			UseCases: []string{
 				"Find real errors without health check noise",
 				"Cleaner investigation starting point",
@@ -266,7 +266,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "traffic_overview",
 			Category:    "discovery",
 			Description: "See overall traffic patterns by service",
-			Query:       "source logs | groupby $l.applicationname calculate count() as volume, countdistinct($l.subsystemname) as components, countif($m.severity >= ERROR) as errors | orderby volume desc | limit 20",
+			Query:       "source logs | groupby $l.applicationname | aggregate count() as volume, approx_count_distinct($l.subsystemname) as components | sortby -volume | limit 20",
 			UseCases: []string{
 				"Understand system topology",
 				"Find unexpected traffic patterns",
@@ -282,7 +282,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "recent_changes",
 			Category:    "discovery",
 			Description: "Detect recent deployments or restarts that might explain issues",
-			Query:       "source logs | filter $d.message:string.contains('start') || $d.message:string.contains('deploy') || $d.message:string.contains('version') || $d.message:string.contains('initializ') || $d.message:string.contains('shutdown') | groupby $l.applicationname calculate count() as events, min($m.timestamp) as earliest, max($m.timestamp) as latest | filter events >= 2 | orderby latest desc | limit 20",
+			Query:       "source logs | filter $d.message:string.contains('start') || $d.message:string.contains('deploy') || $d.message:string.contains('version') || $d.message:string.contains('initializ') || $d.message:string.contains('shutdown') | groupby $l.applicationname | aggregate count() as events, min($m.timestamp) as earliest, max($m.timestamp) as latest | filter events >= 2 | sortby -latest | limit 20",
 			UseCases: []string{
 				"Correlate issues with recent changes",
 				"Find which services were recently deployed",
@@ -300,7 +300,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "error_spike",
 			Category:    "error",
 			Description: "Find error spikes in the last hour grouped by application",
-			Query:       "source logs | filter $m.severity >= 5 | groupby $l.applicationname calculate count() as error_count | sortby -error_count | limit 20",
+			Query:       "source logs | filter $m.severity >= 5 | groupby $l.applicationname | aggregate count() as error_count | sortby -error_count | limit 20",
 			UseCases: []string{
 				"Identify which applications are producing the most errors",
 				"Quick triage during incidents",
@@ -335,14 +335,14 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "error_timeline",
 			Category:    "error",
 			Description: "Error rate over time for trend analysis",
-			Query:       "source logs | filter $m.severity >= 5 | groupby $m.timestamp:1m calculate count() as errors | sortby $m.timestamp",
+			Query:       "source logs | filter $m.severity >= 5 | groupby roundTime($m.timestamp, 1m) as time_bucket | aggregate count() as errors | sortby time_bucket",
 			UseCases: []string{
 				"Visualize error trends over time",
 				"Identify when errors started",
 				"Correlate with deployments or changes",
 			},
 			Tips: []string{
-				"Adjust groupby interval (1m, 5m, 1h) based on time range",
+				"Adjust roundTime interval for different granularity (1m, 5m, 1h)",
 				"Compare with normal periods",
 				"Use for dashboard creation",
 			},
@@ -372,7 +372,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "latency_percentiles",
 			Category:    "performance",
 			Description: "Calculate latency percentiles by endpoint",
-			Query:       "source logs | filter $d.response_time_ms > 0 | groupby $d.endpoint calculate percentile($d.response_time_ms, 50) as p50, percentile($d.response_time_ms, 95) as p95, percentile($d.response_time_ms, 99) as p99, count() as requests | sortby -requests | limit 20",
+			Query:       "source logs | filter $d.response_time_ms > 0 | groupby $d.endpoint | aggregate percentile($d.response_time_ms, 50) as p50, percentile($d.response_time_ms, 95) as p95, percentile($d.response_time_ms, 99) as p99, count() as requests | sortby -requests | limit 20",
 			UseCases: []string{
 				"Understand latency distribution",
 				"Set realistic SLO targets",
@@ -388,14 +388,14 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "throughput_analysis",
 			Category:    "performance",
 			Description: "Request throughput over time by application",
-			Query:       "source logs | filter $d.request_id != '' | groupby $m.timestamp:5m, $l.applicationname calculate count() as requests | sortby $m.timestamp",
+			Query:       "source logs | filter $d.request_id != '' | groupby roundTime($m.timestamp, 1m) as time_bucket, $l.applicationname | aggregate count() as requests | sortby time_bucket",
 			UseCases: []string{
 				"Monitor traffic patterns",
 				"Capacity planning",
 				"Detect traffic anomalies",
 			},
 			Tips: []string{
-				"Adjust time bucket based on analysis needs",
+				"Adjust roundTime interval for different granularity (1m, 5m, 1h)",
 				"Compare with baseline periods",
 				"Useful for dashboard widgets",
 			},
@@ -406,7 +406,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "auth_failures",
 			Category:    "security",
 			Description: "Find authentication failures grouped by source",
-			Query:       "source logs | filter $d.event_type == 'auth_failure' || $d.message.contains('authentication failed') || $d.message.contains('invalid credentials') | groupby $d.source_ip, $d.username calculate count() as failures | filter failures > 3 | sortby -failures",
+			Query:       "source logs | filter $d.event_type == 'auth_failure' || $d.message.contains('authentication failed') || $d.message.contains('invalid credentials') | groupby $d.source_ip, $d.username | aggregate count() as failures | filter failures > 3 | sortby -failures",
 			UseCases: []string{
 				"Detect brute force attempts",
 				"Identify compromised accounts",
@@ -456,7 +456,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "service_health",
 			Category:    "health",
 			Description: "Overall health summary by service",
-			Query:       "source logs | groupby $l.applicationname calculate count() as total, countif($m.severity >= 5) as errors, countif($m.severity >= 4) as warnings | create error_rate = errors * 100.0 / total | sortby -error_rate | limit 20",
+			Query:       "source logs | filter $m.severity >= 5 | groupby $l.applicationname | aggregate count() as error_count | sortby -error_count | limit 20",
 			UseCases: []string{
 				"Quick health overview",
 				"Identify troubled services",
@@ -472,7 +472,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "heartbeat_check",
 			Category:    "health",
 			Description: "Verify services are logging (heartbeat)",
-			Query:       "source logs | groupby $l.applicationname calculate max($m.timestamp) as last_seen, count() as log_count | sortby last_seen",
+			Query:       "source logs | groupby $l.applicationname | aggregate max($m.timestamp) as last_seen, count() as log_count | sortby last_seen",
 			UseCases: []string{
 				"Detect silent failures",
 				"Verify logging is working",
@@ -488,7 +488,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "restart_detection",
 			Category:    "health",
 			Description: "Detect service restarts and crashes",
-			Query:       "source logs | filter $d.message.contains('starting') || $d.message.contains('started') || $d.message.contains('shutdown') || $d.message.contains('terminated') || $d.message.contains('OOMKilled') | select $m.timestamp, $l.applicationname, $l.pod, $d.message | sortby -$m.timestamp | limit 50",
+			Query:       "source logs | filter $d.message.contains('starting') || $d.message.contains('started') || $d.message.contains('shutdown') || $d.message.contains('terminated') || $d.message.contains('OOMKilled') | select $m.timestamp, $l.applicationname, $l.subsystemname, $d.message | sortby -$m.timestamp | limit 50",
 			UseCases: []string{
 				"Detect crash loops",
 				"Track deployment rollouts",
@@ -506,7 +506,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "top_endpoints",
 			Category:    "usage",
 			Description: "Most frequently called endpoints",
-			Query:       "source logs | filter $d.endpoint != '' | groupby $d.endpoint calculate count() as calls, avg($d.response_time_ms) as avg_latency | sortby -calls | limit 20",
+			Query:       "source logs | filter $d.endpoint != '' | groupby $d.endpoint | aggregate count() as calls, avg($d.response_time_ms) as avg_latency | sortby -calls | limit 20",
 			UseCases: []string{
 				"Identify hot endpoints",
 				"Capacity planning",
@@ -522,7 +522,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "user_activity",
 			Category:    "usage",
 			Description: "User activity summary",
-			Query:       "source logs | filter $d.user_id != '' | groupby $d.user_id calculate count() as actions, countdistinct($d.endpoint) as unique_endpoints | sortby -actions | limit 50",
+			Query:       "source logs | filter $d.user_id != '' | groupby $d.user_id | aggregate count() as actions, approx_count_distinct($d.endpoint) as unique_endpoints | sortby -actions | limit 50",
 			UseCases: []string{
 				"Identify power users",
 				"Detect anomalous behavior",
@@ -538,7 +538,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "data_volume",
 			Category:    "usage",
 			Description: "Log volume by application over time",
-			Query:       "source logs | groupby $m.timestamp:1h, $l.applicationname calculate count() as logs | sortby $m.timestamp",
+			Query:       "source logs | groupby roundTime($m.timestamp, 1h) as time_bucket, $l.applicationname | aggregate count() as logs | sortby time_bucket",
 			UseCases: []string{
 				"Cost monitoring",
 				"Capacity planning",
@@ -588,7 +588,7 @@ func getQueryTemplates() []QueryTemplate {
 			Name:        "api_key_usage",
 			Category:    "audit",
 			Description: "Track API key usage patterns",
-			Query:       "source logs | filter $d.api_key_id != '' || $d.auth_type == 'api_key' | groupby $d.api_key_id, $l.applicationname calculate count() as calls, countdistinct($d.source_ip) as unique_ips | sortby -calls | limit 50",
+			Query:       "source logs | filter $d.api_key_id != '' || $d.auth_type == 'api_key' | groupby $d.api_key_id, $l.applicationname | aggregate count() as calls, approx_count_distinct($d.source_ip) as unique_ips | sortby -calls | limit 50",
 			UseCases: []string{
 				"API key auditing",
 				"Detect key sharing/abuse",

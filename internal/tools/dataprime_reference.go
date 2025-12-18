@@ -401,6 +401,7 @@ var TimeFunctions = []string{
 	"now()",                                  // Current timestamp
 	"parseTimestamp(<string>, <format>)",     // Parse string to timestamp
 	"formatTimestamp(<timestamp>, <format>)", // Format timestamp to string
+	"roundTime(<timestamp>, <interval>)",     // Round timestamp to interval (e.g., 1m, 1h) - use for time bucketing in groupby
 	"diffTime(<ts1>, <ts2>)",                 // Difference between timestamps
 	"addTime(<timestamp>, <interval>)",       // Add interval to timestamp
 	"formatInterval(<interval>, <unit>)",     // Format interval (ms, s, h)
