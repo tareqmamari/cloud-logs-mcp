@@ -15,6 +15,21 @@ import (
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
 
+// formatInstanceInfo returns a markdown section with IBM Cloud Logs instance information
+func formatInstanceInfo(info *client.InstanceInfo) string {
+	if info == nil {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("---\n### Target Instance\n")
+	if info.InstanceName != "" {
+		sb.WriteString(fmt.Sprintf("- **Instance:** %s\n", info.InstanceName))
+	}
+	sb.WriteString(fmt.Sprintf("- **Region:** %s\n", info.Region))
+	sb.WriteString(fmt.Sprintf("- **Service URL:** %s\n", info.ServiceURL))
+	return sb.String()
+}
+
 // InvestigateIncidentTool provides a guided incident investigation workflow
 type InvestigateIncidentTool struct {
 	*BaseTool
@@ -210,6 +225,12 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 		startDate = endDate.Add(-1 * time.Hour)
 	}
 
+	// Prepare query (auto-correct and validate) using central validator
+	query, _, err := PrepareQuery(query, "archive", "dataprime")
+	if err != nil {
+		return t.formatInvestigationError(err, query, application)
+	}
+
 	// Execute the query
 	req := &client.Request{
 		Method: "POST",
@@ -229,7 +250,7 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 	}
 
 	// Analyze the results
-	return t.formatInvestigationResults(result, query, application, timeRange, severity)
+	return t.formatInvestigationResults(ctx, result, query, application, timeRange, severity)
 }
 
 // formatInvestigationError formats an error response with helpful suggestions
@@ -251,7 +272,7 @@ func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, _ s
 }
 
 // formatInvestigationResults formats the investigation findings
-func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]interface{}, query, application, timeRange, severity string) (*mcp.CallToolResult, error) {
+func (t *InvestigateIncidentTool) formatInvestigationResults(ctx context.Context, result map[string]interface{}, query, application, timeRange, severity string) (*mcp.CallToolResult, error) {
 	var response strings.Builder
 
 	response.WriteString("# 🔍 Incident Investigation Report\n\n")
@@ -265,6 +286,12 @@ func (t *InvestigateIncidentTool) formatInvestigationResults(result map[string]i
 	}
 
 	response.WriteString(fmt.Sprintf("\n---\n### Query Used\n```dataprime\n%s\n```\n", query))
+
+	// Add instance info so users know which IBM Cloud Logs instance was queried
+	if apiClient, err := t.GetClient(ctx); err == nil {
+		info := apiClient.GetInstanceInfo()
+		response.WriteString(formatInstanceInfo(&info))
+	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -595,8 +622,25 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 	response.WriteString("# 🏥 System Health Check\n\n")
 	response.WriteString(fmt.Sprintf("**Time Range:** Last %s (ending %s UTC)\n\n", timeRange, endDate.Format("15:04")))
 
-	// Query for health summary
-	healthQuery := "source logs | groupby $l.applicationname calculate count() as total, countif($m.severity >= 5) as errors, countif($m.severity >= 4) as warnings | create error_rate = errors * 100.0 / total | sortby -error_rate | limit 15"
+	// Query for health summary - use simple error count per app
+	healthQuery := `source logs
+		| filter $m.severity >= ERROR
+		| groupby $l.applicationname
+		| aggregate count() as error_count
+		| sortby -error_count
+		| limit 15`
+
+	// Prepare query (auto-correct and validate) using central validator
+	healthQuery, _, err := PrepareQuery(healthQuery, "archive", "dataprime")
+	if err != nil {
+		response.WriteString("## ⚠️ Health Check Failed\n\n")
+		response.WriteString(fmt.Sprintf("Query validation error: %s\n\n", err.Error()))
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: response.String()},
+			},
+		}, nil
+	}
 
 	req := &client.Request{
 		Method: "POST",
@@ -711,6 +755,12 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 		response.WriteString("2. Check `list_alerts` to see if any alerts have triggered\n")
 	}
 	response.WriteString("3. Use `query_logs` for detailed investigation of specific issues\n")
+
+	// Add instance info so users know which IBM Cloud Logs instance was queried
+	if apiClient, err := t.GetClient(ctx); err == nil {
+		info := apiClient.GetInstanceInfo()
+		response.WriteString(formatInstanceInfo(&info))
+	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
