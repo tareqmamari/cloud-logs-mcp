@@ -364,7 +364,7 @@ func buildQueryMetadata(arguments map[string]interface{}) (map[string]interface{
 }
 
 // addQueryMetadataToResult adds query execution metadata to the result
-func addQueryMetadataToResult(result map[string]interface{}, metadata map[string]interface{}, tier, syntax, query string, corrections []string) {
+func addQueryMetadataToResult(result map[string]interface{}, metadata map[string]interface{}, tier, syntax, query string, corrections []string, instanceInfo *client.InstanceInfo) {
 	queryMeta := map[string]interface{}{
 		"tier":       tier,
 		"syntax":     syntax,
@@ -375,6 +375,17 @@ func addQueryMetadataToResult(result map[string]interface{}, metadata map[string
 	if len(corrections) > 0 {
 		queryMeta["auto_corrections"] = corrections
 		queryMeta["corrected_query"] = query
+	}
+	// Add instance info so users know which IBM Cloud Logs instance was queried
+	if instanceInfo != nil {
+		instance := map[string]interface{}{
+			"service_url": instanceInfo.ServiceURL,
+			"region":      instanceInfo.Region,
+		}
+		if instanceInfo.InstanceName != "" {
+			instance["instance_name"] = instanceInfo.InstanceName
+		}
+		queryMeta["instance"] = instance
 	}
 	result["_query_metadata"] = queryMeta
 }
@@ -415,13 +426,11 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 		return NewToolResultError(err.Error()), nil
 	}
 
-	// Auto-correct and validate DataPrime query
+	// Prepare query (auto-correct and validate) using central validator
 	var queryCorrections []string
-	if syntax == "dataprime" || syntax == "dataprime_utf8_base64" {
-		query, queryCorrections = AutoCorrectDataPrimeQuery(query)
-		if validationErr := ValidateDataPrimeQuery(query); validationErr != nil {
-			return NewToolResultError(validationErr.Error()), nil
-		}
+	query, queryCorrections, err = PrepareQuery(query, tier, syntax)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
 	}
 
 	// Execute request
@@ -464,7 +473,13 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	if result == nil {
 		result = make(map[string]interface{})
 	}
-	addQueryMetadataToResult(result, metadata, tier, syntax, query, queryCorrections)
+	// Get instance info to include in metadata
+	var instanceInfo *client.InstanceInfo
+	if apiClient, err := t.GetClient(ctx); err == nil {
+		info := apiClient.GetInstanceInfo()
+		instanceInfo = &info
+	}
+	addQueryMetadataToResult(result, metadata, tier, syntax, query, queryCorrections, instanceInfo)
 
 	// Return response
 	summaryOnly, _ := GetBoolParam(arguments, "summary_only", false)
@@ -547,6 +562,13 @@ func (t *SubmitBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 	}
 
 	syntax, err := GetStringParam(arguments, "syntax", true)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+
+	// Prepare query (auto-correct and validate) using central validator
+	// Background queries default to archive tier
+	query, _, err = PrepareQuery(query, "archive", syntax)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
