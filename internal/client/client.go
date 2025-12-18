@@ -165,26 +165,15 @@ type Response struct {
 // Do executes an HTTP request with retry logic
 func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	var lastErr error
+	var lastResp *Response
 
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff with jitter to prevent thundering herd
-			// Cap shift value to prevent overflow (max 30 ensures we stay within reasonable time bounds)
-			shift := min(attempt-1, 30)
-			baseWait := c.config.RetryWaitMin * time.Duration(1<<shift)
-			if baseWait > c.config.RetryWaitMax {
-				baseWait = c.config.RetryWaitMax
-			}
-
-			// Add jitter: random value between 0 and 25% of base wait time
-			// This spreads out retry attempts when multiple clients fail simultaneously
-			jitter := cryptoRandDuration(int64(baseWait) / 4)
-			waitTime := baseWait + jitter
+			waitTime := c.calculateRetryWait(attempt, lastResp)
 
 			c.logger.Debug("Retrying request",
 				zap.Int("attempt", attempt),
 				zap.Duration("wait", waitTime),
-				zap.Duration("jitter", jitter),
 			)
 
 			select {
@@ -197,6 +186,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 		resp, err := c.doRequest(ctx, req)
 		if err != nil {
 			lastErr = err
+			lastResp = nil
 			// Retry on network errors
 			if isRetryable(err) {
 				continue
@@ -207,6 +197,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 		// Retry on specific HTTP status codes
 		if shouldRetry(resp.StatusCode) {
 			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(resp.Body))
+			lastResp = resp
 			continue
 		}
 
@@ -214,6 +205,98 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	}
 
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+// calculateRetryWait determines the wait time before the next retry attempt.
+// It honors the Retry-After header from 429 responses when present,
+// otherwise uses exponential backoff with jitter.
+func (c *Client) calculateRetryWait(attempt int, lastResp *Response) time.Duration {
+	// Check for Retry-After header from rate limit response
+	if lastResp != nil && lastResp.StatusCode == http.StatusTooManyRequests {
+		if retryAfter := c.parseRetryAfter(lastResp.Headers); retryAfter > 0 {
+			// Add jitter (10-25% of Retry-After) to prevent thundering herd
+			// when multiple clients are rate-limited simultaneously
+			jitter := cryptoRandDuration(int64(retryAfter) / 4)
+			waitTime := retryAfter + jitter
+
+			// Cap at max wait to prevent unbounded delays
+			if waitTime > c.config.RetryWaitMax {
+				waitTime = c.config.RetryWaitMax
+			}
+
+			c.logger.Debug("Using Retry-After header for backoff",
+				zap.Duration("retry_after", retryAfter),
+				zap.Duration("jitter", jitter),
+				zap.Duration("total_wait", waitTime),
+			)
+			return waitTime
+		}
+	}
+
+	// Default: exponential backoff with jitter
+	// Cap shift value to prevent overflow (max 30 ensures we stay within reasonable time bounds)
+	shift := min(attempt-1, 30)
+	baseWait := c.config.RetryWaitMin * time.Duration(1<<shift)
+	if baseWait > c.config.RetryWaitMax {
+		baseWait = c.config.RetryWaitMax
+	}
+
+	// Add jitter: random value between 0 and 25% of base wait time
+	// This spreads out retry attempts when multiple clients fail simultaneously
+	jitter := cryptoRandDuration(int64(baseWait) / 4)
+	return baseWait + jitter
+}
+
+// parseRetryAfter parses the Retry-After header value.
+// Supports both delta-seconds (e.g., "120") and HTTP-date formats.
+// Returns 0 if the header is missing or invalid.
+func (c *Client) parseRetryAfter(headers http.Header) time.Duration {
+	retryAfter := headers.Get("Retry-After")
+	if retryAfter == "" {
+		return 0
+	}
+
+	// Try parsing as delta-seconds (most common for rate limiting)
+	if seconds, err := time.ParseDuration(retryAfter + "s"); err == nil {
+		// Sanity check: ignore unreasonably large values (> 1 hour)
+		if seconds > 0 && seconds <= time.Hour {
+			return seconds
+		}
+		if seconds > time.Hour {
+			c.logger.Warn("Retry-After value too large, capping at 1 hour",
+				zap.String("retry_after", retryAfter),
+			)
+			return time.Hour
+		}
+	}
+
+	// Try parsing as HTTP-date (RFC 7231)
+	// Formats: "Sun, 06 Nov 1994 08:49:37 GMT" or similar
+	httpDateFormats := []string{
+		time.RFC1123,
+		time.RFC1123Z,
+		time.RFC850,
+		time.ANSIC,
+	}
+	for _, format := range httpDateFormats {
+		if t, err := time.Parse(format, retryAfter); err == nil {
+			waitTime := time.Until(t)
+			if waitTime > 0 && waitTime <= time.Hour {
+				return waitTime
+			}
+			if waitTime > time.Hour {
+				c.logger.Warn("Retry-After date too far in future, capping at 1 hour",
+					zap.String("retry_after", retryAfter),
+				)
+				return time.Hour
+			}
+		}
+	}
+
+	c.logger.Warn("Could not parse Retry-After header",
+		zap.String("retry_after", retryAfter),
+	)
+	return 0
 }
 
 func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error) {
@@ -455,6 +538,22 @@ func shouldRetry(statusCode int) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// InstanceInfo contains information about the IBM Cloud Logs service instance
+type InstanceInfo struct {
+	ServiceURL   string `json:"service_url"`
+	Region       string `json:"region"`
+	InstanceName string `json:"instance_name,omitempty"`
+}
+
+// GetInstanceInfo returns information about the IBM Cloud Logs service instance
+func (c *Client) GetInstanceInfo() InstanceInfo {
+	return InstanceInfo{
+		ServiceURL:   c.config.ServiceURL,
+		Region:       c.config.Region,
+		InstanceName: c.config.InstanceName,
 	}
 }
 

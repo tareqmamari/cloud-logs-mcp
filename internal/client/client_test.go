@@ -631,3 +631,193 @@ func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
 	}
 	return result, nil
 }
+
+func TestParseRetryAfter(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+
+	tests := []struct {
+		name          string
+		retryAfter    string
+		expectedMin   time.Duration
+		expectedMax   time.Duration
+		expectNonZero bool
+	}{
+		{
+			name:          "empty header",
+			retryAfter:    "",
+			expectNonZero: false,
+		},
+		{
+			name:          "delta-seconds - 30 seconds",
+			retryAfter:    "30",
+			expectedMin:   30 * time.Second,
+			expectedMax:   30 * time.Second,
+			expectNonZero: true,
+		},
+		{
+			name:          "delta-seconds - 120 seconds",
+			retryAfter:    "120",
+			expectedMin:   120 * time.Second,
+			expectedMax:   120 * time.Second,
+			expectNonZero: true,
+		},
+		{
+			name:          "delta-seconds - very large (capped at 1 hour)",
+			retryAfter:    "7200",
+			expectedMin:   time.Hour,
+			expectedMax:   time.Hour,
+			expectNonZero: true,
+		},
+		{
+			name:          "delta-seconds - zero",
+			retryAfter:    "0",
+			expectNonZero: false,
+		},
+		{
+			name:          "delta-seconds - negative",
+			retryAfter:    "-10",
+			expectNonZero: false,
+		},
+		{
+			name:          "invalid format",
+			retryAfter:    "not-a-number",
+			expectNonZero: false,
+		},
+		{
+			name:          "floating point (parsed as valid by Go)",
+			retryAfter:    "30.5",
+			expectedMin:   30500 * time.Millisecond,
+			expectedMax:   30500 * time.Millisecond,
+			expectNonZero: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := make(http.Header)
+			if tt.retryAfter != "" {
+				headers.Set("Retry-After", tt.retryAfter)
+			}
+
+			result := c.parseRetryAfter(headers)
+
+			if tt.expectNonZero {
+				assert.GreaterOrEqual(t, result, tt.expectedMin, "Duration should be >= expected min")
+				assert.LessOrEqual(t, result, tt.expectedMax, "Duration should be <= expected max")
+			} else {
+				assert.Equal(t, time.Duration(0), result, "Expected zero duration")
+			}
+		})
+	}
+}
+
+func TestCalculateRetryWait_WithRetryAfterHeader(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+	// Override RetryWaitMax to allow testing longer Retry-After values
+	c.config.RetryWaitMax = 2 * time.Minute
+
+	// Test with 429 response and Retry-After header
+	headers := make(http.Header)
+	headers.Set("Retry-After", "60")
+
+	lastResp := &Response{
+		StatusCode: http.StatusTooManyRequests,
+		Headers:    headers,
+	}
+
+	waitTime := c.calculateRetryWait(1, lastResp)
+
+	// Should be around 60s + jitter (up to 25% = 15s)
+	assert.GreaterOrEqual(t, waitTime, 60*time.Second, "Wait time should be at least 60s")
+	assert.LessOrEqual(t, waitTime, 75*time.Second, "Wait time should be at most 75s (60s + 25% jitter)")
+}
+
+func TestCalculateRetryWait_Without429(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+
+	// Test with non-429 response (should use exponential backoff)
+	headers := make(http.Header)
+	headers.Set("Retry-After", "60") // This should be ignored
+
+	lastResp := &Response{
+		StatusCode: http.StatusInternalServerError, // 500, not 429
+		Headers:    headers,
+	}
+
+	waitTime := c.calculateRetryWait(1, lastResp)
+
+	// Should use exponential backoff, not Retry-After
+	// First retry: base = RetryWaitMin (100ms) * 2^0 = 100ms, plus up to 25% jitter
+	assert.Less(t, waitTime, 60*time.Second, "Wait time should use backoff, not Retry-After")
+}
+
+func TestCalculateRetryWait_NilResponse(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+
+	// Test with nil response (network error case)
+	waitTime := c.calculateRetryWait(1, nil)
+
+	// Should use exponential backoff
+	// First retry: base = RetryWaitMin (100ms) * 2^0 = 100ms, plus up to 25% jitter
+	assert.GreaterOrEqual(t, waitTime, 100*time.Millisecond)
+	assert.LessOrEqual(t, waitTime, 125*time.Millisecond) // 100ms + 25% jitter
+}
+
+func TestCalculateRetryWait_ExponentialBackoff(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+
+	// Test exponential backoff across multiple attempts
+	var prevWait time.Duration
+	for attempt := 1; attempt <= 3; attempt++ {
+		waitTime := c.calculateRetryWait(attempt, nil)
+
+		if attempt > 1 {
+			// Each attempt should generally have longer base wait (though jitter adds variance)
+			// Just verify it's within reasonable bounds
+			assert.GreaterOrEqual(t, waitTime, c.config.RetryWaitMin)
+			assert.LessOrEqual(t, waitTime, c.config.RetryWaitMax+c.config.RetryWaitMax/4)
+		}
+
+		prevWait = waitTime
+		_ = prevWait // silence unused warning
+	}
+}
+
+func TestRetryWith429AndRetryAfter(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		if requestCount == 1 {
+			// First request: return 429 with Retry-After
+			w.Header().Set("Retry-After", "1") // 1 second
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error": "rate limited"}`))
+			return
+		}
+		// Subsequent requests: success
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success": true}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+	// Override RetryWaitMax to allow testing the Retry-After value
+	c.config.RetryWaitMax = 5 * time.Second
+
+	req := &Request{
+		Method: "GET",
+		Path:   "/v1/test",
+	}
+
+	ctx := context.Background()
+	start := time.Now()
+	resp, err := c.Do(ctx, req)
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 2, requestCount, "Should have made 2 requests (1 failed + 1 success)")
+
+	// Should have waited at least 1 second (the Retry-After value)
+	assert.GreaterOrEqual(t, elapsed, 1*time.Second, "Should respect Retry-After header")
+}
