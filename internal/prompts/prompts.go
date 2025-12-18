@@ -639,8 +639,8 @@ source logs
 ` + "```" + `
 source logs
 | filter $d.status_code >= 500
-| groupby $m.timestamp.bucket(15m)
-| count
+| groupby roundTime($m.timestamp, 1m) as time_bucket
+| aggregate count() as cnt
 ` + "```" + `
 
 **String Operations:**
@@ -679,8 +679,8 @@ source logs
 **Window Functions:**
 ` + "```" + `
 source logs
-| groupby $l.applicationName, $m.timestamp.bucket(1h)
-| count
+| groupby $l.applicationname, roundTime($m.timestamp, 1h) as time_bucket
+| aggregate count() as cnt
 | window rolling(3) as moving_avg
 ` + "```" + `
 

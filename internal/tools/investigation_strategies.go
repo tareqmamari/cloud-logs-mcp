@@ -81,7 +81,7 @@ func (s *GlobalModeStrategy) InitialQueries(_ *SmartInvestigationContext) []Quer
 			Purpose:  "Error distribution over time",
 			Query: `source logs
 				| filter $m.severity >= WARNING
-				| groupby formatTimestamp($m.timestamp, '%Y-%m-%d %H:%M') as time_bucket aggregate count() as errors
+				| groupby roundTime($m.timestamp, 1m) as time_bucket aggregate count() as errors
 				| sortby time_bucket`,
 			Tier: "archive",
 		},

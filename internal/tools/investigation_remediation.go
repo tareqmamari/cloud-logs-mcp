@@ -254,8 +254,8 @@ func (g *RemediationGenerator) generateWidgets(ctx *IncidentContext) []Dashboard
 		Type:  "line_chart",
 		Query: fmt.Sprintf(`source logs
 | filter $m.severity >= 5%s
-| groupby bucket($m.timestamp, 1m) as time_bucket
-| calculate count() as errors`, serviceFilter),
+| groupby roundTime($m.timestamp, 1m) as time_bucket
+| aggregate count() as errors`, serviceFilter),
 	})
 
 	// Error distribution by service
@@ -274,8 +274,8 @@ func (g *RemediationGenerator) generateWidgets(ctx *IncidentContext) []Dashboard
 		Type:  "line_chart",
 		Query: fmt.Sprintf(`source logs
 | filter $d.duration_ms.exists()%s
-| groupby bucket($m.timestamp, 1m) as time_bucket
-| calculate
+| groupby roundTime($m.timestamp, 1m) as time_bucket
+| aggregate
     avg($d.duration_ms) as avg_latency,
     percentile($d.duration_ms, 95) as p95,
     percentile($d.duration_ms, 99) as p99`, serviceFilter),
