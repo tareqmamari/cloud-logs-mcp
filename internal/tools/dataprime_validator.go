@@ -20,9 +20,66 @@ func (e *DataPrimeValidationError) Error() string {
 	return e.Message
 }
 
+// injectionPatterns contains regex patterns for detecting potential injection attacks.
+// These patterns detect SQL-like injection attempts that could be maliciously crafted.
+var injectionPatterns = []*regexp.Regexp{
+	// SQL-style command injection (case-insensitive)
+	regexp.MustCompile(`(?i);\s*(DROP|DELETE|TRUNCATE|ALTER|CREATE|INSERT|UPDATE|EXEC|EXECUTE)\s+`),
+	// UNION-based injection
+	regexp.MustCompile(`(?i)\bUNION\s+(ALL\s+)?SELECT\b`),
+	// Comment-based injection (SQL comments that might bypass filters)
+	regexp.MustCompile(`--\s*$`),                    // Trailing SQL comment
+	regexp.MustCompile(`/\*[\s\S]*?\*/`),            // Block comments used for obfuscation
+	regexp.MustCompile(`(?i);\s*--`),                // Statement termination with comment
+	regexp.MustCompile(`(?i)'\s*;\s*--`),            // String escape with statement termination
+	regexp.MustCompile(`(?i)'\s*OR\s+'1'\s*=\s*'1`), // Classic OR injection
+	regexp.MustCompile(`(?i)'\s*OR\s+1\s*=\s*1`),    // Numeric OR injection
+	// Command execution attempts
+	regexp.MustCompile(`(?i)\bEXEC\s*\(`),          // EXEC() calls
+	regexp.MustCompile(`(?i)\bxp_cmdshell\b`),      // SQL Server command execution
+	regexp.MustCompile(`(?i)\bsys\.(dm_|fn_|sp_)`), // System object access
+	// Stacked queries / multiple statements
+	regexp.MustCompile(`;\s*SELECT\s+`), // Stacked SELECT
+	regexp.MustCompile(`;\s*INSERT\s+`), // Stacked INSERT
+	regexp.MustCompile(`;\s*UPDATE\s+`), // Stacked UPDATE
+	regexp.MustCompile(`;\s*DELETE\s+`), // Stacked DELETE
+}
+
+// validateNoInjectionPatterns checks for potential injection attack patterns.
+// This provides defense-in-depth against maliciously crafted queries.
+func validateNoInjectionPatterns(query string) *DataPrimeValidationError {
+	for _, pattern := range injectionPatterns {
+		if pattern.MatchString(query) {
+			return &DataPrimeValidationError{
+				Message: "Query contains potentially unsafe patterns",
+				Suggestion: `The query contains patterns that resemble injection attacks and has been rejected for security reasons.
+
+If this is a legitimate query, please:
+1. Remove any SQL-style comments (-- or /* */)
+2. Avoid semicolons followed by SQL keywords
+3. Use DataPrime syntax instead of SQL syntax
+
+**DataPrime uses different syntax:**
+- No semicolons between statements (use | pipe instead)
+- No SQL keywords like UNION, DROP, DELETE, etc.
+- Comments are not supported in queries
+
+If you believe this is a false positive, please contact support.`,
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateDataPrimeQuery validates a DataPrime query and returns helpful errors
 func ValidateDataPrimeQuery(query string) *DataPrimeValidationError {
 	// Check for common syntax errors in order of likelihood
+
+	// 0. Check for injection patterns (security first)
+	if err := validateNoInjectionPatterns(query); err != nil {
+		return err
+	}
 
 	// 1. Check for ~~ operator which is NOT valid DataPrime syntax
 	if err := validateNoTildeOperator(query); err != nil {
@@ -228,6 +285,112 @@ func AutoCorrectDataPrimeQuery(query string) (string, []string) {
 			}()))
 		}
 	}
+
+	// Auto-correct wrong aggregate syntax: "aggregate alias = func()" → "aggregate func() as alias"
+	// Common mistake: using assignment syntax instead of 'as' keyword
+	aggregateFullPattern := regexp.MustCompile(`aggregate\s+(\w+)\s*=\s*(count|sum|avg|min|max|approx_count_distinct|percentile|stddev|variance|any_value|collect)\s*\(([^)]*)\)`)
+	if matches := aggregateFullPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			alias := match[1]
+			funcName := match[2]
+			args := match[3]
+			oldExpr := match[0]
+			newExpr := fmt.Sprintf("aggregate %s(%s) as %s", funcName, args, alias)
+			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("aggregate %s = %s() → aggregate %s() as %s (use 'as' for alias)", alias, funcName, funcName, alias))
+		}
+	}
+
+	// Auto-correct count_distinct/distinct_count → approx_count_distinct
+	// The frequent_search tier only supports approx_count_distinct
+	// Use negative lookbehind to avoid matching approx_count_distinct (already correct)
+	distinctCountPattern := regexp.MustCompile(`(?:^|[^a-zA-Z_])(count_distinct|distinct_count)\s*\(`)
+	if matches := distinctCountPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		// Replace only the function name, preserving any prefix characters
+		for _, match := range matches {
+			funcName := match[1]
+			corrected = strings.ReplaceAll(corrected, funcName+"(", "approx_count_distinct(")
+		}
+		corrections = append(corrections, "count_distinct/distinct_count → approx_count_distinct (only approx variant supported)")
+	}
+
+	// Auto-correct invalid time bucket syntax: $m.timestamp:1m → roundTime($m.timestamp, 1m)
+	// The colon syntax is not valid in DataPrime
+	timeBucketColonPattern := regexp.MustCompile(`\$m\.timestamp:(\d+[smhd])`)
+	if matches := timeBucketColonPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			interval := match[1]
+			oldExpr := match[0]
+			newExpr := fmt.Sprintf("roundTime($m.timestamp, %s)", interval)
+			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("$m.timestamp:%s → roundTime($m.timestamp, %s) (use roundTime for time bucketing)", interval, interval))
+		}
+	}
+
+	// Auto-correct bucket() → roundTime()
+	// bucket() is not a valid DataPrime function, use roundTime() instead
+	bucketFuncPattern := regexp.MustCompile(`bucket\s*\(\s*(\$m\.timestamp)\s*,\s*(\d+[smhd])\s*\)`)
+	if matches := bucketFuncPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
+		for _, match := range matches {
+			timestamp := match[1]
+			interval := match[2]
+			oldExpr := match[0]
+			newExpr := fmt.Sprintf("roundTime(%s, %s)", timestamp, interval)
+			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("bucket(%s, %s) → roundTime(%s, %s) (use roundTime for time bucketing)", timestamp, interval, timestamp, interval))
+		}
+	}
+
+	return corrected, corrections
+}
+
+// PrepareQuery validates, corrects, and prepares a DataPrime query for execution.
+// This is the central entry point that all query execution paths should use.
+// It combines auto-correction with validation to provide a consistent query preparation pipeline.
+//
+// Parameters:
+//   - query: The DataPrime query to prepare
+//   - tier: The execution tier ("archive" or "frequent_search") - affects some corrections
+//   - syntax: The query syntax ("dataprime", "dataprime_utf8_base64", "lucene", etc.)
+//
+// Returns:
+//   - The corrected query string
+//   - A list of corrections that were made
+//   - An error if the query is invalid after corrections
+func PrepareQuery(query string, tier string, syntax string) (string, []string, error) {
+	// Skip validation for non-DataPrime queries
+	if syntax != "dataprime" && syntax != "dataprime_utf8_base64" && syntax != "" {
+		return query, nil, nil
+	}
+
+	// 1. Auto-correct common issues
+	corrected, corrections := AutoCorrectDataPrimeQuery(query)
+
+	// 2. Apply tier-specific corrections
+	corrected, tierCorrections := applyTierCorrections(corrected, tier)
+	corrections = append(corrections, tierCorrections...)
+
+	// 3. Validate the final query
+	if err := ValidateDataPrimeQuery(corrected); err != nil {
+		return "", nil, err
+	}
+
+	return corrected, corrections, nil
+}
+
+// applyTierCorrections applies tier-specific corrections to a query.
+// Different tiers have different capabilities and requirements.
+func applyTierCorrections(query string, tier string) (string, []string) {
+	var corrections []string
+	corrected := query
+
+	// Archive tier specific corrections are already handled by AutoCorrectDataPrimeQuery
+	// (numeric severity → keyword severity)
+
+	// Frequent search tier specific corrections
+	// Note: count_distinct → approx_count_distinct is already handled by AutoCorrectDataPrimeQuery
+	// since approx_count_distinct is the only variant that works reliably
+	_ = tier // Tier-specific corrections may be added in the future
 
 	return corrected, corrections
 }
