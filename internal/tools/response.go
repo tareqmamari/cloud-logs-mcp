@@ -12,17 +12,18 @@ import (
 
 // Response size limits
 const (
-	// MaxResultSize is the maximum size of tool results in bytes (500KB to leave significant headroom under 1MB MCP limit)
-	// This is reduced to account for JSON formatting, summaries, pagination info, suggestions, and other metadata overhead
-	MaxResultSize = 500 * 1024
+	// MaxResultSize is the maximum size of tool results in bytes (100KB for Claude Desktop compatibility)
+	// Claude Desktop's context compaction can fail with very large tool results, so we use a conservative limit
+	// This is much lower than MCP's 1MB limit to ensure reliable operation
+	MaxResultSize = 100 * 1024
 
 	// FinalResponseLimit is the absolute maximum size for the final response text before sending to MCP
-	// This ensures we never exceed the 1MB limit even with all metadata added
-	FinalResponseLimit = 950 * 1024
+	// This ensures we never exceed limits that could cause "compaction failed" errors in Claude Desktop
+	FinalResponseLimit = 150 * 1024
 
 	// MaxSSEEvents is the maximum number of SSE events to parse from a query response
-	// This prevents memory issues when queries return very large result sets
-	MaxSSEEvents = 200
+	// This prevents memory issues and keeps results manageable for LLM context
+	MaxSSEEvents = 50
 
 	// TruncationBufferSize is the buffer size reserved for warning messages when truncating results
 	TruncationBufferSize = 500
@@ -45,6 +46,16 @@ var metadataFieldsToRemove = map[string]bool{
 	"logid": true, "branchid": true, "templateid": true, "priorityclass": true,
 	"processingoutputtimestampnanos": true, "processingoutputtimestampmicros": true,
 	"timestampmicros": true, "ingresstimestamp": true,
+}
+
+// getMapKeys returns a sorted list of keys from a map for debugging purposes
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // CleanQueryResults removes unnecessary fields from query results to reduce response size
@@ -208,7 +219,16 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 	// Pretty print JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to format response: %w", err)
+		// Return a valid CallToolResult with error message instead of nil
+		// This prevents "compaction failed" errors in Claude Desktop
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("Error formatting response: %v\n\nRaw data keys: %v", err, getMapKeys(result)),
+				},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	responseText := string(jsonBytes)
@@ -228,20 +248,15 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 		shownItems := countItemsFromBytes(truncatedBytes)
 
 		// Add pagination guidance with truncation warning
-		warningMsg := fmt.Sprintf("\n\n---\n⚠️ RESULT TRUNCATED: Showing %d of %d items (full result was %d bytes, exceeding 1MB limit).\n\n"+
-			"**To get ALL results, use pagination by splitting your query:**\n\n"+
-			"1. **Time-based pagination** (recommended): Split your time range into smaller chunks:\n"+
-			"   - First call: start_date='2024-01-01T00:00:00Z', end_date='2024-01-01T12:00:00Z'\n"+
-			"   - Second call: start_date='2024-01-01T12:00:00Z', end_date='2024-01-02T00:00:00Z'\n\n"+
-			"2. **Limit-based pagination**: Use smaller limits and note the last timestamp:\n"+
-			"   - First call: limit=500\n"+
-			"   - Second call: limit=500, start_date=(last timestamp from previous call)\n\n"+
-			"3. **Filter more specifically**: Add filters to reduce results:\n"+
-			"   - By application: applicationName='your-app' or query='source logs | filter $l.applicationname == \"your-app\"'\n"+
-			"   - By subsystem: subsystemName='your-subsystem' or query='source logs | filter $l.subsystemname == \"your-subsystem\"'\n"+
-			"   - By severity: query='source logs | filter $m.severity >= 5' (5=error, 6=critical)\n"+
-			"   - By keyword: query='source logs | filter $d.message.contains(\"error\")'",
-			shownItems, totalItems, len(jsonBytes))
+		warningMsg := fmt.Sprintf("\n\n---\n⚠️ RESULT TRUNCATED: Showing %d of %d items (result was %d bytes, limit is %d bytes).\n\n"+
+			"**To get complete results:**\n\n"+
+			"1. **Use `summary_only: true`** - Get statistical overview without raw events\n"+
+			"2. **Add filters** - Narrow by app, severity, or time range:\n"+
+			"   - `filter $l.applicationname == 'your-app'`\n"+
+			"   - `filter $m.severity >= ERROR`\n"+
+			"3. **Use smaller limits** - `limit 20` instead of large numbers\n"+
+			"4. **Split time range** - Query smaller time windows",
+			shownItems, totalItems, len(jsonBytes), MaxResultSize)
 		responseText += warningMsg
 
 		t.logger.Warn("Result truncated due to size limit - pagination recommended",
@@ -716,7 +731,16 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 	// Pretty print JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to format response: %w", err)
+		// Return a valid CallToolResult with error message instead of nil
+		// This prevents "compaction failed" errors in Claude Desktop
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("Error formatting response: %v\n\nRaw data keys: %v", err, getMapKeys(result)),
+				},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	responseText := string(jsonBytes)
@@ -809,27 +833,46 @@ func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]int
 	// Pretty print JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to format response: %w", err)
+		// Return a valid CallToolResult with error message instead of nil
+		// This prevents "compaction failed" errors in Claude Desktop
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("Error formatting response: %v\n\nRaw data keys: %v", err, getMapKeys(result)),
+				},
+			},
+			IsError: true,
+		}, nil
 	}
 
+	// For query results, use markdown format instead of raw JSON
+	// This prevents the AI from misinterpreting log message content as JSON structure
 	var responseText string
-	if summary != "" {
-		responseText = summary + "---\n\n### Raw Data\n\n" + string(jsonBytes)
+	if resultType == "query results" {
+		responseText = formatLogsAsMarkdown(result, summary)
 	} else {
-		responseText = string(jsonBytes)
+		if summary != "" {
+			responseText = summary + "---\n\n### Raw Data\n\n" + string(jsonBytes)
+		} else {
+			responseText = string(jsonBytes)
+		}
 	}
 
 	// Check if response exceeds size limit
 	truncatedBySize := false
 	if len(responseText) > MaxResultSize {
 		truncatedBySize = true
-		// Truncate the JSON but keep the summary
-		_, truncatedBytes := truncateResult(result, MaxResultSize-len(summary)-TruncationBufferSize)
-		if truncatedBytes != nil {
-			if summary != "" {
-				responseText = summary + "---\n\n### Raw Data (truncated)\n\n" + string(truncatedBytes)
-			} else {
-				responseText = string(truncatedBytes)
+		// Regenerate with fewer entries
+		if resultType == "query results" {
+			responseText = formatLogsAsMarkdownTruncated(result, summary, MaxResultSize-TruncationBufferSize)
+		} else {
+			_, truncatedBytes := truncateResult(result, MaxResultSize-len(summary)-TruncationBufferSize)
+			if truncatedBytes != nil {
+				if summary != "" {
+					responseText = summary + "---\n\n### Raw Data (truncated)\n\n" + string(truncatedBytes)
+				} else {
+					responseText = string(truncatedBytes)
+				}
 			}
 		}
 	}
@@ -1063,4 +1106,146 @@ func ensureResponseLimit(text string, logger *zap.Logger) string {
 	truncated := text[:FinalResponseLimit-TruncationBufferSize]
 	truncated += "\n\n---\n⚠️ **Response truncated** due to size limits. Use filters or pagination to get complete results."
 	return truncated
+}
+
+// formatLogsAsMarkdown formats log results as readable markdown instead of raw JSON
+// This prevents the AI from misinterpreting log message content as JSON/code structure
+func formatLogsAsMarkdown(result map[string]interface{}, summary string) string {
+	var sb strings.Builder
+
+	if summary != "" {
+		sb.WriteString(summary)
+		sb.WriteString("---\n\n")
+	}
+
+	sb.WriteString("### Log Entries\n\n")
+
+	// Get logs from cleaned result
+	logs, ok := result["logs"].([]interface{})
+	if !ok {
+		// Try events for uncleaned results
+		logs, ok = result["events"].([]interface{})
+	}
+
+	if !ok || len(logs) == 0 {
+		sb.WriteString("No log entries found.\n")
+		return sb.String()
+	}
+
+	for i, log := range logs {
+		formatSingleLogEntry(&sb, log, i+1)
+	}
+
+	// Add query metadata if present
+	if meta, ok := result["_query_metadata"].(map[string]interface{}); ok {
+		sb.WriteString("\n---\n### Query Metadata\n")
+		if tier, ok := meta["tier"].(string); ok {
+			sb.WriteString(fmt.Sprintf("- **Tier:** %s\n", tier))
+		}
+		if inst, ok := meta["instance"].(map[string]interface{}); ok {
+			if name, ok := inst["instance_name"].(string); ok && name != "" {
+				sb.WriteString(fmt.Sprintf("- **Instance:** %s\n", name))
+			}
+			if region, ok := inst["region"].(string); ok {
+				sb.WriteString(fmt.Sprintf("- **Region:** %s\n", region))
+			}
+		}
+	}
+
+	return sb.String()
+}
+
+// formatLogsAsMarkdownTruncated formats logs with a size limit
+func formatLogsAsMarkdownTruncated(result map[string]interface{}, summary string, maxSize int) string {
+	var sb strings.Builder
+
+	if summary != "" {
+		sb.WriteString(summary)
+		sb.WriteString("---\n\n")
+	}
+
+	sb.WriteString("### Log Entries (truncated)\n\n")
+
+	logs, ok := result["logs"].([]interface{})
+	if !ok {
+		logs, ok = result["events"].([]interface{})
+	}
+
+	if !ok || len(logs) == 0 {
+		sb.WriteString("No log entries found.\n")
+		return sb.String()
+	}
+
+	totalLogs := len(logs)
+	shownLogs := 0
+
+	for i, log := range logs {
+		// Check if we're approaching the limit
+		if sb.Len() > maxSize-1000 {
+			break
+		}
+		formatSingleLogEntry(&sb, log, i+1)
+		shownLogs++
+	}
+
+	if shownLogs < totalLogs {
+		sb.WriteString(fmt.Sprintf("\n---\n⚠️ **Showing %d of %d log entries.** Use `summary_only: true` or add filters to reduce results.\n", shownLogs, totalLogs))
+	}
+
+	return sb.String()
+}
+
+// formatSingleLogEntry formats a single log entry as markdown
+func formatSingleLogEntry(sb *strings.Builder, log interface{}, index int) {
+	logMap, ok := log.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	fmt.Fprintf(sb, "**[%d]** ", index)
+
+	// Time
+	if t, ok := logMap["time"].(string); ok {
+		fmt.Fprintf(sb, "`%s` ", t)
+	}
+
+	// Severity
+	if sev, ok := logMap["severity"].(string); ok {
+		fmt.Fprintf(sb, "[%s] ", sev)
+	}
+
+	// App and subsystem
+	if app, ok := logMap["app"].(string); ok {
+		fmt.Fprintf(sb, "**%s**", app)
+		if sub, ok := logMap["subsystem"].(string); ok {
+			fmt.Fprintf(sb, "/%s", sub)
+		}
+		sb.WriteString(" ")
+	}
+
+	sb.WriteString("\n")
+
+	// Message - escape it to prevent markdown/code interpretation
+	if msg, ok := logMap["message"].(string); ok && msg != "" {
+		// Truncate very long messages
+		if len(msg) > 500 {
+			msg = msg[:497] + "..."
+		}
+		// Use blockquote to safely display the message without interpretation
+		sb.WriteString("> ")
+		// Replace newlines in message to keep blockquote format
+		msg = strings.ReplaceAll(msg, "\n", "\n> ")
+		sb.WriteString(msg)
+		sb.WriteString("\n")
+	}
+
+	// Additional fields (exec_ms, sql, etc.)
+	if execMs, ok := logMap["exec_ms"].(int); ok {
+		fmt.Fprintf(sb, "  - Execution time: %dms\n", execMs)
+	}
+	if execMs, ok := logMap["exec_ms"].(float64); ok {
+		fmt.Fprintf(sb, "  - Execution time: %.0fms\n", execMs)
+	}
+
+	sb.WriteString("\n")
 }
