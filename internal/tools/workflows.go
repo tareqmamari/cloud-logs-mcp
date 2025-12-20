@@ -716,19 +716,8 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 		}, nil
 	}
 
-	req := &client.Request{
-		Method: "POST",
-		Path:   "/v1/query",
-		Body: map[string]interface{}{
-			"query":      healthQuery,
-			"tier":       tier,
-			"syntax":     "dataprime",
-			"start_date": startDate.Format(time.RFC3339),
-			"end_date":   endDate.Format(time.RFC3339),
-		},
-	}
-
-	result, err := t.ExecuteRequest(ctx, req)
+	// Query both tiers and merge results for complete health picture
+	result, tiersQueried, err := t.queryBothTiers(ctx, healthQuery, startDate, endDate)
 	if err != nil {
 		response.WriteString("## ⚠️ Health Check Failed\n\n")
 		response.WriteString(fmt.Sprintf("Unable to query logs: %s\n\n", err.Error()))
@@ -740,16 +729,26 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 			},
 		}, nil
 	}
+	tier = tiersQueried // Update tier for display
 
 	// Analyze results
 	events, ok := result["events"].([]interface{})
 	if !ok || len(events) == 0 {
-		response.WriteString("## ⚠️ No Data Available\n\n")
-		response.WriteString("No logs found in the specified time range.\n\n")
-		response.WriteString("### Possible Causes\n")
-		response.WriteString("- Log ingestion may not be configured\n")
-		response.WriteString("- Time range may be too narrow\n")
-		response.WriteString("- No services are currently logging\n")
+		// No errors found - this is actually healthy!
+		response.WriteString("## ✅ Healthy\n\n")
+		response.WriteString("No errors found in the specified time range.\n\n")
+		response.WriteString("### Summary\n")
+		response.WriteString("- **Total Errors:** 0\n")
+		response.WriteString(fmt.Sprintf("- **Data Tiers Searched:** %s\n\n", tiersQueried))
+		response.WriteString("### Recommended Actions\n")
+		response.WriteString("- Use `query_logs` to explore your log data\n")
+		response.WriteString("- Use `list_alerts` to review configured alerts\n")
+
+		// Add instance info
+		if apiClient, clientErr := t.GetClient(ctx); clientErr == nil {
+			info := apiClient.GetInstanceInfo()
+			response.WriteString(formatInstanceInfo(&info))
+		}
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -809,7 +808,8 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 	response.WriteString(fmt.Sprintf("- **Total Logs:** %d\n", totalLogs))
 	response.WriteString(fmt.Sprintf("- **Total Errors:** %d\n", totalErrors))
 	response.WriteString(fmt.Sprintf("- **Overall Error Rate:** %.2f%%\n", overallErrorRate))
-	response.WriteString(fmt.Sprintf("- **Applications Monitored:** %d\n\n", len(events)))
+	response.WriteString(fmt.Sprintf("- **Applications Monitored:** %d\n", len(events)))
+	response.WriteString(fmt.Sprintf("- **Data Tier:** %s\n\n", tier))
 
 	// Unhealthy applications
 	if len(unhealthyApps) > 0 {
@@ -913,6 +913,144 @@ func (t *HealthCheckTool) writeHealthPatterns(ctx context.Context, response *str
 		fmt.Fprintf(response, "\n... and %d more patterns\n", len(clusters)-maxPatterns)
 	}
 	response.WriteString("\n")
+}
+
+// queryBothTiers queries the appropriate tiers based on TCO configuration
+// TCO policies determine where data is routed:
+// - type_high: frequent_search (Priority Insights) + archive - fast queries, also archived
+// - type_medium: archive only - cost-optimized storage, no fast queries
+// - type_low: archive only - lowest cost storage
+// - No policies: both tiers (default behavior, logs go everywhere)
+func (t *HealthCheckTool) queryBothTiers(ctx context.Context, query string, startDate, endDate time.Time) (map[string]interface{}, string, error) {
+	// Determine which tiers to query based on TCO configuration
+	session := GetSession()
+	tcoConfig := session.GetTCOConfig()
+
+	var tiers []string
+	if tcoConfig == nil || !tcoConfig.HasPolicies {
+		// No TCO policies - query both tiers (logs go to both by default)
+		tiers = []string{"frequent_search", "archive"}
+	} else {
+		// Use TCO config to determine which tiers have data
+		if tcoConfig.HasFrequentSearch {
+			tiers = append(tiers, "frequent_search")
+		}
+		if tcoConfig.HasArchive {
+			tiers = append(tiers, "archive")
+		}
+		// If neither is set (shouldn't happen), default to both
+		if len(tiers) == 0 {
+			tiers = []string{"frequent_search", "archive"}
+		}
+	}
+
+	var tiersWithData []string
+	mergedEvents := make(map[string]map[string]interface{}) // app_name -> aggregated data
+
+	for _, tier := range tiers {
+		result, err := t.executeHealthQuery(ctx, query, tier, startDate, endDate)
+		if err != nil {
+			continue // Skip tier on error, try next
+		}
+
+		events, ok := result["events"].([]interface{})
+		if !ok || len(events) == 0 {
+			continue
+		}
+
+		// Check if tier has actual data (not just empty buckets)
+		hasRealData := false
+		for _, event := range events {
+			if eventMap, ok := event.(map[string]interface{}); ok {
+				errorCount, _ := eventMap["error_count"].(float64)
+				if errorCount > 0 {
+					hasRealData = true
+					break
+				}
+			}
+		}
+
+		if hasRealData {
+			tiersWithData = append(tiersWithData, tier)
+		}
+
+		// Merge events by app_name
+		for _, event := range events {
+			if eventMap, ok := event.(map[string]interface{}); ok {
+				appName, _ := eventMap["app_name"].(string)
+				if appName == "" {
+					appName, _ = eventMap["$l.applicationname"].(string)
+				}
+				if appName == "" {
+					continue
+				}
+
+				errorCount, _ := eventMap["error_count"].(float64)
+
+				if existing, exists := mergedEvents[appName]; exists {
+					// Add to existing
+					existingCount, _ := existing["error_count"].(float64)
+					existing["error_count"] = existingCount + errorCount
+				} else {
+					// New app
+					mergedEvents[appName] = map[string]interface{}{
+						"app_name":    appName,
+						"error_count": errorCount,
+					}
+				}
+			}
+		}
+	}
+
+	// Convert merged map back to events slice
+	var events []interface{}
+	for _, event := range mergedEvents {
+		events = append(events, event)
+	}
+
+	// Sort by error_count descending
+	for i := 0; i < len(events)-1; i++ {
+		for j := i + 1; j < len(events); j++ {
+			iCount, _ := events[i].(map[string]interface{})["error_count"].(float64)
+			jCount, _ := events[j].(map[string]interface{})["error_count"].(float64)
+			if jCount > iCount {
+				events[i], events[j] = events[j], events[i]
+			}
+		}
+	}
+
+	// Build tier label based on what was queried and what had data
+	var tiersLabel string
+	if len(tiers) == 1 {
+		tiersLabel = tiers[0]
+	} else {
+		tiersLabel = strings.Join(tiers, " + ")
+	}
+
+	if len(tiersWithData) == 0 {
+		tiersLabel += " (no errors found)"
+	} else if len(tiersWithData) < len(tiers) {
+		tiersLabel = strings.Join(tiersWithData, " + ") + " (data found)"
+	}
+
+	return map[string]interface{}{"events": events}, tiersLabel, nil
+}
+
+// executeHealthQuery runs a health check query against a specific tier
+func (t *HealthCheckTool) executeHealthQuery(ctx context.Context, query, tier string, startDate, endDate time.Time) (map[string]interface{}, error) {
+	req := &client.Request{
+		Method: "POST",
+		Path:   "/v1/query",
+		Body: map[string]interface{}{
+			"query":      query,
+			"tier":       tier,
+			"syntax":     "dataprime",
+			"start_date": startDate.Format(time.RFC3339),
+			"end_date":   endDate.Format(time.RFC3339),
+		},
+	}
+
+	return t.ExecuteRequest(ctx, req)
 }
 
 // ValidateQueryTool validates a query without executing it
