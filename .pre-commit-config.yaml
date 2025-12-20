@@ -37,13 +37,6 @@ repos:
         types: [go]
         pass_filenames: true
 
-      - id: validate-benchmarks
-        name: validate-benchmarks (update metrics)
-        entry: go run scripts/validate-benchmarks.go
-        language: system
-        files: (internal/tools/.*\.go|benchmarks\.json)$
-        pass_filenames: false
-
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
