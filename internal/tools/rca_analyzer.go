@@ -158,7 +158,8 @@ type LogCluster struct {
 	RootCause   string    `json:"root_cause"`   // Inferred root cause category
 }
 
-// ClusterLogs groups logs by their template for pattern analysis
+// ClusterLogs groups logs by their template for pattern analysis.
+// Uses sync.Pool for memory efficiency in high-throughput multi-agent swarm scenarios.
 func ClusterLogs(events []interface{}) []*LogCluster {
 	clusters := make(map[string]*LogCluster)
 	appSets := make(map[string]map[string]bool)
@@ -169,12 +170,16 @@ func ClusterLogs(events []interface{}) []*LogCluster {
 			continue
 		}
 
-		msg := extractMessageField(eventMap)
-		if msg == "" {
+		// Use pooled LogEntry for efficient parsing
+		entry := AcquireLogEntry()
+		parseEventIntoEntry(eventMap, entry)
+
+		if entry.Message == "" {
+			ReleaseLogEntry(entry)
 			continue
 		}
 
-		template, templateID := ExtractLogTemplate(msg)
+		template, templateID := ExtractLogTemplate(entry.Message)
 
 		cluster, exists := clusters[templateID]
 		if !exists {
@@ -190,19 +195,19 @@ func ClusterLogs(events []interface{}) []*LogCluster {
 		cluster.Count++
 
 		// Track severity (keep highest)
-		sev, sevNum := extractSeverityFromEvent(eventMap)
-		if sevNum > cluster.SeverityNum {
-			cluster.Severity = sev
-			cluster.SeverityNum = sevNum
+		if entry.SeverityNum > cluster.SeverityNum {
+			cluster.Severity = entry.Severity
+			cluster.SeverityNum = entry.SeverityNum
 		}
 
 		// Track applications
-		if app := extractAppFromEvent(eventMap); app != "" {
-			appSets[templateID][app] = true
+		if entry.App != "" {
+			appSets[templateID][entry.App] = true
 		}
 
 		// Collect samples (max 3)
 		if len(cluster.Samples) < 3 {
+			msg := entry.Message
 			if len(msg) > 200 {
 				msg = msg[:197] + "..."
 			}
@@ -210,14 +215,17 @@ func ClusterLogs(events []interface{}) []*LogCluster {
 		}
 
 		// Track time range
-		if ts := extractTimestampFromEvent(eventMap); !ts.IsZero() {
-			if cluster.FirstSeen.IsZero() || ts.Before(cluster.FirstSeen) {
-				cluster.FirstSeen = ts
+		if !entry.Timestamp.IsZero() {
+			if cluster.FirstSeen.IsZero() || entry.Timestamp.Before(cluster.FirstSeen) {
+				cluster.FirstSeen = entry.Timestamp
 			}
-			if ts.After(cluster.LastSeen) {
-				cluster.LastSeen = ts
+			if entry.Timestamp.After(cluster.LastSeen) {
+				cluster.LastSeen = entry.Timestamp
 			}
 		}
+
+		// Return entry to pool
+		ReleaseLogEntry(entry)
 	}
 
 	// Convert app sets to slices and infer root causes
@@ -239,6 +247,93 @@ func ClusterLogs(events []interface{}) []*LogCluster {
 	})
 
 	return result
+}
+
+// parseEventIntoEntry populates a LogEntry from an event map.
+// This enables efficient reuse of LogEntry via sync.Pool.
+func parseEventIntoEntry(eventMap map[string]interface{}, entry *LogEntry) {
+	// Extract message
+	entry.Message = extractMessageField(eventMap)
+
+	// Extract severity
+	entry.Severity, entry.SeverityNum = extractSeverityFromEvent(eventMap)
+
+	// Extract application
+	entry.App = extractAppFromEvent(eventMap)
+
+	// Extract subsystem
+	entry.Subsystem = extractSubsystemFromEvent(eventMap)
+
+	// Extract timestamp
+	entry.Timestamp = extractTimestampFromEvent(eventMap)
+
+	// Extract trace context
+	entry.TraceID, entry.SpanID = extractTraceContext(eventMap)
+
+	// Extract template (will be set by caller if needed)
+	entry.Template = ""
+	entry.TemplateID = ""
+}
+
+// extractSubsystemFromEvent extracts subsystem name from event
+func extractSubsystemFromEvent(event map[string]interface{}) string {
+	// Try labels
+	if labels, ok := event["labels"].(map[string]interface{}); ok {
+		if sub, ok := labels["subsystemname"].(string); ok {
+			return sub
+		}
+	}
+
+	// Try direct field
+	if sub, ok := event["subsystemname"].(string); ok {
+		return sub
+	}
+	if sub, ok := event["subsystem"].(string); ok {
+		return sub
+	}
+
+	return ""
+}
+
+// extractTraceContext extracts trace_id and span_id from event
+func extractTraceContext(event map[string]interface{}) (traceID, spanID string) {
+	// Try user_data first (common for structured logs)
+	if userData, ok := event["user_data"].(map[string]interface{}); ok {
+		if tid, ok := userData["trace_id"].(string); ok {
+			traceID = tid
+		} else if tid, ok := userData["traceId"].(string); ok {
+			traceID = tid
+		} else if tid, ok := userData["traceID"].(string); ok {
+			traceID = tid
+		}
+
+		if sid, ok := userData["span_id"].(string); ok {
+			spanID = sid
+		} else if sid, ok := userData["spanId"].(string); ok {
+			spanID = sid
+		} else if sid, ok := userData["spanID"].(string); ok {
+			spanID = sid
+		}
+	}
+
+	// Try direct fields if not found in user_data
+	if traceID == "" {
+		if tid, ok := event["trace_id"].(string); ok {
+			traceID = tid
+		} else if tid, ok := event["traceId"].(string); ok {
+			traceID = tid
+		}
+	}
+
+	if spanID == "" {
+		if sid, ok := event["span_id"].(string); ok {
+			spanID = sid
+		} else if sid, ok := event["spanId"].(string); ok {
+			spanID = sid
+		}
+	}
+
+	return traceID, spanID
 }
 
 // inferRootCause categorizes the likely root cause based on template patterns
