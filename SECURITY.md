@@ -25,27 +25,173 @@ This document outlines security best practices for deploying and operating the I
 3. **Least Privilege Principle**
    - Request only the minimum required IBM Cloud IAM permissions
    - Use service-specific API keys, not personal keys
-   - Recommended IAM roles:
-     - `Viewer` - Read-only access for queries and listing
-     - `Operator` - Read and limited write operations
-     - `Editor` - Full management capabilities (use sparingly)
+   - Recommended IAM service roles (see detailed mapping below):
+     - `Sender` - Data ingestion only (for log shipping agents)
+     - `Reader` - Read-only access for queries and viewing
+     - `Writer` - Read + create/modify alerts, webhooks, views
+     - `Manager` - Full administrative access
+     - `Service Configuration Reader` - Configuration audit access
 
-### Example IAM Policy
+### IBM Cloud Logs Service Roles
+
+| Role | CRN | Use Case |
+|------|-----|----------|
+| **Sender** | `crn:v1:bluemix:public:logs::::serviceRole:Sender` | Log shipping agents, data ingestion only |
+| **Reader** | `crn:v1:bluemix:public:logs::::serviceRole:Reader` | Monitoring dashboards, read-only queries |
+| **Writer** | `crn:v1:bluemix:public:logs::::serviceRole:Writer` | Alert management, view/dashboard creation |
+| **Manager** | `crn:v1:bluemix:public:logs::::serviceRole:Manager` | Full administration including policies |
+| **Service Configuration Reader** | `crn:v1:bluemix:public:logs::::serviceRole:ConfigurationReader` | Compliance auditing |
+
+### Tool-to-IAM Action Mapping
+
+The MCP server tools require specific IAM actions. Choose the minimum role needed:
+
+#### Query Tools (Minimum: Reader)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `query_logs` | `logs.logs-data-api-high.read`, `logs.logs-data-api-low.read` |
+| `build_query` | None (local validation) |
+| `submit_background_query` | `logs.logs-data-api-high.read`, `logs.legacy-archive-query.execute` |
+
+#### Alert Tools (Read: Reader, Write: Writer)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_alerts`, `get_alert` | `logs.alert-config.read`, `logs.logs-alert.read` |
+| `create_alert`, `update_alert`, `delete_alert` | `logs.alert-config.manage`, `logs.logs-alert.manage` |
+
+#### Dashboard Tools (Read: Reader, Write: Writer)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_dashboards`, `get_dashboard` | `logs.shared-dashboard.read` |
+| `create_dashboard`, `update_dashboard`, `delete_dashboard` | `logs.shared-dashboard.manage` |
+
+#### Policy Tools (Minimum: Manager)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_policies`, `get_policy` | `logs.logs-tco-policy.read` |
+| `create_policy`, `update_policy`, `delete_policy` | `logs.logs-tco-policy.manage` |
+
+#### Webhook Tools (Read: Reader, Write: Writer)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_outgoing_webhooks`, `get_outgoing_webhook` | `logs.webhook.read` |
+| `create_outgoing_webhook`, `update_outgoing_webhook`, `delete_outgoing_webhook` | `logs.webhook.manage` |
+
+#### Events2Metrics Tools (Minimum: Manager)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_e2m`, `get_e2m` | `logs.events2metrics.read` |
+| `create_e2m`, `update_e2m`, `delete_e2m` | `logs.events2metrics.manage` |
+
+#### Enrichment Tools (Minimum: Manager)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_enrichments` | `logs.custom-enrichment.read`, `logs.geo-enrichment.read`, `logs.security-enrichment.read` |
+| `create_enrichment`, `update_enrichment`, `delete_enrichment` | `logs.custom-enrichment.manage`, `logs.geo-enrichment.manage`, `logs.security-enrichment.manage` |
+
+#### Data Access Tools (Minimum: Manager)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_data_access_rules` | `logs.data-access-rule.read` |
+| `create_data_access_rule`, `update_data_access_rule`, `delete_data_access_rule` | `logs.data-access-rule.manage` |
+
+#### Stream Tools (Minimum: Manager)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `list_streams`, `get_stream` | `logs.logs-stream-setup.read` |
+| `create_stream`, `update_stream`, `delete_stream` | `logs.logs-stream-setup.manage` |
+
+#### Ingestion Tools (Minimum: Sender)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `ingest_logs` | `logs.data-ingress.send` |
+
+#### Meta Tools (No IAM Required)
+| Tool | Required IAM Actions |
+|------|---------------------|
+| `search_tools`, `describe_tools`, `list_tool_categories`, `discover_tools` | None (local operations) |
+
+### Example IAM Policy (Reader Role)
 
 ```json
 {
+  "type": "access",
+  "subjects": [
+    {
+      "attributes": [
+        {
+          "name": "iam_id",
+          "value": "IBMid-XXXXXXXXXX"
+        }
+      ]
+    }
+  ],
   "roles": [
     {
-      "role_id": "crn:v1:bluemix:public:iam::::role:Viewer",
-      "description": "Read-only access to logs"
-    },
+      "role_id": "crn:v1:bluemix:public:logs::::serviceRole:Reader"
+    }
+  ],
+  "resources": [
     {
-      "role_id": "crn:v1:bluemix:public:logs::::serviceRole:Reader",
-      "description": "Query logs and view configurations"
+      "attributes": [
+        {
+          "name": "serviceName",
+          "value": "logs"
+        },
+        {
+          "name": "serviceInstance",
+          "value": "your-instance-id"
+        }
+      ]
     }
   ]
 }
 ```
+
+### Example IAM Policy (Manager Role - Full Access)
+
+```json
+{
+  "type": "access",
+  "subjects": [
+    {
+      "attributes": [
+        {
+          "name": "iam_id",
+          "value": "IBMid-XXXXXXXXXX"
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "role_id": "crn:v1:bluemix:public:logs::::serviceRole:Manager"
+    }
+  ],
+  "resources": [
+    {
+      "attributes": [
+        {
+          "name": "serviceName",
+          "value": "logs"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Recommended Role by Use Case
+
+| Use Case | Recommended Role | Notes |
+|----------|------------------|-------|
+| Log shipping agent | Sender | Ingestion only, no read access |
+| Read-only monitoring | Reader | Query logs, view alerts/dashboards |
+| Alert management | Writer | Create/modify alerts and webhooks |
+| Full administration | Manager | Policy, enrichment, and stream management |
+| Compliance auditing | Service Configuration Reader | View-only on all configurations |
+| CI/CD pipeline | Writer | Automated alert and dashboard management |
+| Security team | Reader + Data Access Reader | Query with data access controls |
 
 ## Network Security
 
