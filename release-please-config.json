@@ -26,6 +26,14 @@
         ".release-please-manifest.json",
         "release-please-config.json",
         "commitlint.config.js"
+      ],
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".well-known/agent.json",
+          "jsonpath": "$.version"
+        },
+        "AGENTS.md"
       ]
     }
   }

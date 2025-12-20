@@ -8,14 +8,16 @@ repos:
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
-        exclude: (package.lock.json|logs-service-api.json|.goreleaser.yaml|README.md|install.sh)
+        exclude: (package.lock.json|logs-service-api.json|.goreleaser.yaml|README.md|install.sh|\.well-known/agent\.json)
 
   # Go formatting and linting
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
       - id: go-fmt
+        exclude: ^scripts/
       - id: go-vet
+        exclude: ^scripts/
       - id: go-mod-tidy
 
   # Go linting with golangci-lint (using system binary for Go version compatibility)

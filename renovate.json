@@ -14,6 +14,56 @@
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
+  "pre-commit": {
+    "enabled": true
+  },
+  "dockerfile": {
+    "fileMatch": ["(^|/)Dockerfile[^/]*$"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Docker ARG versions in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\nARG\\s+[A-Z_]+=(?<currentValue>[^\\s]+)"
+      ],
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Track MCP specification version in agent.json",
+      "fileMatch": ["\\.well-known/agent\\.json$"],
+      "matchStrings": [
+        "\"protocol\":\\s*\\{[^}]*\"version\":\\s*\"(?<currentValue>\\d{4}-\\d{2}-\\d{2})\""
+      ],
+      "depNameTemplate": "modelcontextprotocol/specification",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    },
+    {
+      "customType": "regex",
+      "description": "Track MCP specification version in AGENTS.md",
+      "fileMatch": ["AGENTS\\.md$"],
+      "matchStrings": [
+        "\\*\\*MCP Spec Compliance\\*\\*:\\s*(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
+      ],
+      "depNameTemplate": "modelcontextprotocol/specification",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    },
+    {
+      "customType": "regex",
+      "description": "Track MCP specification version in update script",
+      "fileMatch": ["scripts/update-protocol-version\\.go$"],
+      "matchStrings": [
+        "DefaultProtocolVersion\\s*=\\s*\"(?<currentValue>\\d{4}-\\d{2}-\\d{2})\""
+      ],
+      "depNameTemplate": "modelcontextprotocol/specification",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    }
+  ],
   "packageRules": [
     {
       "description": "Group Go module updates",
@@ -57,23 +107,19 @@
       "matchPackagePatterns": ["^registry\\.access\\.redhat\\.com/"],
       "versioning": "redhat",
       "labels": ["dependencies", "docker"]
-    }
-  ],
-  "pre-commit": {
-    "enabled": true
-  },
-  "dockerfile": {
-    "fileMatch": ["(^|/)Dockerfile[^/]*$"]
-  },
-  "customManagers": [
+    },
     {
-      "customType": "regex",
-      "description": "Update Docker ARG versions in Dockerfile",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-        "#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\nARG\\s+[A-Z_]+=(?<currentValue>[^\\s]+)"
-      ],
-      "versioningTemplate": "docker"
+      "description": "MCP Specification updates - manual review required",
+      "matchPackageNames": ["modelcontextprotocol/specification"],
+      "groupName": "MCP Specification",
+      "labels": ["dependencies", "mcp", "protocol"],
+      "automerge": false,
+      "prPriority": 5,
+      "prBodyNotes": [
+        "This updates the MCP protocol specification version.",
+        "Review the [changelog](https://modelcontextprotocol.io/specification/{{newVersion}}/changelog) before merging.",
+        "After merging, run `make update-protocol-version MCP_VERSION={{newVersion}}` to sync all files."
+      ]
     }
   ]
 }

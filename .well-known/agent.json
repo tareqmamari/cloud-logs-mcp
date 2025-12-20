@@ -1,0 +1,487 @@
+{
+  "$schema": "https://openai.com/schemas/agent-card/v1",
+  "authentication": {
+    "configuration": {
+      "api_key_env": "LOGS_API_KEY",
+      "region_env": "LOGS_REGION",
+      "service_url_env": "LOGS_SERVICE_URL"
+    },
+    "minimum_role_by_namespace": {
+      "alerts.read": "Reader",
+      "alerts.write": "Writer",
+      "dashboards.read": "Reader",
+      "dashboards.write": "Writer",
+      "data-access": "Manager",
+      "e2m": "Manager",
+      "enrichments": "Manager",
+      "ingestion": "Sender",
+      "meta": null,
+      "policies": "Manager",
+      "queries": "Reader",
+      "streams": "Manager",
+      "views.read": "Reader",
+      "views.write": "Writer",
+      "webhooks.read": "Reader",
+      "webhooks.write": "Writer",
+      "workflows": "Reader"
+    },
+    "service_name": "logs",
+    "service_roles": [
+      {
+        "actions": [
+          "logs.data-ingress.send"
+        ],
+        "crn": "crn:v1:bluemix:public:logs::::serviceRole:Sender",
+        "description": "Data ingestion only - for log shipping agents",
+        "name": "Sender"
+      },
+      {
+        "actions": [
+          "logs.logs-data-api-high.read",
+          "logs.logs-data-api-low.read",
+          "logs.alert-config.read",
+          "logs.logs-alert.read",
+          "logs.metrics-alert.read",
+          "logs.shared-dashboard.read",
+          "logs.shared-view.read",
+          "logs.private-view.read",
+          "logs.private-view.manage",
+          "logs.webhook.read",
+          "logs.incident.read",
+          "logs.livetail.read",
+          "logs.data-usage.read",
+          "logs.suppression-rule.read",
+          "logs.reserved-field.read",
+          "logs.legacy-archive-query.execute"
+        ],
+        "crn": "crn:v1:bluemix:public:logs::::serviceRole:Reader",
+        "description": "Read-only access to logs, alerts, dashboards, and views",
+        "name": "Reader"
+      },
+      {
+        "actions": [
+          "logs.alert-config.manage",
+          "logs.logs-alert.manage",
+          "logs.metrics-alert.manage",
+          "logs.shared-dashboard.manage",
+          "logs.shared-view.manage",
+          "logs.webhook.manage",
+          "logs.incident.acknowledge",
+          "logs.incident.snooze",
+          "logs.incident.assign",
+          "logs.incident.close",
+          "logs.alert.snooze",
+          "logs.suppression-rule.manage"
+        ],
+        "crn": "crn:v1:bluemix:public:logs::::serviceRole:Writer",
+        "description": "Reader permissions plus create/modify alerts, webhooks, views, dashboards",
+        "name": "Writer"
+      },
+      {
+        "actions": [
+          "logs.logs-tco-policy.manage",
+          "logs.data-access-rule.manage",
+          "logs.geo-enrichment.manage",
+          "logs.security-enrichment.manage",
+          "logs.custom-enrichment.manage",
+          "logs.custom-enrichment-data.manage",
+          "logs.events2metrics.manage",
+          "logs.logs-stream-setup.manage",
+          "logs.parsing-rule.manage",
+          "logs.team-members.read",
+          "logs.data-usage.manage",
+          "logs.data-usage.export",
+          "logs.logs-data-analytics-high.read",
+          "logs.logs-data-analytics-low.read",
+          "logs.metrics-data-analytics-high.read",
+          "logs.metrics-data-analytics-low.read",
+          "logs.version-benchmark-tags.manage",
+          "logs.extension.manage"
+        ],
+        "crn": "crn:v1:bluemix:public:logs::::serviceRole:Manager",
+        "description": "Full administrative access including policies, enrichments, and system configuration",
+        "name": "Manager"
+      },
+      {
+        "actions": [
+          "logs.data-access-rule.read",
+          "logs.logs-tco-policy.read",
+          "logs.geo-enrichment.read",
+          "logs.security-enrichment.read",
+          "logs.custom-enrichment.read",
+          "logs.parsing-rule.read",
+          "logs.events2metrics.read",
+          "logs.logs-stream-setup.read"
+        ],
+        "crn": "crn:v1:bluemix:public:logs::::serviceRole:ConfigurationReader",
+        "description": "Read-only access to service configurations for compliance auditing",
+        "name": "Service Configuration Reader"
+      }
+    ],
+    "type": "ibm_cloud_iam"
+  },
+  "behavioral_hints": {
+    "budget_aware": {
+      "compression_levels": [
+        "none",
+        "summary",
+        "insights",
+        "samples",
+        "full"
+      ],
+      "default_max_tokens": 4000,
+      "enabled": true,
+      "progressive_disclosure": true
+    },
+    "cost_metadata": {
+      "fields": [
+        "api_cost",
+        "token_cost",
+        "execution_speed",
+        "rate_limit_impact",
+        "requires_confirm"
+      ],
+      "provided": true
+    },
+    "query_validation": {
+      "auto_correction": true,
+      "dataprime_syntax": true,
+      "injection_detection": true
+    },
+    "tool_annotations": {
+      "destructive_hint": "Used by all delete_* tools",
+      "idempotent_hint": "Used by create_* with dry_run parameter",
+      "read_only_hint": "Used by all list_*, get_*, query_* tools"
+    }
+  },
+  "capabilities": {
+    "elicitation": {
+      "method": "tool-based",
+      "supported": "partial",
+      "tools": [
+        "verify_intent"
+      ]
+    },
+    "prompts": {
+      "supported": false
+    },
+    "resources": {
+      "supported": false
+    },
+    "sampling": {
+      "supported": false
+    },
+    "tools": {
+      "count": 50,
+      "discovery": {
+        "entry_points": [
+          "search_tools",
+          "list_tool_categories"
+        ],
+        "method": "dynamic",
+        "schema_retrieval": "describe_tools"
+      },
+      "namespaces": [
+        {
+          "description": "Log querying and DataPrime execution",
+          "name": "queries",
+          "required_iam_actions": [
+            "logs.logs-data-api-high.read",
+            "logs.logs-data-api-low.read",
+            "logs.legacy-archive-query.execute"
+          ],
+          "tools": [
+            "query_logs",
+            "build_query",
+            "submit_background_query",
+            "get_background_query_status",
+            "get_background_query_data"
+          ]
+        },
+        {
+          "description": "Alert definition and management",
+          "name": "alerts",
+          "required_iam_actions": [
+            "logs.alert-config.read",
+            "logs.alert-config.manage",
+            "logs.logs-alert.read",
+            "logs.logs-alert.manage"
+          ],
+          "tools": [
+            "list_alerts",
+            "get_alert",
+            "create_alert",
+            "update_alert",
+            "delete_alert",
+            "suggest_alert"
+          ]
+        },
+        {
+          "description": "Dashboard and visualization management",
+          "name": "dashboards",
+          "required_iam_actions": [
+            "logs.shared-dashboard.read",
+            "logs.shared-dashboard.manage"
+          ],
+          "tools": [
+            "list_dashboards",
+            "get_dashboard",
+            "create_dashboard",
+            "update_dashboard",
+            "delete_dashboard"
+          ]
+        },
+        {
+          "description": "TCO policy management for data tiering",
+          "name": "policies",
+          "required_iam_actions": [
+            "logs.logs-tco-policy.read",
+            "logs.logs-tco-policy.manage"
+          ],
+          "tools": [
+            "list_policies",
+            "get_policy",
+            "create_policy",
+            "update_policy",
+            "delete_policy"
+          ]
+        },
+        {
+          "description": "Outgoing webhook configuration",
+          "name": "webhooks",
+          "required_iam_actions": [
+            "logs.webhook.read",
+            "logs.webhook.manage"
+          ],
+          "tools": [
+            "list_outgoing_webhooks",
+            "get_outgoing_webhook",
+            "create_outgoing_webhook",
+            "update_outgoing_webhook",
+            "delete_outgoing_webhook"
+          ]
+        },
+        {
+          "description": "Events to Metrics conversion",
+          "name": "e2m",
+          "required_iam_actions": [
+            "logs.events2metrics.read",
+            "logs.events2metrics.manage"
+          ],
+          "tools": [
+            "list_e2m",
+            "get_e2m",
+            "create_e2m",
+            "update_e2m",
+            "delete_e2m"
+          ]
+        },
+        {
+          "description": "Log enrichment configurations",
+          "name": "enrichments",
+          "required_iam_actions": [
+            "logs.custom-enrichment.read",
+            "logs.custom-enrichment.manage",
+            "logs.geo-enrichment.read",
+            "logs.geo-enrichment.manage",
+            "logs.security-enrichment.read",
+            "logs.security-enrichment.manage"
+          ],
+          "tools": [
+            "list_enrichments",
+            "get_enrichment",
+            "create_enrichment",
+            "update_enrichment",
+            "delete_enrichment"
+          ]
+        },
+        {
+          "description": "Saved views management",
+          "name": "views",
+          "required_iam_actions": [
+            "logs.shared-view.read",
+            "logs.shared-view.manage",
+            "logs.private-view.read",
+            "logs.private-view.manage"
+          ],
+          "tools": [
+            "list_views",
+            "get_view",
+            "create_view",
+            "update_view",
+            "delete_view"
+          ]
+        },
+        {
+          "description": "Data access rule management",
+          "name": "data-access",
+          "required_iam_actions": [
+            "logs.data-access-rule.read",
+            "logs.data-access-rule.manage"
+          ],
+          "tools": [
+            "list_data_access_rules",
+            "get_data_access_rule",
+            "create_data_access_rule",
+            "update_data_access_rule",
+            "delete_data_access_rule"
+          ]
+        },
+        {
+          "description": "Log streaming configuration",
+          "name": "streams",
+          "required_iam_actions": [
+            "logs.logs-stream-setup.read",
+            "logs.logs-stream-setup.manage"
+          ],
+          "tools": [
+            "list_streams",
+            "get_stream",
+            "create_stream",
+            "update_stream",
+            "delete_stream"
+          ]
+        },
+        {
+          "description": "High-level investigation and health workflows",
+          "name": "workflows",
+          "required_iam_actions": [
+            "logs.logs-data-api-high.read",
+            "logs.incident.read",
+            "logs.alert-config.read"
+          ],
+          "tools": [
+            "investigate_incident",
+            "health_check"
+          ]
+        },
+        {
+          "description": "Tool discovery and introspection",
+          "name": "meta",
+          "required_iam_actions": [],
+          "tools": [
+            "search_tools",
+            "describe_tools",
+            "list_tool_categories",
+            "discover_tools"
+          ]
+        },
+        {
+          "description": "Log data ingestion",
+          "name": "ingestion",
+          "required_iam_actions": [
+            "logs.data-ingress.send"
+          ],
+          "tools": [
+            "ingest_logs"
+          ]
+        }
+      ],
+      "supported": true
+    }
+  },
+  "contact": {
+    "documentation_url": "https://github.com/tareqmamari/logs-mcp-server/blob/main/README.md",
+    "security_contact": "https://github.com/tareqmamari/logs-mcp-server/security",
+    "support_url": "https://github.com/tareqmamari/logs-mcp-server/issues"
+  },
+  "description": "Model Context Protocol server for IBM Cloud Logs observability platform. Provides intelligent log querying, alert management, dashboard creation, and incident investigation with budget-aware progressive disclosure.",
+  "display_name": "IBM Cloud Logs MCP Server",
+  "documentation": "https://github.com/tareqmamari/logs-mcp-server/blob/main/AGENTS.md",
+  "homepage": "https://github.com/tareqmamari/logs-mcp-server",
+  "license": "Apache-2.0",
+  "name": "ibm-cloud-logs-mcp",
+  "protocol": {
+    "transports": [
+      {
+        "primary": true,
+        "type": "stdio"
+      },
+      {
+        "endpoint": "/sse",
+        "supported": true,
+        "type": "sse"
+      }
+    ],
+    "type": "mcp",
+    "version": "2025-11-25"
+  },
+  "rate_limits": {
+    "default": {
+      "burst": 20,
+      "requests_per_second": 100
+    },
+    "per_tool": {
+      "ingest_logs": {
+        "reason": "High-throughput ingestion",
+        "requests_per_second": 50
+      },
+      "investigate_incident": {
+        "reason": "Multi-query workflow",
+        "requests_per_second": 2
+      },
+      "query_logs": {
+        "reason": "Heavy API operation",
+        "requests_per_second": 10
+      }
+    }
+  },
+  "schema_version": "1.0.0",
+  "security": {
+    "audit_logging": {
+      "enabled": true,
+      "excludes": [
+        "api_keys",
+        "request_bodies",
+        "pii"
+      ]
+    },
+    "injection_protection": {
+      "command_injection": true,
+      "path_traversal": true,
+      "sql_injection": true
+    },
+    "sensitive_tools": [
+      {
+        "requires_confirmation": true,
+        "risk": "high",
+        "tool": "delete_alert"
+      },
+      {
+        "requires_confirmation": true,
+        "risk": "critical",
+        "tool": "delete_policy"
+      },
+      {
+        "requires_confirmation": true,
+        "risk": "medium",
+        "tool": "delete_dashboard"
+      },
+      {
+        "requires_confirmation": true,
+        "risk": "high",
+        "tool": "delete_e2m"
+      },
+      {
+        "requires_confirmation": true,
+        "risk": "critical",
+        "tool": "delete_data_access_rule"
+      }
+    ],
+    "tls_required": true
+  },
+  "tags": [
+    "observability",
+    "logging",
+    "ibm-cloud",
+    "mcp",
+    "monitoring",
+    "alerting",
+    "dataprime"
+  ],
+  "vendor": {
+    "name": "IBM / Community",
+    "url": "https://github.com/tareqmamari/logs-mcp-server"
+  },
+  "version": "0.8.0"
+}

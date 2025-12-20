@@ -444,6 +444,28 @@ docs: ## Generate documentation
 	@echo "Visit http://localhost:6060/pkg/github.com/tareqmamari/logs-mcp-server/"
 	@$(shell go env GOPATH)/bin/godoc -http=:6060
 
+# MCP Protocol Version Management
+# Usage: make update-protocol-version [MCP_VERSION=2025-11-25]
+MCP_VERSION ?=
+update-protocol-version: ## Update MCP protocol version (MCP_VERSION=2025-11-25)
+	@echo "Updating MCP protocol version..."
+	@if [ -n "$(MCP_VERSION)" ]; then \
+		go run scripts/update-protocol-version.go $(MCP_VERSION); \
+	else \
+		go run scripts/update-protocol-version.go; \
+	fi
+	@echo "✅ MCP protocol version updated"
+
+check-protocol-version: ## Check current MCP protocol version
+	@echo "MCP Protocol Version Status:"
+	@echo "  Supported versions: 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05"
+	@AGENT_VERSION=$$(grep '"version":' .well-known/agent.json | head -2 | tail -1 | grep -o '[0-9-]*'); \
+	echo "  agent.json:  $$AGENT_VERSION"; \
+	SDK_VERSION=$$(grep -o 'latestProtocolVersion.*=.*protocolVersion[0-9]*' $$(go env GOPATH)/pkg/mod/github.com/modelcontextprotocol/go-sdk@*/mcp/shared.go 2>/dev/null | grep -o '[0-9]*' | head -1); \
+	if [ -n "$$SDK_VERSION" ]; then \
+		echo "  SDK default: $$(echo $$SDK_VERSION | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')"; \
+	fi
+
 # API Update helpers
 compare-api: ## Compare old and new API definitions
 	@./scripts/compare-api-changes.sh
