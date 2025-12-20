@@ -13,10 +13,10 @@ Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants t
 
 ## Overview
 
-This MCP server provides comprehensive access to IBM Cloud Logs through 88 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
+This MCP server provides comprehensive access to IBM Cloud Logs through 92 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (88 tools)
+- Complete IBM Cloud Logs API coverage (92 tools)
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
 - Configurable rate limiting
@@ -123,7 +123,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-88 tools organized by functionality:
+92 tools organized by functionality:
 
 #### Query Operations (5 tools)
 - `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
@@ -164,6 +164,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 #### Views (5 tools)
 - `list_views`, `get_view`, `create_view`, `replace_view`, `delete_view`
+
+#### Root Cause Analysis (4 tools)
+- `analyze_log_delta` - Semantic log clustering and delta analysis between time windows
+- `get_trace_context` - Trace-log cohesion for distributed request analysis
+- `analyze_causal_chain` - Causal discovery to identify root causes from error patterns
+- `generate_rca_document` - Generate structured RCA document template for post-mortems
 
 ### Resources
 
@@ -256,6 +262,39 @@ The alerting engine implements recommendations from:
 - [Google SRE Handbook - Alerting](https://sre.google/sre-book/monitoring-distributed-systems/)
 - ["My Philosophy on Alerting"](https://docs.google.com/document/d/199PqyG3UsyXlwieHaqbGiWVa8eMWi8zzAn0YfcApr8Q) by Rob Ewaschuk
 - [SRE Workbook - Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
+
+---
+
+## Root Cause Analysis
+
+Advanced RCA tools implementing **SOTA 2025 patterns** for causal discovery and semantic log analysis.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `analyze_log_delta` | Compare log patterns between healthy and unhealthy time windows |
+| `get_trace_context` | Analyze distributed traces with cross-service correlation |
+| `analyze_causal_chain` | Build causal graphs to identify root causes |
+| `generate_rca_document` | Generate structured RCA document with 5 Whys methodology |
+
+### Key Capabilities
+
+- **Semantic Log Clustering**: Automatically groups similar logs using template extraction (normalizes UUIDs, IPs, timestamps)
+- **Root Cause Inference**: Categorizes errors into actionable categories (MEMORY_PRESSURE, TIMEOUT, NETWORK_FAILURE, etc.)
+- **Causal Discovery**: Ranks potential root causes using temporal ordering and fundamental cause scoring
+- **Trace-Log Cohesion**: Correlates spans across services for distributed request analysis
+- **High-Throughput Optimization**: Uses sync.Pool for memory efficiency in high-cardinality scenarios
+
+### Quick Start
+
+```
+"What changed in the logs between 9am and 10am compared to 10am-11am?"
+"Show me the trace context for request abc123"
+"Analyze the causal chain for errors in the last hour"
+```
+
+See [TOOLS_REFERENCE.md](TOOLS_REFERENCE.md#root-cause-analysis) for complete documentation.
 
 ---
 

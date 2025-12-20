@@ -1,6 +1,6 @@
 # IBM Cloud Logs MCP Tools Reference
 
-This document provides comprehensive documentation for all 88 tools available in the IBM Cloud Logs MCP Server. Tools are organized by category with best practices and usage guidelines.
+This document provides comprehensive documentation for all 92 tools available in the IBM Cloud Logs MCP Server. Tools are organized by category with best practices and usage guidelines.
 
 ---
 
@@ -27,6 +27,7 @@ This document provides comprehensive documentation for all 88 tools available in
 - [AI Helpers](#ai-helpers)
 - [Query Intelligence](#query-intelligence)
 - [Workflow Automation](#workflow-automation)
+- [Root Cause Analysis](#root-cause-analysis)
 - [Meta Tools](#meta-tools)
 - [Best Practices](#best-practices)
 
@@ -56,6 +57,7 @@ This document provides comprehensive documentation for all 88 tools available in
 | AI Helpers | 3 | AI-powered analysis |
 | Query Intelligence | 3 | Query building assistance |
 | Workflows | 2 | Automated investigation |
+| Root Cause Analysis | 4 | Advanced RCA with causal discovery |
 | Meta | 4 | Tool discovery and session |
 
 ---
@@ -922,7 +924,204 @@ Autonomous incident investigation that thinks like a senior SRE.
 
 ### health_check
 
-Quick system health overview.
+Quick system health overview with log clustering.
+
+**What it does:**
+1. Queries recent error and warning logs
+2. Clusters similar log patterns using semantic templates
+3. Identifies root cause categories (TIMEOUT, MEMORY_PRESSURE, etc.)
+4. Provides system health summary
+
+---
+
+## Root Cause Analysis
+
+Advanced RCA tools implementing SOTA 2025 patterns for causal discovery and trace-log cohesion.
+
+### analyze_log_delta
+
+Analyze log volume and pattern changes between time windows.
+
+**When to use:** Identify what changed between healthy and unhealthy states. Implements LogAssist/LogBatcher 2025 patterns for semantic log clustering.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | Yes | DataPrime query to filter logs |
+| `baseline_start` | string | Yes | RFC3339 start of baseline window |
+| `baseline_end` | string | Yes | RFC3339 end of baseline window |
+| `comparison_start` | string | Yes | RFC3339 start of comparison window |
+| `comparison_end` | string | Yes | RFC3339 end of comparison window |
+| `min_change_percent` | number | No | Minimum change threshold (default: 20%) |
+
+**Example:**
+```json
+{
+  "query": "source logs | filter $l.applicationname == 'api-gateway'",
+  "baseline_start": "2024-01-15T09:00:00Z",
+  "baseline_end": "2024-01-15T10:00:00Z",
+  "comparison_start": "2024-01-15T10:00:00Z",
+  "comparison_end": "2024-01-15T11:00:00Z"
+}
+```
+
+**Output:**
+- Clustered log patterns with semantic templates
+- Volume change percentages per cluster
+- Root cause categories (TIMEOUT, MEMORY_PRESSURE, NETWORK_FAILURE, etc.)
+- New patterns that emerged in comparison window
+- Disappeared patterns from baseline
+
+**Key Features:**
+- Log template extraction (normalizes UUIDs, IPs, timestamps, etc.)
+- Automatic root cause inference from templates
+- Verification traces for reasoning models (System 2)
+- sync.Pool optimization for high-throughput scenarios
+
+---
+
+### get_trace_context
+
+Retrieve and analyze all logs associated with a trace ID.
+
+**When to use:** Understand the full context of a distributed request flow. Provides trace-log cohesion by correlating spans across services.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `trace_id` | string | Yes | Trace ID to look up |
+| `start_date` | string | No | RFC3339 start time |
+| `end_date` | string | No | RFC3339 end time |
+
+**Example:**
+```json
+{
+  "trace_id": "abc123def456789012345678",
+  "start_date": "2024-01-15T10:00:00Z",
+  "end_date": "2024-01-15T11:00:00Z"
+}
+```
+
+**Output:**
+- Timeline of events sorted by timestamp
+- Services involved (in order of appearance)
+- Error summary with counts per service
+- Total trace duration
+- Span relationships
+
+**Key Features:**
+- Automatic service extraction from various field formats
+- Severity-based error tracking
+- Cross-service correlation
+
+---
+
+### analyze_causal_chain
+
+Build causal graph from clustered log patterns to identify root causes.
+
+**When to use:** Determine the likely root cause from a set of error patterns. Implements AURORA/RCD 2025 causal discovery algorithms.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | Yes | DataPrime query to filter logs |
+| `start_date` | string | Yes | RFC3339 start time |
+| `end_date` | string | Yes | RFC3339 end time |
+| `include_context` | boolean | No | Include additional timeline context |
+
+**Example:**
+```json
+{
+  "query": "source logs | filter $m.severity >= 5",
+  "start_date": "2024-01-15T10:00:00Z",
+  "end_date": "2024-01-15T11:00:00Z",
+  "include_context": true
+}
+```
+
+**Output:**
+- Causal graph with nodes (log clusters) and edges (relationships)
+- Root cause candidates ranked by confidence score
+- Error propagation path across services
+- Timeline of cluster appearances
+
+**Confidence Scoring:**
+- **Temporal ordering**: Earlier clusters score higher as potential causes
+- **Fundamental causes**: MEMORY_PRESSURE, NETWORK_FAILURE, STORAGE_FAILURE score higher than symptoms like TIMEOUT
+- **Service spread**: Issues affecting fewer services (more localized) score higher
+
+**Root Cause Categories:**
+| Category | Typical Patterns |
+|----------|------------------|
+| MEMORY_PRESSURE | OOM, killed process, heap exhausted |
+| TIMEOUT | Connection timeout, request timeout |
+| NETWORK_FAILURE | Connection refused, socket error |
+| AUTH_FAILURE | Permission denied, unauthorized |
+| STORAGE_FAILURE | Disk full, no space left |
+| RATE_LIMITED | Rate limit exceeded, throttled |
+| DNS_FAILURE | DNS resolution failed |
+| TLS_FAILURE | Certificate expired, TLS handshake |
+| DATABASE_FAILURE | Deadlock, connection pool exhausted |
+| K8S_ORCHESTRATION | Pod evicted, node pressure |
+
+---
+
+### generate_rca_document
+
+Generate a structured Root Cause Analysis document template.
+
+**When to use:** After completing incident investigation to create a formal RCA report for post-mortem review and stakeholder communication.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `incident_title` | string | Yes | Short title describing the incident |
+| `incident_id` | string | No | Incident tracking ID (auto-generated if not provided) |
+| `incident_start` | string | Yes | When the incident started (RFC3339) |
+| `incident_end` | string | No | When resolved (omit if ongoing) |
+| `severity` | string | No | SEV1, SEV2, SEV3, SEV4 (default: SEV2) |
+| `affected_services` | array | No | List of affected services |
+| `root_cause_category` | string | No | Primary root cause from analysis |
+| `root_cause_description` | string | No | Detailed root cause description |
+| `error_patterns` | array | No | Error patterns from analyze_log_delta |
+| `timeline_events` | array | No | Timeline events from investigation |
+| `include_template_sections` | boolean | No | Include blank sections to fill (default: true) |
+
+**Example:**
+```json
+{
+  "incident_title": "API Gateway Timeout Spike",
+  "incident_start": "2024-01-15T10:00:00Z",
+  "incident_end": "2024-01-15T11:30:00Z",
+  "severity": "SEV2",
+  "affected_services": ["api-gateway", "auth-service"],
+  "root_cause_category": "NETWORK_FAILURE",
+  "root_cause_description": "Network partition between api-gateway and auth-service due to misconfigured network policy"
+}
+```
+
+**Output:** Markdown document with sections:
+1. Executive Summary
+2. Affected Services
+3. Impact Assessment
+4. Incident Timeline
+5. Root Cause Analysis (5 Whys)
+6. Log Evidence
+7. Contributing Factors
+8. Corrective Actions
+9. Prevention Measures
+10. Lessons Learned
+
+**Key Features:**
+- Pre-filled with data from RCA tools
+- Template sections with guidance for manual completion
+- Industry-standard 5 Whys methodology
+- Checklist format for action items
 
 ---
 
@@ -1085,6 +1284,7 @@ Get a brief overview of all tool categories.
 | `workflow` | Automated workflows |
 | `data_usage` | Usage metrics |
 | `ai_helper` | AI-powered analysis |
+| `rca` | Root cause analysis |
 | `meta` | Tool discovery and session |
 
 ---
