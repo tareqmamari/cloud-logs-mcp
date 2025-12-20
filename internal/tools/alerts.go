@@ -565,6 +565,11 @@ func (t *DeleteAlertTool) InputSchema() interface{} {
 				"type":        "string",
 				"description": "The unique identifier of the alert to delete",
 			},
+			"confirm": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Set to true to confirm deletion. Required to prevent accidental deletions.",
+				"default":     false,
+			},
 		},
 		"required": []string{"id"},
 	}
@@ -595,6 +600,11 @@ func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]inte
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+
+	// Require explicit confirmation for destructive operations
+	if shouldContinue, result := RequireConfirmation(arguments, "alert", id); !shouldContinue {
+		return result, nil
 	}
 
 	req := &client.Request{

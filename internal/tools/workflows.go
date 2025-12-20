@@ -332,7 +332,15 @@ func (t *InvestigateIncidentTool) writeFindings(response *strings.Builder, resul
 	fmt.Fprintf(response, "Found **%d error logs** in the specified time range.\n\n", len(events))
 
 	t.writeAnalysis(response, analysis)
-	t.writeSampleErrors(response, events)
+
+	// SOTA 2025: Add semantic log clustering for pattern detection
+	// This uses LogAssist/LogBatcher paradigm for high-cardinality filtering
+	if len(events) >= 5 {
+		t.writeClusteredPatterns(response, events)
+	} else {
+		t.writeSampleErrors(response, events)
+	}
+
 	t.writeHypotheses(response, events, session)
 	t.recordFindings(session, events, analysis, timeRange)
 	t.writeRecommendedActions(response)
@@ -399,6 +407,61 @@ func (t *InvestigateIncidentTool) writeSampleErrors(response *strings.Builder, e
 	}
 }
 
+// writeClusteredPatterns uses semantic log clustering (SOTA 2025 LogAssist/LogBatcher pattern)
+// to identify error patterns instead of showing raw samples. This provides better RCA insights.
+func (t *InvestigateIncidentTool) writeClusteredPatterns(response *strings.Builder, events []interface{}) {
+	clusters := ClusterLogs(events)
+
+	if len(clusters) == 0 {
+		t.writeSampleErrors(response, events)
+		return
+	}
+
+	response.WriteString("\n### 🔬 Error Pattern Analysis\n\n")
+	fmt.Fprintf(response, "Identified **%d unique error patterns** from %d log entries:\n\n", len(clusters), len(events))
+
+	// Show top 5 clusters
+	maxClusters := 5
+	if len(clusters) < maxClusters {
+		maxClusters = len(clusters)
+	}
+
+	for i := 0; i < maxClusters; i++ {
+		cluster := clusters[i]
+		fmt.Fprintf(response, "**Pattern %d** (`%s`)\n", i+1, cluster.TemplateID)
+		fmt.Fprintf(response, "- **Count:** %d occurrences (%.1f%%)\n",
+			cluster.Count, float64(cluster.Count)*100/float64(len(events)))
+		fmt.Fprintf(response, "- **Severity:** %s\n", cluster.Severity)
+		fmt.Fprintf(response, "- **Root Cause Category:** %s\n", cluster.RootCause)
+		if len(cluster.Apps) > 0 {
+			fmt.Fprintf(response, "- **Apps:** %s\n", strings.Join(cluster.Apps, ", "))
+		}
+		if len(cluster.Samples) > 0 {
+			fmt.Fprintf(response, "- **Sample:** `%s`\n", truncateString(cluster.Samples[0], 80))
+		}
+		response.WriteString("\n")
+	}
+
+	if len(clusters) > maxClusters {
+		fmt.Fprintf(response, "... and %d more patterns\n\n", len(clusters)-maxClusters)
+	}
+
+	// Add causal insight summary
+	rootCauses := make(map[string]int)
+	for _, c := range clusters {
+		if c.RootCause != "UNKNOWN" {
+			rootCauses[c.RootCause] += c.Count
+		}
+	}
+	if len(rootCauses) > 0 {
+		response.WriteString("### 🎯 Likely Root Cause Categories\n")
+		for cause, count := range rootCauses {
+			fmt.Fprintf(response, "- **%s:** %d occurrences\n", cause, count)
+		}
+		response.WriteString("\n")
+	}
+}
+
 func (t *InvestigateIncidentTool) writeHypotheses(response *strings.Builder, events []interface{}, session *SessionContext) {
 	response.WriteString("\n## 🎯 Root Cause Hypotheses\n")
 	hypotheses := generateHypotheses(events)
@@ -424,9 +487,11 @@ func (t *InvestigateIncidentTool) recordFindings(session *SessionContext, events
 func (t *InvestigateIncidentTool) writeRecommendedActions(response *strings.Builder) {
 	response.WriteString("\n## 📋 Recommended Actions\n")
 	response.WriteString("1. **Drill down:** Use `query_logs` with specific filters to examine individual errors\n")
-	response.WriteString("2. **Check alerts:** Run `list_alerts` to see if any alerts have triggered\n")
-	response.WriteString("3. **Create monitoring:** Use `suggest_alert` to set up alerting for this pattern\n")
-	response.WriteString("4. **Build dashboard:** Use `create_dashboard` to visualize error trends\n")
+	response.WriteString("2. **Delta analysis:** Use `analyze_log_delta` to compare before/after incident time\n")
+	response.WriteString("3. **Trace context:** Use `get_trace_context` with a trace ID to see full request flow\n")
+	response.WriteString("4. **Causal analysis:** Use `analyze_causal_chain` to find the true root cause\n")
+	response.WriteString("5. **Check alerts:** Run `list_alerts` to see if any alerts have triggered\n")
+	response.WriteString("6. **Create monitoring:** Use `suggest_alert` to set up alerting for this pattern\n")
 }
 
 // extractErrorMessage extracts the error message from an event
@@ -622,16 +687,25 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 	response.WriteString("# 🏥 System Health Check\n\n")
 	response.WriteString(fmt.Sprintf("**Time Range:** Last %s (ending %s UTC)\n\n", timeRange, endDate.Format("15:04")))
 
+	// Determine tier based on TCO configuration
+	session := GetSession()
+	tcoConfig := session.GetTCOConfig()
+	tier := "frequent_search" // Default to frequent_search for faster queries
+	if tcoConfig != nil {
+		tier = tcoConfig.DefaultTier
+	}
+
 	// Query for health summary - use simple error count per app
+	// Use 'as' aliases to get clean field names in results
 	healthQuery := `source logs
 		| filter $m.severity >= ERROR
-		| groupby $l.applicationname
+		| groupby $l.applicationname as app_name
 		| aggregate count() as error_count
 		| sortby -error_count
 		| limit 15`
 
 	// Prepare query (auto-correct and validate) using central validator
-	healthQuery, _, err := PrepareQuery(healthQuery, "archive", "dataprime")
+	healthQuery, _, err := PrepareQuery(healthQuery, tier, "dataprime")
 	if err != nil {
 		response.WriteString("## ⚠️ Health Check Failed\n\n")
 		response.WriteString(fmt.Sprintf("Query validation error: %s\n\n", err.Error()))
@@ -647,7 +721,7 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 		Path:   "/v1/query",
 		Body: map[string]interface{}{
 			"query":      healthQuery,
-			"tier":       "archive",
+			"tier":       tier,
 			"syntax":     "dataprime",
 			"start_date": startDate.Format(time.RFC3339),
 			"end_date":   endDate.Format(time.RFC3339),
@@ -746,15 +820,22 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 		response.WriteString("\n")
 	}
 
+	// SOTA 2025: Add error pattern clustering for better insights
+	// Query actual error logs for pattern analysis if there are errors
+	if totalErrors > 0 {
+		t.writeHealthPatterns(ctx, &response, tier, startDate, endDate)
+	}
+
 	// Recommendations
 	response.WriteString("### Recommended Actions\n")
 	if len(unhealthyApps) > 0 {
 		response.WriteString("1. Run `investigate_incident` for applications with high error rates\n")
 	}
 	if overallErrorRate > 1 {
-		response.WriteString("2. Check `list_alerts` to see if any alerts have triggered\n")
+		response.WriteString("2. Use `analyze_log_delta` to compare with a healthy baseline\n")
+		response.WriteString("3. Check `list_alerts` to see if any alerts have triggered\n")
 	}
-	response.WriteString("3. Use `query_logs` for detailed investigation of specific issues\n")
+	response.WriteString("4. Use `query_logs` for detailed investigation of specific issues\n")
 
 	// Add instance info so users know which IBM Cloud Logs instance was queried
 	if apiClient, err := t.GetClient(ctx); err == nil {
@@ -767,6 +848,71 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 			&mcp.TextContent{Text: response.String()},
 		},
 	}, nil
+}
+
+// writeHealthPatterns fetches error logs and clusters them for pattern analysis
+func (t *HealthCheckTool) writeHealthPatterns(ctx context.Context, response *strings.Builder, tier string, startDate, endDate time.Time) {
+	// Query for actual error messages (limit to 100 for clustering)
+	patternQuery := `source logs
+		| filter $m.severity >= ERROR
+		| limit 100`
+
+	patternQuery, _, err := PrepareQuery(patternQuery, tier, "dataprime")
+	if err != nil {
+		return // Silently skip pattern analysis on error
+	}
+
+	req := &client.Request{
+		Method: "POST",
+		Path:   "/v1/query",
+		Body: map[string]interface{}{
+			"query":      patternQuery,
+			"tier":       tier,
+			"syntax":     "dataprime",
+			"start_date": startDate.Format(time.RFC3339),
+			"end_date":   endDate.Format(time.RFC3339),
+		},
+	}
+
+	result, err := t.ExecuteRequest(ctx, req)
+	if err != nil {
+		return
+	}
+
+	events, ok := result["events"].([]interface{})
+	if !ok || len(events) < 3 {
+		return // Not enough data for meaningful clustering
+	}
+
+	// Cluster the logs
+	clusters := ClusterLogs(events)
+	if len(clusters) == 0 {
+		return
+	}
+
+	response.WriteString("### 🔬 Error Pattern Summary\n\n")
+
+	// Show top 3 patterns
+	maxPatterns := 3
+	if len(clusters) < maxPatterns {
+		maxPatterns = len(clusters)
+	}
+
+	for i := 0; i < maxPatterns; i++ {
+		cluster := clusters[i]
+		fmt.Fprintf(response, "**%d. %s** (%d occurrences)\n", i+1, cluster.RootCause, cluster.Count)
+		if len(cluster.Apps) > 0 {
+			fmt.Fprintf(response, "   - Apps: %s\n", strings.Join(cluster.Apps, ", "))
+		}
+		if len(cluster.Samples) > 0 {
+			fmt.Fprintf(response, "   - Sample: `%s`\n", truncateString(cluster.Samples[0], 60))
+		}
+	}
+
+	if len(clusters) > maxPatterns {
+		fmt.Fprintf(response, "\n... and %d more patterns\n", len(clusters)-maxPatterns)
+	}
+	response.WriteString("\n")
 }
 
 // ValidateQueryTool validates a query without executing it

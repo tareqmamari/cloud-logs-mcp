@@ -318,7 +318,8 @@ func (t *DeleteAlertDefinitionTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"id": map[string]interface{}{"type": "string", "description": "Alert definition ID"},
+			"id":      map[string]interface{}{"type": "string", "description": "Alert definition ID to delete"},
+			"confirm": ConfirmationInputSchema(),
 		},
 		"required": []string{"id"},
 	}
@@ -329,6 +330,9 @@ func (t *DeleteAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(arguments, "alert definition", id); !shouldContinue {
+		return result, nil
 	}
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/alert_definitions/" + id})
 	if err != nil {

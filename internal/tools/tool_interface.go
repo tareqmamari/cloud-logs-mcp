@@ -69,6 +69,10 @@ type ToolMetadata struct {
 	// "middle" - used after initial discovery
 	// "finisher" - concluding actions like create/delete
 	ChainPosition string `json:"chain_position"`
+
+	// Icon is the URI for the tool's icon (MCP 2025-11-25)
+	// Can be a data URI (data:image/svg+xml;base64,...) or HTTPS URL
+	Icon string `json:"icon,omitempty"`
 }
 
 // ToolCategory represents the functional category of a tool

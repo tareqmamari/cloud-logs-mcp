@@ -494,6 +494,90 @@ func TestAutoCorrectDataPrimeQuery(t *testing.T) {
 			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1m) as time_bucket aggregate count() as cnt",
 			expectedCorrections: 0,
 		},
+		// bin() -> roundTime()
+		{
+			name:                "bin function to roundTime",
+			query:               "source logs | groupby bin($m.timestamp, 1h) as time_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as time_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "bin function with minutes",
+			query:               "source logs | groupby bin($m.timestamp, 15m) as bucket aggregate count() as errors",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 15m) as bucket aggregate count() as errors",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "bin function with quoted interval",
+			query:               "source logs | groupby bin($m.timestamp, '1h') as time_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as time_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		// time_bucket() -> roundTime() (PostgreSQL/TimescaleDB syntax)
+		{
+			name:                "time_bucket function to roundTime",
+			query:               "source logs | groupby time_bucket(1h, $m.timestamp) as time_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as time_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "time_bucket with quoted interval",
+			query:               "source logs | groupby time_bucket('30m', $m.timestamp) as bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 30m) as bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		// timestampformat -> removed (invalid DataPrime, LLM hallucination)
+		{
+			name:                "timestampformat stage removed",
+			query:               "source logs | filter $l.applicationname == 'myapp' | timestampformat $m.timestamp to_timestamp '%Y-%m-%d %H:00:00' as hour_bucket | groupby hour_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | filter $l.applicationname == 'myapp' | groupby hour_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		// timestamp_round_down() -> roundTime() (invalid function, LLM hallucination)
+		{
+			name:                "timestamp_round_down to roundTime",
+			query:               "source logs | groupby timestamp_round_down($m.timestamp, 1h) as hour aggregate count() as error_count",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as hour aggregate count() as error_count",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "timestamp_round_down with quoted interval",
+			query:               "source logs | groupby timestamp_round_down($m.timestamp, '30m') as bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 30m) as bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		// date_trunc() -> roundTime() (PostgreSQL syntax, not valid in DataPrime)
+		{
+			name:                "date_trunc hour to roundTime",
+			query:               "source logs | groupby date_trunc('hour', $m.timestamp) as hour_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as hour_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "date_trunc day to roundTime",
+			query:               "source logs | groupby date_trunc('day', $m.timestamp) as day_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1d) as day_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "date_trunc minute to roundTime",
+			query:               "source logs | groupby date_trunc('minute', $m.timestamp) as min_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1m) as min_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		// trunc() -> roundTime() (alternative truncation syntax)
+		{
+			name:                "trunc hour to roundTime",
+			query:               "source logs | groupby trunc($m.timestamp, 'hour') as hour_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1h) as hour_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
+		{
+			name:                "trunc day to roundTime",
+			query:               "source logs | groupby trunc($m.timestamp, 'day') as day_bucket aggregate count() as cnt",
+			expectedQuery:       "source logs | groupby roundTime($m.timestamp, 1d) as day_bucket aggregate count() as cnt",
+			expectedCorrections: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -534,6 +618,11 @@ func TestSuggestQueryFix(t *testing.T) {
 			name:          "unknown function error",
 			errorMessage:  "unknown function: foo",
 			shouldContain: []string{"count()", "contains()", "avg()"},
+		},
+		{
+			name:          "unknown function bin error",
+			errorMessage:  "unknown function 'bin'",
+			shouldContain: []string{"roundTime", "time bucketing", "roundTime($m.timestamp"},
 		},
 	}
 
@@ -860,6 +949,59 @@ func TestValidateNoInjectionPatterns(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error for valid query (%s): %s", tt.description, err.Error())
 				}
+			}
+		})
+	}
+}
+
+func TestSanitizeQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "removes tabs",
+			input:    "source logs\t| filter\t$m.severity >= ERROR",
+			expected: "source logs | filter $m.severity >= ERROR",
+		},
+		{
+			name:     "normalizes multiple spaces",
+			input:    "source logs  |  filter   $m.severity >= ERROR",
+			expected: "source logs | filter $m.severity >= ERROR",
+		},
+		{
+			name:     "converts smart quotes to single quotes",
+			input:    "source logs | filter $l.applicationname == \u2018myapp\u2019",
+			expected: "source logs | filter $l.applicationname == 'myapp'",
+		},
+		{
+			name:     "converts double smart quotes to single quotes",
+			input:    "source logs | filter $l.applicationname == \u201cmyapp\u201d",
+			expected: "source logs | filter $l.applicationname == 'myapp'",
+		},
+		{
+			name:     "normalizes newlines to spaces",
+			input:    "source logs\n| filter $m.severity >= ERROR\n| limit 10",
+			expected: "source logs | filter $m.severity >= ERROR | limit 10",
+		},
+		{
+			name:     "trims whitespace",
+			input:    "  source logs | filter $m.severity >= ERROR  ",
+			expected: "source logs | filter $m.severity >= ERROR",
+		},
+		{
+			name:     "handles CRLF",
+			input:    "source logs\r\n| filter $m.severity >= ERROR",
+			expected: "source logs | filter $m.severity >= ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeQuery(tt.input)
+			if result != tt.expected {
+				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 			}
 		})
 	}

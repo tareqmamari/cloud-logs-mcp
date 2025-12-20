@@ -47,8 +47,10 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 	}
 
 	// Create MCP server with tools, prompts, and resources capabilities
+	// MCP 2025-11-25: Implementation now supports Title for display purposes
 	mcpServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "IBM Cloud Logs MCP Server",
+		Name:    "ibm-cloud-logs-mcp",
+		Title:   "IBM Cloud Logs MCP Server",
 		Version: version,
 	}, &mcp.ServerOptions{
 		HasTools:     true,
@@ -254,6 +256,16 @@ func (s *Server) registerTools() error {
 	s.registerTool(tools.NewDescribeToolsTool(s.apiClient, s.logger))
 	s.registerTool(tools.NewListToolCategoriesBrief(s.apiClient, s.logger))
 
+	// Advanced RCA tools (SOTA 2025 patterns)
+	// - analyze_log_delta: System 2 Reasoning with Verification Traces
+	// - get_trace_context: Trace-Log Cohesion for distributed tracing
+	// - analyze_causal_chain: AURORA/RCD 2025 Causal Discovery
+	// - generate_rca_document: Structured RCA document generation
+	s.registerTool(tools.NewAnalyzeLogDeltaTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGetTraceContextTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewAnalyzeCausalChainTool(s.apiClient, s.logger))
+	s.registerTool(tools.NewGenerateRCADocumentTool(s.apiClient, s.logger))
+
 	s.logger.Info("Registered all MCP tools")
 	return nil
 }
@@ -267,12 +279,17 @@ func (s *Server) registerTool(t tools.Tool) {
 	tools.RegisterToolForDynamic(t)
 
 	// Create tool definition with annotations
+	// MCP 2025-11-25: Include icon metadata via Meta field
 	mcpTool := &mcp.Tool{
 		Name:        toolName,
 		Description: t.Description(),
 		InputSchema: t.InputSchema(),
 		Annotations: t.Annotations(),
 	}
+
+	// Add icon metadata (MCP 2025-11-25 feature)
+	icon := tools.GetToolIcon(toolName)
+	mcpTool.Meta = mcp.Meta{"icon": string(icon)}
 
 	// Create handler that calls the tool's Execute method with metrics tracking
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

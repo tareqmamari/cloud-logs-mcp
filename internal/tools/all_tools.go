@@ -164,7 +164,14 @@ func (t *DeleteRuleGroupTool) Description() string { return "Delete a rule group
 
 // InputSchema returns the input schema
 func (t *DeleteRuleGroupTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "Rule group ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -172,6 +179,9 @@ func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "rule group", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/rule_groups/" + id})
 	if err != nil {
@@ -452,7 +462,14 @@ func (t *DeleteOutgoingWebhookTool) Description() string { return "Delete an out
 
 // InputSchema returns the input schema
 func (t *DeleteOutgoingWebhookTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "Webhook ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -460,6 +477,9 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "outgoing webhook", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/outgoing_webhooks/" + id})
 	if err != nil {
@@ -766,7 +786,14 @@ func (t *DeletePolicyTool) Description() string { return "Delete a policy" }
 
 // InputSchema returns the input schema
 func (t *DeletePolicyTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "Policy ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -774,6 +801,10 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	// Policies affect data routing - require confirmation
+	if shouldContinue, result := RequireConfirmation(args, "policy", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/policies/" + id})
 	if err != nil {
@@ -1103,7 +1134,14 @@ func (t *DeleteE2MTool) Description() string { return "Delete an events-to-metri
 
 // InputSchema returns the input schema
 func (t *DeleteE2MTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "E2M config ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -1111,6 +1149,10 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	// E2M affects metrics generation - require confirmation
+	if shouldContinue, result := RequireConfirmation(args, "events-to-metrics configuration", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/events2metrics/" + id})
 	if err != nil {
@@ -1381,7 +1423,14 @@ func (t *DeleteDataAccessRuleTool) Description() string { return "Delete a data 
 
 // InputSchema returns the input schema
 func (t *DeleteDataAccessRuleTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "Data access rule ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -1389,6 +1438,9 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "data access rule", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/data_access_rules/" + id})
 	if err != nil {
@@ -1589,7 +1641,14 @@ func (t *DeleteEnrichmentTool) Description() string { return "Delete an enrichme
 
 // InputSchema returns the input schema
 func (t *DeleteEnrichmentTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "Enrichment ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -1597,6 +1656,9 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "enrichment", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/enrichments/" + id})
 	if err != nil {
@@ -1861,7 +1923,14 @@ func (t *DeleteViewTool) Description() string { return "Delete a view" }
 
 // InputSchema returns the input schema
 func (t *DeleteViewTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "View ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -1869,6 +1938,9 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "view", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/views/" + id})
 	if err != nil {
@@ -2026,7 +2098,14 @@ func (t *DeleteViewFolderTool) Description() string { return "Delete a view fold
 
 // InputSchema returns the input schema
 func (t *DeleteViewFolderTool) InputSchema() interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}}, "required": []string{"id"}}
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"id":      map[string]interface{}{"type": "string", "description": "View folder ID to delete"},
+			"confirm": ConfirmationInputSchema(),
+		},
+		"required": []string{"id"},
+	}
 }
 
 // Execute executes the tool
@@ -2034,6 +2113,9 @@ func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	id, err := GetStringParam(args, "id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(args, "view folder", id); !shouldContinue {
+		return result, nil
 	}
 	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id})
 	if err != nil {

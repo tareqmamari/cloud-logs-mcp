@@ -57,70 +57,46 @@ func (t *IngestLogsTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
-// Required fields: logs (array of log entries)
-// Each log entry must have: applicationName (or namespace), subsystemName (or component), severity, text
-// Optional fields: timestamp, json
+// Aliases (namespace, app, component, etc.) are resolved at runtime.
 func (t *IngestLogsTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
 			"logs": map[string]interface{}{
 				"type":        "array",
-				"description": "Array of log entries to ingest",
-				"examples": []interface{}{
-					[]map[string]interface{}{
-						{
-							"applicationName": "api-gateway",
-							"subsystemName":   "auth",
-							"severity":        5,
-							"text":            "Authentication failed for user john@example.com",
-							"json": map[string]interface{}{
-								"user_id":    "12345",
-								"ip_address": "192.168.1.100",
-								"error_code": "AUTH_FAILED",
-							},
-						},
-					},
-				},
+				"description": "Array of log entries to ingest (max 1000 per batch)",
 				"items": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"applicationName": map[string]interface{}{
 							"type":        "string",
-							"description": "Name of the application generating the log (aliases: namespace, app, application, service)",
-						},
-						"namespace": map[string]interface{}{
-							"type":        "string",
-							"description": "Alias for applicationName - the namespace/application generating the log",
+							"description": "App name (also accepts: namespace, app, service)",
 						},
 						"subsystemName": map[string]interface{}{
 							"type":        "string",
-							"description": "Name of the subsystem within the application (aliases: component, resource, module)",
-						},
-						"component": map[string]interface{}{
-							"type":        "string",
-							"description": "Alias for subsystemName - the component/resource within the application",
+							"description": "Subsystem name (also accepts: component, resource, module)",
 						},
 						"severity": map[string]interface{}{
 							"type":        "integer",
-							"description": "Log severity level (1=Debug, 2=Verbose, 3=Info, 4=Warning, 5=Error, 6=Critical)",
+							"description": "1=Debug, 2=Verbose, 3=Info, 4=Warning, 5=Error, 6=Critical",
 							"minimum":     1,
 							"maximum":     6,
 						},
 						"text": map[string]interface{}{
 							"type":        "string",
-							"description": "The log message text",
+							"description": "Log message text",
 						},
 						"timestamp": map[string]interface{}{
 							"type":        "number",
-							"description": "Unix timestamp with nanoseconds (e.g., 1699564800.123456789). If not provided, current time will be used.",
+							"description": "Unix timestamp with nanoseconds (optional, defaults to now)",
 						},
 						"json": map[string]interface{}{
 							"type":        "object",
-							"description": "Optional JSON object containing structured log data",
+							"description": "Structured data to attach to the log entry",
 						},
 					},
-					"required": []string{"severity", "text"},
+					"required":             []string{"applicationName", "subsystemName", "severity", "text"},
+					"additionalProperties": true, // Allow aliases
 				},
 			},
 		},

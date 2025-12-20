@@ -170,89 +170,63 @@ var validQueryFields = map[string]bool{
 }
 
 // InputSchema returns the input schema
+// Note: Aliases (namespace, app, component, etc.) are supported at runtime via resolveAliasedParam()
+// but not exposed in schema to reduce token overhead. See validQueryFields for full list.
 func (t *QueryTool) InputSchema() interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
 			"query": map[string]interface{}{
 				"type":        "string",
-				"description": "The query string to execute (DataPrime or Lucene syntax). Max 4096 characters.",
+				"description": "DataPrime query (max 4096 chars). Example: source logs | filter $l.applicationname == 'myapp' | limit 100",
 				"minLength":   1,
 				"maxLength":   4096,
-				"examples": []string{
-					"source logs | filter $m.severity >= 5",
-					"source logs | filter $l.applicationname == 'api-gateway' && $m.severity >= 4",
-					"source logs | filter $d.message.contains('timeout') | limit 100",
-				},
 			},
 			"tier": map[string]interface{}{
 				"type":        "string",
-				"description": "Log tier to query. archive (default, aliases: COS, storage, cold), frequent_search (aliases: PI, priority, insights, quick), or unspecified",
+				"description": "Log tier: archive (default), frequent_search, or unspecified",
 				"enum":        []string{"unspecified", "archive", "frequent_search"},
 				"default":     "archive",
 			},
 			"syntax": map[string]interface{}{
 				"type":        "string",
-				"description": "Query syntax: dataprime (default), lucene, dataprime_utf8_base64, lucene_utf8_base64, or unspecified",
+				"description": "Query syntax: dataprime (default) or lucene",
 				"enum":        []string{"unspecified", "lucene", "dataprime", "lucene_utf8_base64", "dataprime_utf8_base64"},
 				"default":     "dataprime",
 			},
 			"start_date": map[string]interface{}{
 				"type":        "string",
 				"format":      "date-time",
-				"description": "Start date for the query (required, ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Always specify a time range for efficient queries.",
+				"description": "Query start (ISO 8601, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"end_date": map[string]interface{}{
 				"type":        "string",
 				"format":      "date-time",
-				"description": "End date for the query (required, ISO 8601 format, e.g., 2024-05-01T20:47:12.940Z). Always specify a time range for efficient queries.",
+				"description": "Query end (ISO 8601, e.g., 2024-05-01T20:47:12.940Z)",
 			},
 			"limit": map[string]interface{}{
 				"type":        "integer",
-				"description": "Maximum number of results to return (default: 200 to prevent hitting response size limits). Increase if needed, max for frequent_search: 12000, max for archive: 50000.",
+				"description": "Max results (default: 200, max: 12000 for frequent_search, 50000 for archive)",
 				"minimum":     0,
 				"maximum":     50000,
 			},
-			"default_source": map[string]interface{}{
-				"type":        "string",
-				"description": "Default source when omitted in query (e.g., 'logs'). If not specified, 'source logs' must be in the query.",
-			},
-			"strict_fields_validation": map[string]interface{}{
-				"type":        "boolean",
-				"description": "If true, reject queries using unknown fields not detected in ingested data. Default: false.",
-				"default":     false,
-			},
-			"now_date": map[string]interface{}{
-				"type":        "string",
-				"format":      "date-time",
-				"description": "Override current time for time-based functions like now() in DataPrime. Defaults to system time.",
-			},
 			"summary_only": map[string]interface{}{
 				"type":        "boolean",
-				"description": "If true, return only statistical summary (severity distribution, top apps, counts) without raw events. Reduces response tokens by ~90%. Default: false.",
+				"description": "Return only statistics without raw events (reduces tokens ~90%)",
 				"default":     false,
 			},
-			// Application filter with aliases
+			// Consolidated filter properties - aliases resolved at runtime
 			"applicationName": map[string]interface{}{
 				"type":        "string",
-				"description": "Filter by application name (aliases: namespace, app, application, service). Maps to the applicationName label in IBM Cloud Logs.",
+				"description": "Filter by app name (also accepts: namespace, app, application, service)",
 			},
-			"namespace": map[string]interface{}{
-				"type":        "string",
-				"description": "Alias for applicationName - filter by namespace/application name",
-			},
-			// Subsystem filter with aliases
 			"subsystemName": map[string]interface{}{
 				"type":        "string",
-				"description": "Filter by subsystem name (aliases: component, resource, module). Maps to the subsystemName label in IBM Cloud Logs.",
-			},
-			"component": map[string]interface{}{
-				"type":        "string",
-				"description": "Alias for subsystemName - filter by component/resource name",
+				"description": "Filter by subsystem (also accepts: component, resource, module)",
 			},
 		},
 		"required":             []string{"query", "start_date", "end_date"},
-		"additionalProperties": false,
+		"additionalProperties": true, // Allow aliases at runtime
 	}
 }
 

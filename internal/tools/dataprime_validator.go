@@ -155,193 +155,194 @@ func AutoCorrectDataPrimeQuery(query string) (string, []string) {
 	var corrections []string
 	corrected := query
 
-	// Auto-correct $d.field.contains/startsWith/endsWith/matches to $d.field:string.method
-	// This handles mixed-type fields (object|string) that need type casting for string methods
-	// Common fields: message, msg, log, text, body, content, payload, data
+	// Apply corrections in order - each returns the corrected query and appends to corrections
 	corrected, corrections = autoCorrectMixedTypeStringMethods(corrected, corrections)
+	corrected, corrections = autoCorrectLevelToSeverity(corrected, corrections)
+	corrected, corrections = autoCorrectStatusCodes(corrected, corrections)
+	corrected, corrections = autoCorrectNumericSeverity(corrected, corrections)
+	corrected, corrections = autoCorrectSeverityTypos(corrected, corrections)
+	corrected, corrections = autoCorrectSortToOrderby(corrected, corrections)
+	corrected, corrections = autoCorrectAggregateSyntax(corrected, corrections)
+	corrected, corrections = autoCorrectDistinctCount(corrected, corrections)
+	corrected, corrections = autoCorrectTimeBucketing(corrected, corrections)
 
-	// Auto-correct $d.level to $m.severity (common mistake - level is often mixed type)
-	// Maps string level names to severity names
+	return corrected, corrections
+}
+
+// autoCorrectLevelToSeverity corrects $d.level to $m.severity
+func autoCorrectLevelToSeverity(query string, corrections []string) (string, []string) {
 	levelToSeverity := map[string]string{
-		"'INFO'":     "INFO",
-		"'info'":     "INFO",
-		"'DEBUG'":    "DEBUG",
-		"'debug'":    "DEBUG",
-		"'WARNING'":  "WARNING",
-		"'warning'":  "WARNING",
-		"'WARN'":     "WARNING",
-		"'warn'":     "WARNING",
-		"'ERROR'":    "ERROR",
-		"'error'":    "ERROR",
-		"'ERR'":      "ERROR",
-		"'err'":      "ERROR",
-		"'CRITICAL'": "CRITICAL",
-		"'critical'": "CRITICAL",
-		"'VERBOSE'":  "VERBOSE",
-		"'verbose'":  "VERBOSE",
+		"'INFO'": "INFO", "'info'": "INFO", "'DEBUG'": "DEBUG", "'debug'": "DEBUG",
+		"'WARNING'": "WARNING", "'warning'": "WARNING", "'WARN'": "WARNING", "'warn'": "WARNING",
+		"'ERROR'": "ERROR", "'error'": "ERROR", "'ERR'": "ERROR", "'err'": "ERROR",
+		"'CRITICAL'": "CRITICAL", "'critical'": "CRITICAL", "'VERBOSE'": "VERBOSE", "'verbose'": "VERBOSE",
 	}
 
-	levelPattern := regexp.MustCompile(`\$d\.level\s*(==|!=)\s*('(?:INFO|info|DEBUG|debug|WARNING|warning|WARN|warn|ERROR|error|ERR|err|CRITICAL|critical|VERBOSE|verbose)')`)
-	if matches := levelPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			operator := match[1]
-			levelValue := match[2]
-			severityName := levelToSeverity[levelValue]
-			if severityName != "" {
-				oldExpr := match[0]
-				newExpr := "$m.severity " + operator + " " + severityName
-				corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-				corrections = append(corrections, fmt.Sprintf("$d.level %s %s → $m.severity %s %s (level field has mixed types)", operator, levelValue, operator, severityName))
-			}
+	pattern := regexp.MustCompile(`\$d\.level\s*(==|!=)\s*('(?:INFO|info|DEBUG|debug|WARNING|warning|WARN|warn|ERROR|error|ERR|err|CRITICAL|critical|VERBOSE|verbose)')`)
+	for _, match := range pattern.FindAllStringSubmatch(query, -1) {
+		if severityName := levelToSeverity[match[2]]; severityName != "" {
+			oldExpr, newExpr := match[0], "$m.severity "+match[1]+" "+severityName
+			query = strings.Replace(query, oldExpr, newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf("$d.level %s %s → $m.severity %s %s (level field has mixed types)", match[1], match[2], match[1], severityName))
 		}
 	}
+	return query, corrections
+}
 
-	// Auto-correct $d.status_code == 200 to $d.status_code == '200'
-	// HTTP status codes are often stored as strings in logs
-	statusCodePattern := regexp.MustCompile(`(\$d\.(?:status_code|statusCode|http_status|httpStatus|response_code|responseCode))\s*(==|!=)\s*(\d{3})`)
-	if matches := statusCodePattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			field := match[1]
-			operator := match[2]
-			numValue := match[3]
-			oldExpr := match[0]
-			newExpr := field + " " + operator + " '" + numValue + "'"
-			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-			corrections = append(corrections, fmt.Sprintf("%s %s %s → %s %s '%s' (status codes are often strings)", field, operator, numValue, field, operator, numValue))
+// autoCorrectStatusCodes corrects numeric status codes to strings
+func autoCorrectStatusCodes(query string, corrections []string) (string, []string) {
+	pattern := regexp.MustCompile(`(\$d\.(?:status_code|statusCode|http_status|httpStatus|response_code|responseCode))\s*(==|!=)\s*(\d{3})`)
+	for _, match := range pattern.FindAllStringSubmatch(query, -1) {
+		oldExpr := match[0]
+		newExpr := match[1] + " " + match[2] + " '" + match[3] + "'"
+		query = strings.Replace(query, oldExpr, newExpr, 1)
+		corrections = append(corrections, fmt.Sprintf("%s %s %s → %s %s '%s' (status codes are often strings)", match[1], match[2], match[3], match[1], match[2], match[3]))
+	}
+	return query, corrections
+}
+
+// autoCorrectNumericSeverity corrects numeric severity to named severity
+func autoCorrectNumericSeverity(query string, corrections []string) (string, []string) {
+	severityNumToName := map[string]string{"0": "VERBOSE", "1": "DEBUG", "2": "INFO", "3": "WARNING", "4": "ERROR", "5": "CRITICAL", "6": "CRITICAL"}
+	pattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)(\d+)`)
+	for _, match := range pattern.FindAllStringSubmatch(query, -1) {
+		namedValue := severityNumToName[match[2]]
+		if namedValue == "" {
+			namedValue = "ERROR"
 		}
+		query = strings.Replace(query, match[0], match[1]+namedValue, 1)
+		corrections = append(corrections, fmt.Sprintf("severity %s → %s", match[2], namedValue))
 	}
+	return query, corrections
+}
 
-	// Auto-correct numeric severity to named severity
-	// Maps: 0→VERBOSE, 1→DEBUG, 2→INFO, 3→WARNING, 4→ERROR, 5→CRITICAL
-	severityNumToName := map[string]string{
-		"0": "VERBOSE",
-		"1": "DEBUG",
-		"2": "INFO",
-		"3": "WARNING",
-		"4": "ERROR",
-		"5": "CRITICAL",
-		"6": "CRITICAL", // Handle out-of-range as CRITICAL
+// autoCorrectSeverityTypos corrects common severity typos
+func autoCorrectSeverityTypos(query string, corrections []string) (string, []string) {
+	typos := map[string]string{
+		"ERR": "ERROR", "WARN": "WARNING", "CRIT": "CRITICAL", "DBG": "DEBUG", "VERB": "VERBOSE",
+		"error": "ERROR", "warning": "WARNING", "critical": "CRITICAL", "info": "INFO", "debug": "DEBUG",
 	}
-
-	numericSeverityPattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)(\d+)`)
-	if matches := numericSeverityPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			numValue := match[2]
-			namedValue := severityNumToName[numValue]
-			if namedValue == "" {
-				namedValue = "ERROR" // Default for unknown values
-			}
-			oldVal := match[0]
-			newVal := match[1] + namedValue
-			corrected = strings.Replace(corrected, oldVal, newVal, 1)
-			corrections = append(corrections, fmt.Sprintf("severity %s → %s", numValue, namedValue))
-		}
-	}
-
-	// Auto-correct common severity typos
-	severityTypos := map[string]string{
-		"ERR":      "ERROR",
-		"WARN":     "WARNING",
-		"CRIT":     "CRITICAL",
-		"DBG":      "DEBUG",
-		"VERB":     "VERBOSE",
-		"error":    "ERROR",
-		"warning":  "WARNING",
-		"critical": "CRITICAL",
-		"info":     "INFO",
-		"debug":    "DEBUG",
-	}
-
-	for typo, correct := range severityTypos {
-		typoPattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)` + regexp.QuoteMeta(typo) + `\b`)
-		if typoPattern.MatchString(corrected) {
-			corrected = typoPattern.ReplaceAllString(corrected, "${1}"+correct)
+	for typo, correct := range typos {
+		pattern := regexp.MustCompile(`(\$m\.severity\s*(?:==|!=|>=|<=|>|<)\s*)` + regexp.QuoteMeta(typo) + `\b`)
+		if pattern.MatchString(query) {
+			query = pattern.ReplaceAllString(query, "${1}"+correct)
 			corrections = append(corrections, fmt.Sprintf("severity %s → %s", typo, correct))
 		}
 	}
+	return query, corrections
+}
 
-	// Auto-correct 'sort' to 'orderby' (sort is not a valid DataPrime keyword)
-	// DataPrime uses: orderby, sortby, order by, sort by
-	// Handle: | sort field, | sort -field (descending)
-	// Supports both $-prefixed fields ($m.timestamp) and plain column names (error_count from aggregations)
-	sortPattern := regexp.MustCompile(`\|\s*sort\s+(-?)([a-zA-Z_$][a-zA-Z0-9_.]*)`)
-	if matches := sortPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			descending := match[1] // "-" for descending or "" for ascending
-			field := match[2]
-			oldExpr := match[0]
-			var newExpr string
-			if descending == "-" {
-				newExpr = "| orderby " + field + " desc"
-			} else {
-				newExpr = "| orderby " + field
-			}
-			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-			corrections = append(corrections, fmt.Sprintf("sort %s%s → orderby %s%s (use 'orderby' in DataPrime)", descending, field, field, func() string {
-				if descending == "-" {
-					return " desc"
-				}
-				return ""
-			}()))
+// autoCorrectSortToOrderby corrects 'sort' to 'orderby'
+func autoCorrectSortToOrderby(query string, corrections []string) (string, []string) {
+	pattern := regexp.MustCompile(`\|\s*sort\s+(-?)([a-zA-Z_$][a-zA-Z0-9_.]*)`)
+	for _, match := range pattern.FindAllStringSubmatch(query, -1) {
+		descending, field := match[1], match[2]
+		newExpr := "| orderby " + field
+		if descending == "-" {
+			newExpr += " desc"
 		}
-	}
-
-	// Auto-correct wrong aggregate syntax: "aggregate alias = func()" → "aggregate func() as alias"
-	// Common mistake: using assignment syntax instead of 'as' keyword
-	aggregateFullPattern := regexp.MustCompile(`aggregate\s+(\w+)\s*=\s*(count|sum|avg|min|max|approx_count_distinct|percentile|stddev|variance|any_value|collect)\s*\(([^)]*)\)`)
-	if matches := aggregateFullPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			alias := match[1]
-			funcName := match[2]
-			args := match[3]
-			oldExpr := match[0]
-			newExpr := fmt.Sprintf("aggregate %s(%s) as %s", funcName, args, alias)
-			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-			corrections = append(corrections, fmt.Sprintf("aggregate %s = %s() → aggregate %s() as %s (use 'as' for alias)", alias, funcName, funcName, alias))
+		query = strings.Replace(query, match[0], newExpr, 1)
+		desc := ""
+		if descending == "-" {
+			desc = " desc"
 		}
+		corrections = append(corrections, fmt.Sprintf("sort %s%s → orderby %s%s (use 'orderby' in DataPrime)", descending, field, field, desc))
 	}
+	return query, corrections
+}
 
-	// Auto-correct count_distinct/distinct_count → approx_count_distinct
-	// The frequent_search tier only supports approx_count_distinct
-	// Use negative lookbehind to avoid matching approx_count_distinct (already correct)
-	distinctCountPattern := regexp.MustCompile(`(?:^|[^a-zA-Z_])(count_distinct|distinct_count)\s*\(`)
-	if matches := distinctCountPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		// Replace only the function name, preserving any prefix characters
+// autoCorrectAggregateSyntax corrects "aggregate alias = func()" to "aggregate func() as alias"
+func autoCorrectAggregateSyntax(query string, corrections []string) (string, []string) {
+	pattern := regexp.MustCompile(`aggregate\s+(\w+)\s*=\s*(count|sum|avg|min|max|approx_count_distinct|percentile|stddev|variance|any_value|collect)\s*\(([^)]*)\)`)
+	for _, match := range pattern.FindAllStringSubmatch(query, -1) {
+		alias, funcName, args := match[1], match[2], match[3]
+		newExpr := fmt.Sprintf("aggregate %s(%s) as %s", funcName, args, alias)
+		query = strings.Replace(query, match[0], newExpr, 1)
+		corrections = append(corrections, fmt.Sprintf("aggregate %s = %s() → aggregate %s() as %s (use 'as' for alias)", alias, funcName, funcName, alias))
+	}
+	return query, corrections
+}
+
+// autoCorrectDistinctCount corrects count_distinct/distinct_count to approx_count_distinct
+func autoCorrectDistinctCount(query string, corrections []string) (string, []string) {
+	pattern := regexp.MustCompile(`(?:^|[^a-zA-Z_])(count_distinct|distinct_count)\s*\(`)
+	if matches := pattern.FindAllStringSubmatch(query, -1); len(matches) > 0 {
 		for _, match := range matches {
-			funcName := match[1]
-			corrected = strings.ReplaceAll(corrected, funcName+"(", "approx_count_distinct(")
+			query = strings.ReplaceAll(query, match[1]+"(", "approx_count_distinct(")
 		}
 		corrections = append(corrections, "count_distinct/distinct_count → approx_count_distinct (only approx variant supported)")
 	}
+	return query, corrections
+}
 
-	// Auto-correct invalid time bucket syntax: $m.timestamp:1m → roundTime($m.timestamp, 1m)
-	// The colon syntax is not valid in DataPrime
-	timeBucketColonPattern := regexp.MustCompile(`\$m\.timestamp:(\d+[smhd])`)
-	if matches := timeBucketColonPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			interval := match[1]
-			oldExpr := match[0]
-			newExpr := fmt.Sprintf("roundTime($m.timestamp, %s)", interval)
-			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-			corrections = append(corrections, fmt.Sprintf("$m.timestamp:%s → roundTime($m.timestamp, %s) (use roundTime for time bucketing)", interval, interval))
-		}
+// autoCorrectTimeBucketing corrects various invalid time bucketing syntaxes to roundTime()
+func autoCorrectTimeBucketing(query string, corrections []string) (string, []string) {
+	// Time bucket patterns to correct to roundTime($m.timestamp, interval)
+	patterns := []struct {
+		re     *regexp.Regexp
+		format string // format string for correction message
+	}{
+		{regexp.MustCompile(`\$m\.timestamp:(\d+[smhd])`), "$m.timestamp:%s → roundTime($m.timestamp, %s)"},
+		{regexp.MustCompile(`bucket\s*\(\s*(\$m\.timestamp)\s*,\s*(\d+[smhd])\s*\)`), "bucket(%s, %s) → roundTime(%s, %s)"},
+		{regexp.MustCompile(`bin\s*\(\s*(\$m\.timestamp)\s*,\s*'?(\d+[smhd])'?\s*\)`), "bin(%s, %s) → roundTime(%s, %s)"},
+		{regexp.MustCompile(`timestamp_round_down\s*\(\s*(\$m\.timestamp)\s*,\s*'?(\d+[smhd])'?\s*\)`), "timestamp_round_down(%s, %s) → roundTime(%s, %s)"},
 	}
 
-	// Auto-correct bucket() → roundTime()
-	// bucket() is not a valid DataPrime function, use roundTime() instead
-	bucketFuncPattern := regexp.MustCompile(`bucket\s*\(\s*(\$m\.timestamp)\s*,\s*(\d+[smhd])\s*\)`)
-	if matches := bucketFuncPattern.FindAllStringSubmatch(corrected, -1); len(matches) > 0 {
-		for _, match := range matches {
-			timestamp := match[1]
-			interval := match[2]
-			oldExpr := match[0]
+	for _, p := range patterns {
+		for _, match := range p.re.FindAllStringSubmatch(query, -1) {
+			var timestamp, interval string
+			if len(match) == 2 { // Colon syntax: $m.timestamp:1h
+				timestamp, interval = "$m.timestamp", match[1]
+			} else { // Function syntax: func($m.timestamp, 1h)
+				timestamp, interval = match[1], match[2]
+			}
 			newExpr := fmt.Sprintf("roundTime(%s, %s)", timestamp, interval)
-			corrected = strings.Replace(corrected, oldExpr, newExpr, 1)
-			corrections = append(corrections, fmt.Sprintf("bucket(%s, %s) → roundTime(%s, %s) (use roundTime for time bucketing)", timestamp, interval, timestamp, interval))
+			query = strings.Replace(query, match[0], newExpr, 1)
+			corrections = append(corrections, fmt.Sprintf(p.format+" (use roundTime for time bucketing)", timestamp, interval, timestamp, interval))
 		}
 	}
 
-	return corrected, corrections
+	// time_bucket() has reversed argument order
+	timeBucketPattern := regexp.MustCompile(`time_bucket\s*\(\s*'?(\d+[smhd])'?\s*,\s*(\$m\.timestamp)\s*\)`)
+	for _, match := range timeBucketPattern.FindAllStringSubmatch(query, -1) {
+		interval, timestamp := match[1], match[2]
+		newExpr := fmt.Sprintf("roundTime(%s, %s)", timestamp, interval)
+		query = strings.Replace(query, match[0], newExpr, 1)
+		corrections = append(corrections, fmt.Sprintf("time_bucket('%s', %s) → roundTime(%s, %s) (use roundTime for time bucketing)", interval, timestamp, timestamp, interval))
+	}
+
+	// date_trunc() and trunc() use unit names instead of intervals
+	intervalMap := map[string]string{"hour": "1h", "day": "1d", "minute": "1m", "second": "1s"}
+
+	dateTruncPattern := regexp.MustCompile(`date_trunc\s*\(\s*'(hour|day|minute|second)'\s*,\s*(\$m\.timestamp)\s*\)`)
+	for _, match := range dateTruncPattern.FindAllStringSubmatch(query, -1) {
+		unit, timestamp := match[1], match[2]
+		interval := intervalMap[unit]
+		newExpr := fmt.Sprintf("roundTime(%s, %s)", timestamp, interval)
+		query = strings.Replace(query, match[0], newExpr, 1)
+		corrections = append(corrections, fmt.Sprintf("date_trunc('%s', %s) → roundTime(%s, %s) (use roundTime for time bucketing)", unit, timestamp, timestamp, interval))
+	}
+
+	truncPattern := regexp.MustCompile(`trunc\s*\(\s*(\$m\.timestamp)\s*,\s*'(hour|day|minute|second)'\s*\)`)
+	for _, match := range truncPattern.FindAllStringSubmatch(query, -1) {
+		timestamp, unit := match[1], match[2]
+		interval := intervalMap[unit]
+		newExpr := fmt.Sprintf("roundTime(%s, %s)", timestamp, interval)
+		query = strings.Replace(query, match[0], newExpr, 1)
+		corrections = append(corrections, fmt.Sprintf("trunc(%s, '%s') → roundTime(%s, %s) (use roundTime for time bucketing)", timestamp, unit, timestamp, interval))
+	}
+
+	// Remove invalid timestampformat stage
+	timestampFormatPattern := regexp.MustCompile(`\|\s*timestampformat\s+\$m\.timestamp\s+to_timestamp\s+'[^']+'\s+as\s+(\w+)\s*`)
+	for _, match := range timestampFormatPattern.FindAllStringSubmatch(query, -1) {
+		query = strings.Replace(query, match[0], " ", 1)
+		corrections = append(corrections, fmt.Sprintf("Removed invalid 'timestampformat' stage. Use 'groupby roundTime($m.timestamp, 1h) as %s' for time bucketing", match[1]))
+	}
+	// Clean up multiple spaces and normalize pipes
+	query = regexp.MustCompile(`\s+\|`).ReplaceAllString(query, " |")
+	query = regexp.MustCompile(`\|\s+\|`).ReplaceAllString(query, "|")
+
+	return query, corrections
 }
 
 // PrepareQuery validates, corrects, and prepares a DataPrime query for execution.
@@ -363,8 +364,11 @@ func PrepareQuery(query string, tier string, syntax string) (string, []string, e
 		return query, nil, nil
 	}
 
+	// 0. Sanitize query - remove/replace problematic characters that can break JSON serialization
+	corrected := sanitizeQuery(query)
+
 	// 1. Auto-correct common issues
-	corrected, corrections := AutoCorrectDataPrimeQuery(query)
+	corrected, corrections := AutoCorrectDataPrimeQuery(corrected)
 
 	// 2. Apply tier-specific corrections
 	corrected, tierCorrections := applyTierCorrections(corrected, tier)
@@ -376,6 +380,33 @@ func PrepareQuery(query string, tier string, syntax string) (string, []string, e
 	}
 
 	return corrected, corrections, nil
+}
+
+// sanitizeQuery removes or replaces problematic characters that can cause JSON serialization issues
+func sanitizeQuery(query string) string {
+	// Normalize whitespace - replace tabs and multiple spaces with single space
+	query = regexp.MustCompile(`[\t]+`).ReplaceAllString(query, " ")
+	query = regexp.MustCompile(`[ ]{2,}`).ReplaceAllString(query, " ")
+
+	// Replace common problematic characters
+	// Smart quotes (curly quotes) → regular single quotes
+	query = strings.ReplaceAll(query, "\u201c", "'") // Left double quote "
+	query = strings.ReplaceAll(query, "\u201d", "'") // Right double quote "
+	query = strings.ReplaceAll(query, "\u2018", "'") // Left single quote '
+	query = strings.ReplaceAll(query, "\u2019", "'") // Right single quote '
+
+	// Remove zero-width characters and other invisible Unicode
+	query = regexp.MustCompile(`[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]`).ReplaceAllString(query, "")
+
+	// Normalize line breaks to spaces (DataPrime queries should be single-line for API)
+	query = strings.ReplaceAll(query, "\r\n", " ")
+	query = strings.ReplaceAll(query, "\r", " ")
+	query = strings.ReplaceAll(query, "\n", " ")
+
+	// Trim leading/trailing whitespace
+	query = strings.TrimSpace(query)
+
+	return query
 }
 
 // applyTierCorrections applies tier-specific corrections to a query.
@@ -682,6 +713,25 @@ func SuggestQueryFix(_ string, errorMessage string) string {
 
 	// Handle compilation errors
 	if strings.Contains(lowerError, "compilation error") {
+		// Check for specific invalid keywords/functions
+		if strings.Contains(lowerError, "timestampformat") {
+			return `**'timestampformat' is not a valid DataPrime keyword.** Use roundTime() in groupby for time bucketing.
+
+**Correct syntax:**
+` + "```" + `
+source logs
+| filter $m.severity >= ERROR
+| groupby roundTime($m.timestamp, 1h) as time_bucket, $l.applicationname
+| aggregate count() as error_count
+| sortby time_bucket
+` + "```" + `
+
+**Time bucket intervals:**
+- roundTime($m.timestamp, 5m) - 5 minute buckets
+- roundTime($m.timestamp, 1h) - hourly buckets
+- roundTime($m.timestamp, 1d) - daily buckets`
+		}
+
 		return `Query syntax error. Common fixes:
 
 1. Use == for comparison (not = or LIKE)
@@ -694,12 +744,27 @@ func SuggestQueryFix(_ string, errorMessage string) string {
 
 	// Handle unknown function errors
 	if strings.Contains(lowerError, "unknown function") {
+		// Specific suggestion for bin() function
+		if strings.Contains(lowerError, "'bin'") {
+			return `**bin() is not a valid DataPrime function.** Use roundTime() instead for time bucketing.
+
+**Correct syntax:**
+- roundTime($m.timestamp, 1h) - Group by hour
+- roundTime($m.timestamp, 15m) - Group by 15 minutes
+- roundTime($m.timestamp, 1d) - Group by day
+
+**Example query:**
+source logs | filter $m.severity >= ERROR | groupby roundTime($m.timestamp, 1h) as time_bucket, $l.applicationname aggregate count() as error_count | sortby time_bucket desc`
+		}
+
 		return `Unknown function. Common DataPrime functions:
 
-**Aggregation:** count(), sum(), avg(), min(), max(), distinct_count()
+**Aggregation:** count(), sum(), avg(), min(), max(), approx_count_distinct()
 **String:** contains(), startsWith(), endsWith(), matches(), toLowerCase(), toUpperCase(), trim(), concat()
-**Time:** now(), parseTimestamp(), formatTimestamp(), diffTime()
-**Conditional:** if(), case {}, coalesce()`
+**Time:** now(), roundTime(), parseTimestamp(), formatTimestamp(), diffTime()
+**Conditional:** if(), case {}, coalesce()
+
+**Time bucketing:** Use roundTime($m.timestamp, <interval>) where interval is: 1s, 5m, 1h, 1d, etc.`
 	}
 
 	return ""

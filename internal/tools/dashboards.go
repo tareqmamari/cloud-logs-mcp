@@ -888,6 +888,7 @@ func (t *DeleteDashboardTool) InputSchema() interface{} {
 				"type":        "string",
 				"description": "The unique identifier of the dashboard to delete",
 			},
+			"confirm": ConfirmationInputSchema(),
 		},
 		"required": []string{"dashboard_id"},
 	}
@@ -916,6 +917,9 @@ func (t *DeleteDashboardTool) Execute(ctx context.Context, arguments map[string]
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {
 		return NewToolResultError("dashboard_id is required and must be a string"), nil
+	}
+	if shouldContinue, result := RequireConfirmation(arguments, "dashboard", dashboardID); !shouldContinue {
+		return result, nil
 	}
 
 	req := &client.Request{

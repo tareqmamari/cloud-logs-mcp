@@ -537,6 +537,7 @@ func (t *DeleteStreamTool) InputSchema() interface{} {
 				"type":        "string",
 				"description": "The unique identifier of the stream to delete",
 			},
+			"confirm": ConfirmationInputSchema(),
 		},
 		"required": []string{"stream_id"},
 	}
@@ -549,6 +550,9 @@ func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]int
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
+	}
+	if shouldContinue, result := RequireConfirmation(arguments, "stream", streamID); !shouldContinue {
+		return result, nil
 	}
 
 	req := &client.Request{

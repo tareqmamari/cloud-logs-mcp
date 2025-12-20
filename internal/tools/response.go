@@ -1,10 +1,13 @@
 package tools
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -48,6 +51,79 @@ var metadataFieldsToRemove = map[string]bool{
 	"timestampmicros": true, "ingresstimestamp": true,
 }
 
+// ResponseMeta contains verification traces for GRPO-style self-correction.
+// Modern reasoning models can use these signals to verify execution and adjust behavior.
+type ResponseMeta struct {
+	ExecutionMs  int64  `json:"execution_ms"`           // Time taken to execute the tool
+	ResultHash   string `json:"result_hash"`            // SHA256 hash of result for idempotency verification
+	ResultCount  int    `json:"result_count"`           // Number of items in result
+	Truncated    bool   `json:"truncated"`              // Whether result was truncated
+	ToolName     string `json:"tool_name,omitempty"`    // Tool that generated this response
+	RequestHash  string `json:"request_hash,omitempty"` // Hash of request for deduplication
+	CacheHit     bool   `json:"cache_hit,omitempty"`    // Whether result came from cache
+	ErrorCode    string `json:"error_code,omitempty"`   // Structured error code if failed
+	RetryAllowed bool   `json:"retry_allowed"`          // Whether retry is safe for this operation
+}
+
+// NewResponseMeta creates a new ResponseMeta with execution timing started
+func NewResponseMeta(toolName string) *ResponseMeta {
+	return &ResponseMeta{
+		ToolName:     toolName,
+		RetryAllowed: true, // Default to allowing retries
+	}
+}
+
+// computeResultHash generates a SHA256 hash of the result for verification
+func computeResultHash(result map[string]interface{}) string {
+	// Remove volatile fields before hashing
+	stableResult := make(map[string]interface{})
+	for k, v := range result {
+		if k != "_meta" && k != "_rate_limit" && !strings.HasPrefix(k, "_") {
+			stableResult[k] = v
+		}
+	}
+
+	data, err := json.Marshal(stableResult)
+	if err != nil {
+		return ""
+	}
+
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:8]) // First 8 bytes = 16 hex chars
+}
+
+// AddVerificationMeta adds GRPO verification traces to a result map.
+// This enables reasoning models to verify execution and detect inconsistencies.
+func AddVerificationMeta(result map[string]interface{}, toolName string, startTime time.Time, truncated bool) {
+	meta := &ResponseMeta{
+		ExecutionMs:  time.Since(startTime).Milliseconds(),
+		ResultHash:   computeResultHash(result),
+		ResultCount:  countItems(result),
+		Truncated:    truncated,
+		ToolName:     toolName,
+		RetryAllowed: !isDestructiveTool(toolName),
+	}
+
+	result["_meta"] = meta
+}
+
+// isDestructiveTool returns true if the tool performs destructive operations
+func isDestructiveTool(toolName string) bool {
+	destructiveTools := map[string]bool{
+		"delete_alert":            true,
+		"delete_dashboard":        true,
+		"delete_policy":           true,
+		"delete_e2m":              true,
+		"delete_enrichment":       true,
+		"delete_view":             true,
+		"delete_outgoing_webhook": true,
+		"delete_data_access_rule": true,
+		"delete_stream":           true,
+		"cancel_background_query": true,
+	}
+	return destructiveTools[toolName]
+}
+
 // getMapKeys returns a sorted list of keys from a map for debugging purposes
 func getMapKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
@@ -73,18 +149,30 @@ func CleanQueryResults(result map[string]interface{}) map[string]interface{} {
 			cleanedEvents = append(cleanedEvents, event)
 			continue
 		}
+
+		// Skip query_id events (SSE metadata, not actual log data)
+		if _, hasQueryID := eventMap["query_id"]; hasQueryID && len(eventMap) == 1 {
+			continue
+		}
+
 		// Handle the nested result structure from API
 		if resultObj, ok := eventMap["result"].(map[string]interface{}); ok {
 			if results, ok := resultObj["results"].([]interface{}); ok {
 				for _, r := range results {
 					if rMap, ok := r.(map[string]interface{}); ok {
-						cleanedEvents = append(cleanedEvents, transformLogEntry(rMap))
+						transformed := transformLogEntry(rMap)
+						if len(transformed) > 0 {
+							cleanedEvents = append(cleanedEvents, transformed)
+						}
 					}
 				}
 			}
 		} else {
-			// Direct event format
-			cleanedEvents = append(cleanedEvents, transformLogEntry(eventMap))
+			// Direct event format (including aggregation results)
+			transformed := transformLogEntry(eventMap)
+			if len(transformed) > 0 {
+				cleanedEvents = append(cleanedEvents, transformed)
+			}
 		}
 	}
 
@@ -102,10 +190,15 @@ func CleanQueryResults(result map[string]interface{}) map[string]interface{} {
 }
 
 // transformLogEntry converts verbose log entry to compact format
+// Handles multiple response formats from IBM Cloud Logs:
+// 1. Array format: labels/metadata as []interface{} with key/value pairs
+// 2. Map format: labels/metadata as map[string]interface{} with direct fields
+// 3. Flat format: direct fields at the root level (aggregation results)
 func transformLogEntry(entry map[string]interface{}) map[string]interface{} {
 	compact := make(map[string]interface{})
 
 	// Extract essential labels (app, subsystem)
+	// Handle array format: [{"key": "applicationname", "value": "myapp"}, ...]
 	if labels, ok := entry["labels"].([]interface{}); ok {
 		for _, l := range labels {
 			if lm, ok := l.(map[string]interface{}); ok {
@@ -122,9 +215,18 @@ func transformLogEntry(entry map[string]interface{}) map[string]interface{} {
 				}
 			}
 		}
+	} else if labels, ok := entry["labels"].(map[string]interface{}); ok {
+		// Handle map format: {"applicationname": "myapp", "subsystemname": "api"}
+		if app, ok := labels["applicationname"].(string); ok && app != "" {
+			compact["app"] = app
+		}
+		if sub, ok := labels["subsystemname"].(string); ok && sub != "" {
+			compact["subsystem"] = sub
+		}
 	}
 
 	// Extract essential metadata (timestamp, severity)
+	// Handle array format: [{"key": "timestamp", "value": "2024-..."}, ...]
 	if metadata, ok := entry["metadata"].([]interface{}); ok {
 		for _, m := range metadata {
 			if mm, ok := m.(map[string]interface{}); ok {
@@ -142,39 +244,175 @@ func transformLogEntry(entry map[string]interface{}) map[string]interface{} {
 				}
 			}
 		}
+	} else if metadata, ok := entry["metadata"].(map[string]interface{}); ok {
+		// Handle map format: {"timestamp": "2024-...", "severity": "ERROR"}
+		if ts, ok := metadata["timestamp"].(string); ok && ts != "" {
+			compact["time"] = ts
+		}
+		if sev, ok := metadata["severity"].(string); ok && sev != "" {
+			compact["severity"] = sev
+		}
+		// Also check for numeric severity
+		if sevNum, ok := metadata["severity"].(float64); ok {
+			compact["severity"] = severityNumToName(int(sevNum))
+		}
 	}
 
-	// Parse and extract from user_data JSON
+	// Parse and extract from user_data
+	// Handle string format (JSON that needs parsing)
 	if userData, ok := entry["user_data"].(string); ok && userData != "" {
 		var ud map[string]interface{}
 		if err := json.Unmarshal([]byte(userData), &ud); err == nil {
 			extractUserData(ud, compact)
 		}
+	} else if userData, ok := entry["user_data"].(map[string]interface{}); ok {
+		// Handle already-parsed map format
+		extractUserData(userData, compact)
+	}
+
+	// For flat/aggregation results, try extracting common fields directly from entry
+	// This handles DataPrime aggregation results that don't use the nested structure
+	// Always try flat extraction if no message was found yet
+	if compact["message"] == nil {
+		extractFlatFields(entry, compact)
 	}
 
 	return compact
 }
 
-// extractUserData extracts essential fields from parsed user_data
-func extractUserData(ud map[string]interface{}, compact map[string]interface{}) {
-	// Extract message
-	if event, ok := ud["event"].(map[string]interface{}); ok {
-		if msg, ok := event["_message"].(string); ok {
-			compact["message"] = msg
-		}
-		// Extract SQL if present (useful for DB queries)
-		if sql, ok := event["sql"].(string); ok {
-			compact["sql"] = sql
-		}
-		// Extract execution time if present
-		if execMs, ok := event["execMs"].(float64); ok {
-			compact["exec_ms"] = int(execMs)
+// severityNumToName converts numeric severity to human-readable name
+func severityNumToName(sev int) string {
+	severityNames := map[int]string{
+		1: "Debug",
+		2: "Verbose",
+		3: "Info",
+		4: "Warning",
+		5: "Error",
+		6: "Critical",
+	}
+	if name, ok := severityNames[sev]; ok {
+		return name
+	}
+	return fmt.Sprintf("Level %d", sev)
+}
+
+// extractFlatFields extracts fields from flat/aggregation result entries
+func extractFlatFields(entry map[string]interface{}, compact map[string]interface{}) {
+	// Common timestamp field names (including DataPrime reference formats from groupby)
+	for _, tsField := range []string{"timestamp", "@timestamp", "time", "_time", "ts", "$m.timestamp"} {
+		if ts, ok := entry[tsField].(string); ok && ts != "" {
+			compact["time"] = ts
+			break
 		}
 	}
 
-	// Direct message field
-	if msg, ok := ud["message"].(string); ok && compact["message"] == nil {
+	// Common message field names
+	for _, msgField := range []string{"message", "msg", "text", "_message", "log"} {
+		if msg, ok := entry[msgField].(string); ok && msg != "" {
+			compact["message"] = msg
+			break
+		}
+	}
+
+	// Common severity field names (including DataPrime reference formats from groupby)
+	for _, sevField := range []string{"severity", "level", "log_level", "loglevel", "$m.severity"} {
+		if sev, ok := entry[sevField].(string); ok && sev != "" {
+			compact["severity"] = sev
+			break
+		}
+		if sevNum, ok := entry[sevField].(float64); ok {
+			compact["severity"] = severityNumToName(int(sevNum))
+			break
+		}
+	}
+
+	// Common application field names (including DataPrime reference formats from groupby)
+	for _, appField := range []string{"applicationname", "application", "app", "service", "app_name", "$l.applicationname"} {
+		if app, ok := entry[appField].(string); ok && app != "" {
+			compact["app"] = app
+			break
+		}
+	}
+
+	// Common subsystem field names (including DataPrime reference formats from groupby)
+	for _, subField := range []string{"subsystemname", "subsystem", "component", "module", "$l.subsystemname"} {
+		if sub, ok := entry[subField].(string); ok && sub != "" {
+			compact["subsystem"] = sub
+			break
+		}
+	}
+
+	// If no message was found, include remaining non-standard fields as the message
+	// This ensures aggregation results (count, sum, avg, etc.) are visible
+	if compact["message"] == nil && len(entry) > 0 {
+		// Fields that we've already extracted to standard names
+		extractedFields := map[string]bool{
+			"timestamp": true, "@timestamp": true, "time": true, "_time": true, "ts": true, "$m.timestamp": true,
+			"message": true, "msg": true, "text": true, "_message": true, "log": true,
+			"severity": true, "level": true, "log_level": true, "loglevel": true, "$m.severity": true,
+			"applicationname": true, "application": true, "app": true, "service": true, "app_name": true, "$l.applicationname": true,
+			"subsystemname": true, "subsystem": true, "component": true, "module": true, "$l.subsystemname": true,
+			"labels": true, "metadata": true, "user_data": true,
+		}
+
+		var parts []string
+		for k, v := range entry {
+			// Skip internal/metadata fields and already-extracted fields
+			if strings.HasPrefix(k, "_") || k == "query_id" || extractedFields[k] {
+				continue
+			}
+			switch val := v.(type) {
+			case string:
+				if val != "" {
+					parts = append(parts, fmt.Sprintf("%s=%s", k, val))
+				}
+			case float64:
+				parts = append(parts, fmt.Sprintf("%s=%.0f", k, val))
+			case int:
+				parts = append(parts, fmt.Sprintf("%s=%d", k, val))
+			case bool:
+				parts = append(parts, fmt.Sprintf("%s=%v", k, val))
+			}
+		}
+		if len(parts) > 0 {
+			sort.Strings(parts)
+			compact["message"] = strings.Join(parts, ", ")
+		}
+	}
+}
+
+// extractUserData extracts essential fields from parsed user_data
+func extractUserData(ud map[string]interface{}, compact map[string]interface{}) {
+	extractEventFields(ud, compact)
+	extractDirectFields(ud, compact)
+	extractAggregationFields(ud, compact)
+	buildAggregationMessage(ud, compact)
+}
+
+// extractEventFields extracts fields from the nested event object
+func extractEventFields(ud map[string]interface{}, compact map[string]interface{}) {
+	event, ok := ud["event"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	if msg, ok := event["_message"].(string); ok {
 		compact["message"] = msg
+	}
+	if sql, ok := event["sql"].(string); ok {
+		compact["sql"] = sql
+	}
+	if execMs, ok := event["execMs"].(float64); ok {
+		compact["exec_ms"] = int(execMs)
+	}
+}
+
+// extractDirectFields extracts commonly used direct fields from user_data
+func extractDirectFields(ud map[string]interface{}, compact map[string]interface{}) {
+	// Direct message field (if not already set from event)
+	if compact["message"] == nil {
+		if msg, ok := ud["message"].(string); ok {
+			compact["message"] = msg
+		}
 	}
 
 	// Log level
@@ -184,7 +422,6 @@ func extractUserData(ud map[string]interface{}, compact map[string]interface{}) 
 
 	// Logger name (shortened)
 	if logger, ok := ud["logger_name"].(string); ok {
-		// Shorten long logger names
 		parts := strings.Split(logger, ".")
 		if len(parts) > 2 {
 			compact["logger"] = parts[len(parts)-2] + "." + parts[len(parts)-1]
@@ -193,12 +430,89 @@ func extractUserData(ud map[string]interface{}, compact map[string]interface{}) 
 		}
 	}
 
-	// Trace/span IDs (useful for correlation)
+	// Trace/span IDs
 	if traceID, ok := ud["trace_id"].(string); ok {
 		compact["trace_id"] = traceID
 	}
 	if spanID, ok := ud["span_id"].(string); ok {
 		compact["span_id"] = spanID
+	}
+}
+
+// extractAggregationFields extracts app, subsystem, severity from aggregation results
+func extractAggregationFields(ud map[string]interface{}, compact map[string]interface{}) {
+	// App name from various field names
+	if compact["app"] == nil {
+		compact["app"] = findFirstString(ud, "applicationname", "application", "app", "service", "app_name")
+	}
+
+	// Subsystem from various field names
+	if compact["subsystem"] == nil {
+		compact["subsystem"] = findFirstString(ud, "subsystemname", "subsystem", "component", "module")
+	}
+
+	// Severity (string or numeric)
+	if compact["severity"] == nil {
+		for _, field := range []string{"severity", "level", "log_level"} {
+			if sev, ok := ud[field].(string); ok && sev != "" {
+				compact["severity"] = sev
+				return
+			}
+			if sevNum, ok := ud[field].(float64); ok {
+				compact["severity"] = severityNumToName(int(sevNum))
+				return
+			}
+		}
+	}
+}
+
+// findFirstString returns the first non-empty string value found for any of the given keys
+func findFirstString(m map[string]interface{}, keys ...string) interface{} {
+	for _, k := range keys {
+		if v, ok := m[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	return nil
+}
+
+// alreadyExtractedFields are fields we've already extracted - skip when building aggregation message
+var alreadyExtractedFields = map[string]bool{
+	"applicationname": true, "application": true, "app": true, "service": true, "app_name": true,
+	"subsystemname": true, "subsystem": true, "component": true, "module": true,
+	"severity": true, "level": true, "log_level": true,
+	"message": true, "msg": true, "text": true,
+	"event": true, "logger_name": true, "trace_id": true, "span_id": true,
+}
+
+// buildAggregationMessage creates a message from aggregated values when no message exists
+func buildAggregationMessage(ud map[string]interface{}, compact map[string]interface{}) {
+	if compact["message"] != nil {
+		return
+	}
+
+	var parts []string
+	for k, v := range ud {
+		if alreadyExtractedFields[k] {
+			continue
+		}
+		switch val := v.(type) {
+		case float64:
+			if val == float64(int(val)) {
+				parts = append(parts, fmt.Sprintf("%s=%d", k, int(val)))
+			} else {
+				parts = append(parts, fmt.Sprintf("%s=%.2f", k, val))
+			}
+		case string:
+			if len(val) <= 100 {
+				parts = append(parts, fmt.Sprintf("%s=%s", k, val))
+			}
+		}
+	}
+
+	if len(parts) > 0 {
+		sort.Strings(parts)
+		compact["message"] = strings.Join(parts, ", ")
 	}
 }
 
@@ -717,6 +1031,8 @@ func extractFieldValues(items []interface{}, fieldNames []string, limit int) []s
 
 // FormatResponseWithSuggestions formats the response with proactive suggestions
 func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, toolName string) (*mcp.CallToolResult, error) {
+	startTime := time.Now()
+
 	// Handle empty result - len(nil map) is 0, so this covers both nil and empty
 	if len(result) == 0 {
 		return &mcp.CallToolResult{
@@ -727,6 +1043,8 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 			},
 		}, nil
 	}
+
+	truncated := false
 
 	// Pretty print JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
@@ -747,6 +1065,7 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 
 	// Check if response exceeds size limit
 	if len(jsonBytes) > MaxResultSize {
+		truncated = true
 		_, truncatedBytes := truncateResult(result, MaxResultSize)
 		if truncatedBytes != nil {
 			responseText = string(truncatedBytes)
@@ -767,6 +1086,9 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 			zap.Int("truncated_size", len(responseText)),
 		)
 	}
+
+	// Add verification metadata for GRPO-style self-correction
+	AddVerificationMeta(result, toolName, startTime, truncated)
 
 	// Add proactive suggestions based on tool and result
 	suggestions := GetProactiveSuggestions(toolName, result, false)
@@ -805,6 +1127,8 @@ func (t *BaseTool) FormatResponseWithSummary(result map[string]interface{}, resu
 
 // FormatResponseWithSummaryAndSuggestions formats the response with summary and proactive suggestions
 func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]interface{}, resultType string, toolName string) (*mcp.CallToolResult, error) {
+	startTime := time.Now()
+
 	// Handle empty result - len(nil map) is 0, so this covers both nil and empty
 	if len(result) == 0 {
 		return &mcp.CallToolResult{
@@ -912,6 +1236,9 @@ func (t *BaseTool) FormatResponseWithSummaryAndSuggestions(result map[string]int
 			responseText += FormatProactiveSuggestions(suggestions)
 		}
 	}
+
+	// Add verification metadata for GRPO-style self-correction
+	AddVerificationMeta(result, toolName, startTime, wasTruncated || truncatedBySize)
 
 	// Final safety check: ensure response doesn't exceed absolute limit
 	responseText = ensureResponseLimit(responseText, t.logger)
@@ -1150,6 +1477,30 @@ func formatLogsAsMarkdown(result map[string]interface{}, summary string) string 
 				sb.WriteString(fmt.Sprintf("- **Region:** %s\n", region))
 			}
 		}
+
+		// Show auto-corrections that were applied - this helps the AI learn correct DataPrime syntax
+		if corrections, ok := meta["auto_corrections"].([]string); ok && len(corrections) > 0 {
+			sb.WriteString("\n⚠️ **Query Auto-Corrections Applied:**\n")
+			sb.WriteString("*The following corrections were automatically applied. Please use the correct syntax in future queries:*\n")
+			for _, correction := range corrections {
+				sb.WriteString(fmt.Sprintf("  - `%s`\n", correction))
+			}
+			if correctedQuery, ok := meta["corrected_query"].(string); ok {
+				sb.WriteString(fmt.Sprintf("\n**Corrected Query:** `%s`\n", correctedQuery))
+			}
+		} else if corrections, ok := meta["auto_corrections"].([]interface{}); ok && len(corrections) > 0 {
+			// Handle case where corrections are stored as []interface{}
+			sb.WriteString("\n⚠️ **Query Auto-Corrections Applied:**\n")
+			sb.WriteString("*The following corrections were automatically applied. Please use the correct syntax in future queries:*\n")
+			for _, correction := range corrections {
+				if corr, ok := correction.(string); ok {
+					sb.WriteString(fmt.Sprintf("  - `%s`\n", corr))
+				}
+			}
+			if correctedQuery, ok := meta["corrected_query"].(string); ok {
+				sb.WriteString(fmt.Sprintf("\n**Corrected Query:** `%s`\n", correctedQuery))
+			}
+		}
 	}
 
 	return sb.String()
@@ -1190,6 +1541,23 @@ func formatLogsAsMarkdownTruncated(result map[string]interface{}, summary string
 
 	if shownLogs < totalLogs {
 		sb.WriteString(fmt.Sprintf("\n---\n⚠️ **Showing %d of %d log entries.** Use `summary_only: true` or add filters to reduce results.\n", shownLogs, totalLogs))
+	}
+
+	// Also show auto-corrections in truncated output - important for AI learning
+	if meta, ok := result["_query_metadata"].(map[string]interface{}); ok {
+		if corrections, ok := meta["auto_corrections"].([]string); ok && len(corrections) > 0 {
+			sb.WriteString("\n⚠️ **Query Auto-Corrections Applied:**\n")
+			for _, correction := range corrections {
+				sb.WriteString(fmt.Sprintf("  - `%s`\n", correction))
+			}
+		} else if corrections, ok := meta["auto_corrections"].([]interface{}); ok && len(corrections) > 0 {
+			sb.WriteString("\n⚠️ **Query Auto-Corrections Applied:**\n")
+			for _, correction := range corrections {
+				if corr, ok := correction.(string); ok {
+					sb.WriteString(fmt.Sprintf("  - `%s`\n", corr))
+				}
+			}
+		}
 	}
 
 	return sb.String()
@@ -1248,4 +1616,116 @@ func formatSingleLogEntry(sb *strings.Builder, log interface{}, index int) {
 	}
 
 	sb.WriteString("\n")
+}
+
+// ============================================================================
+// HIGH-CARDINALITY FILTERING (Server-side Token Drowning Prevention)
+// ============================================================================
+
+// FormatClusteredSummary formats logs as semantic clusters instead of raw dumps.
+// This dramatically reduces token usage for large result sets while preserving insights.
+// Implements the LogAssist/LogBatcher 2025 pattern for high-cardinality filtering.
+func FormatClusteredSummary(events []interface{}, maxClusters int) string {
+	if len(events) == 0 {
+		return "No log events to cluster."
+	}
+
+	// Cluster logs by template
+	clusters := ClusterLogs(events)
+
+	var sb strings.Builder
+	sb.WriteString("## 🔬 Clustered Log Analysis\n\n")
+	sb.WriteString(fmt.Sprintf("**Total Events:** %d\n", len(events)))
+	sb.WriteString(fmt.Sprintf("**Unique Patterns:** %d\n\n", len(clusters)))
+
+	if maxClusters <= 0 {
+		maxClusters = 10
+	}
+
+	// Show top clusters
+	sb.WriteString("### Top Error Patterns\n\n")
+	for i, cluster := range clusters {
+		if i >= maxClusters {
+			sb.WriteString(fmt.Sprintf("... and %d more patterns\n", len(clusters)-maxClusters))
+			break
+		}
+
+		// Format cluster
+		sb.WriteString(fmt.Sprintf("#### Pattern %d: `%s`\n", i+1, cluster.TemplateID))
+		sb.WriteString(fmt.Sprintf("- **Count:** %d occurrences\n", cluster.Count))
+		sb.WriteString(fmt.Sprintf("- **Severity:** %s\n", cluster.Severity))
+		sb.WriteString(fmt.Sprintf("- **Root Cause:** %s\n", cluster.RootCause))
+		if len(cluster.Apps) > 0 {
+			sb.WriteString(fmt.Sprintf("- **Apps:** %s\n", strings.Join(cluster.Apps, ", ")))
+		}
+		sb.WriteString(fmt.Sprintf("- **Template:** `%s`\n", truncateString(cluster.Template, 80)))
+		if len(cluster.Samples) > 0 {
+			sb.WriteString(fmt.Sprintf("- **Sample:** `%s`\n", truncateString(cluster.Samples[0], 100)))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// ClusteredAnalysis extends the base analysis with semantic log clustering.
+// This provides SOTA 2025 pattern detection (LogAssist/LogBatcher paradigm).
+type ClusteredAnalysis struct {
+	TotalEvents int              `json:"total_events"`
+	TimeRange   *ClusterTimeInfo `json:"time_range,omitempty"`
+	Clusters    []*LogCluster    `json:"clusters,omitempty"`
+	RootCauses  []string         `json:"root_causes,omitempty"`
+}
+
+// ClusterTimeInfo contains time range metadata for clustering
+type ClusterTimeInfo struct {
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	Duration string `json:"duration"`
+}
+
+// AnalyzeQueryResultsWithClustering performs analysis with semantic log clustering.
+// This extends the base AnalyzeQueryResults with SOTA 2025 pattern recognition.
+func AnalyzeQueryResultsWithClustering(result map[string]interface{}) *ClusteredAnalysis {
+	events, ok := result["events"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	analysis := &ClusteredAnalysis{
+		TotalEvents: len(events),
+	}
+
+	if len(events) == 0 {
+		return analysis
+	}
+
+	// Time range extraction
+	timeRangeStr := extractTimeRange(events)
+	if timeRangeStr != "" {
+		parts := strings.Split(timeRangeStr, "\n")
+		if len(parts) >= 2 {
+			analysis.TimeRange = &ClusterTimeInfo{
+				Start: strings.TrimPrefix(parts[0], "From: "),
+				End:   strings.TrimPrefix(parts[1], "To: "),
+			}
+		}
+	}
+
+	// Cluster analysis for pattern detection
+	clusters := ClusterLogs(events)
+	if len(clusters) > 0 {
+		analysis.Clusters = clusters
+
+		// Extract unique root causes
+		seenCauses := make(map[string]bool)
+		for _, cluster := range clusters {
+			if cluster.RootCause != "UNKNOWN" && !seenCauses[cluster.RootCause] {
+				seenCauses[cluster.RootCause] = true
+				analysis.RootCauses = append(analysis.RootCauses, cluster.RootCause)
+			}
+		}
+	}
+
+	return analysis
 }

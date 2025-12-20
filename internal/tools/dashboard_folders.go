@@ -294,6 +294,7 @@ func (t *DeleteDashboardFolderTool) InputSchema() interface{} {
 				"type":        "string",
 				"description": "The unique identifier of the folder to delete",
 			},
+			"confirm": ConfirmationInputSchema(),
 		},
 		"required": []string{"folder_id"},
 	}
@@ -304,6 +305,9 @@ func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 	folderID, ok := arguments["folder_id"].(string)
 	if !ok || folderID == "" {
 		return NewToolResultError("folder_id is required and must be a string"), nil
+	}
+	if shouldContinue, result := RequireConfirmation(arguments, "dashboard folder", folderID); !shouldContinue {
+		return result, nil
 	}
 
 	req := &client.Request{
