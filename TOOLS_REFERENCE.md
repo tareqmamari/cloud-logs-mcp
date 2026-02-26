@@ -855,9 +855,9 @@ Validate query syntax before execution.
 | `query` | string | Yes | Query to validate |
 | `syntax` | string | No | Expected syntax type |
 
-### estimate_query_cost
+### estimate_query_cost *(experimental)*
 
-Estimate query resource consumption.
+Estimate relative query complexity using heuristic-based static analysis. Does not query actual instance metrics — useful for comparing queries and catching potential performance issues (wide time ranges, missing filters, heavy aggregations).
 
 **Parameters:**
 
@@ -1042,7 +1042,7 @@ Get a brief overview of all tool categories.
 
 ### Performance Best Practices
 
-1. **Use `estimate_query_cost` before large queries**
+1. **Use `estimate_query_cost` before large queries** *(experimental — heuristic-based hints, not precise costs)*
 
 2. **Use background queries for:**
    - Queries spanning > 24 hours

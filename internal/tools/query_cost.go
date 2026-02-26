@@ -36,32 +36,32 @@ func (t *QueryCostEstimateTool) Annotations() *mcp.ToolAnnotations {
 
 // Description returns a human-readable description of the tool
 func (t *QueryCostEstimateTool) Description() string {
-	return `Estimate the cost and performance impact of a log query before running it.
+	return `Estimate the relative complexity of a log query before running it (experimental).
+
+**Note:** This is a heuristic-based static analysis. It does not query actual instance metrics or log volumes. Estimates are approximate and useful for relative comparison, not precise cost prediction.
 
 **Use this tool to:**
-- Understand how expensive a query will be before execution
+- Get a rough sense of how complex a query is before execution
 - Get recommendations for optimizing queries
-- Predict approximate execution time and data scanned
-- Identify potential performance issues
+- Identify potential performance concerns (wide time ranges, missing filters, heavy aggregations)
 
-**What it analyzes:**
+**What it analyzes (heuristic-based):**
 - Query complexity (aggregations, groupings, sorting)
-- Time range scope and expected data volume
-- Filter efficiency and index usage
-- Resource consumption patterns
+- Time range scope
+- Filter presence and specificity
+- Sorting and limit usage
 
 **Returns:**
-- Estimated cost score (low, medium, high, very_high)
-- Predicted execution time range
-- Estimated data scan size
+- Relative cost score (low, medium, high, very_high)
+- Approximate execution time range (rough estimate)
+- Approximate data scan size (based on assumed ~100MB/hour baseline)
 - Optimization suggestions
-- Resource usage breakdown
 
 **When to use:**
 - Before running queries with large time ranges
 - When queries include complex aggregations
 - For queries without specific filters
-- To optimize slow-running queries`
+- To compare relative cost of different query approaches`
 }
 
 // Metadata returns semantic metadata for AI-driven discovery
