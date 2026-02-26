@@ -6,6 +6,25 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.9.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.8.0...v0.9.0) (2026-02-26)
+
+
+### Features
+
+* **api:** add service abstraction layer with structured error handling ([52c1e4e](https://github.com/tareqmamari/cloud-logs-mcp/commit/52c1e4ecc1a2aabdf80a063944c746e898c87003))
+* **client:** add Retry-After header support and instance info accessor ([6790dc3](https://github.com/tareqmamari/cloud-logs-mcp/commit/6790dc3267bfcbb55dd92cdf5e5e6301ff74f43e))
+* **tools:** add instance info to query responses ([33c4518](https://github.com/tareqmamari/cloud-logs-mcp/commit/33c4518ce90d3dc2e64580805d528a6b8c5ab8b8))
+* **tools:** add service adapter, log clustering, and context injection ([f2f397d](https://github.com/tareqmamari/cloud-logs-mcp/commit/f2f397daff08b44fbe46e59443c4c3dfc7c9c596))
+* **validator:** add centralized DataPrime query validation pipeline ([f50de6a](https://github.com/tareqmamari/cloud-logs-mcp/commit/f50de6acf7e2b7ef24cc27d1d9d08423430b50d3))
+
+
+### Bug Fixes
+
+* **lint:** resolve all golangci-lint v2.10 warnings ([72220f8](https://github.com/tareqmamari/cloud-logs-mcp/commit/72220f875a3231251bbad027f677b9179edc4a36))
+* **tools:** prevent context compaction failures and improve log formatting ([f2732ac](https://github.com/tareqmamari/cloud-logs-mcp/commit/f2732ac542c5e003e125f761137825ddb238144b))
+* **tools:** update dashboard configuration as per the OpenAPI spec ([a3c941d](https://github.com/tareqmamari/cloud-logs-mcp/commit/a3c941de4ee83500d5a005fdd1f86012378b8c70))
+* **tools:** use roundTime() for time bucketing in queries ([b4fcc67](https://github.com/tareqmamari/cloud-logs-mcp/commit/b4fcc672a173a85a939eea8f623a0c8c68796205))
+
 ## [0.8.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.7.0...v0.8.0) (2025-12-15)
 
 
