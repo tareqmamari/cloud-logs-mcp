@@ -149,7 +149,7 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 	keyword, _ := GetStringParam(args, "keyword", false)
 
 	// Get session context for defaults and tracking
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	// Use session preferences if not specified
 	if timeRange == "" {
@@ -282,7 +282,7 @@ func (t *InvestigateIncidentTool) formatInvestigationResults(ctx context.Context
 	if !ok || len(events) == 0 {
 		t.writeNoIssuesFound(&response)
 	} else {
-		t.writeFindings(&response, result, events, timeRange)
+		t.writeFindings(ctx, &response, result, events, timeRange)
 	}
 
 	response.WriteString(fmt.Sprintf("\n---\n### Query Used\n```dataprime\n%s\n```\n", query))
@@ -324,8 +324,8 @@ func (t *InvestigateIncidentTool) writeNoIssuesFound(response *strings.Builder) 
 	response.WriteString("- Check `list_alerts` for any triggered alerts\n")
 }
 
-func (t *InvestigateIncidentTool) writeFindings(response *strings.Builder, result map[string]interface{}, events []interface{}, timeRange string) {
-	session := GetSession()
+func (t *InvestigateIncidentTool) writeFindings(ctx context.Context, response *strings.Builder, result map[string]interface{}, events []interface{}, timeRange string) {
+	session := GetSessionFromContext(ctx)
 	analysis := AnalyzeQueryResults(result)
 
 	response.WriteString("## 📊 Findings Summary\n\n")

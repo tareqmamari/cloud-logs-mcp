@@ -74,7 +74,7 @@ func (t *GetAlertTool) Metadata() *ToolMetadata {
 
 // Execute executes the tool
 func (t *GetAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
@@ -169,8 +169,8 @@ func (t *ListAlertsTool) Metadata() *ToolMetadata {
 
 // Execute executes the tool
 func (t *ListAlertsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
-	cacheHelper := GetCacheHelper()
+	session := GetSessionFromContext(ctx)
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	// Get pagination parameters
 	pagination, err := GetPaginationParams(arguments)
@@ -306,8 +306,8 @@ func (t *CreateAlertTool) Metadata() *ToolMetadata {
 
 // Execute executes the tool
 func (t *CreateAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
-	cacheHelper := GetCacheHelper()
+	session := GetSessionFromContext(ctx)
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	alert, err := GetObjectParam(arguments, "alert", true)
 	if err != nil {
@@ -500,7 +500,7 @@ func (t *UpdateAlertTool) Metadata() *ToolMetadata {
 
 // Execute executes the tool
 func (t *UpdateAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	cacheHelper := GetCacheHelper()
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {
@@ -590,7 +590,7 @@ func (t *DeleteAlertTool) Metadata() *ToolMetadata {
 
 // Execute executes the tool
 func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	cacheHelper := GetCacheHelper()
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	id, err := GetStringParam(arguments, "id", true)
 	if err != nil {

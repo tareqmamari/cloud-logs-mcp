@@ -1143,6 +1143,13 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 			}
 			summary.WriteString("\n")
 		}
+
+		// Message patterns (clustered view) for larger result sets
+		if len(events) >= 10 {
+			summary.WriteString("### Message Patterns\n")
+			summary.WriteString(FormatClusteredSummary(events, 5))
+			summary.WriteString("\n")
+		}
 	} else {
 		summary.WriteString("**No events found** matching the query criteria.\n\n")
 	}

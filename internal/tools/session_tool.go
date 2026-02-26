@@ -115,13 +115,13 @@ func (t *SessionContextTool) Annotations() *mcp.ToolAnnotations {
 }
 
 // Execute executes the tool
-func (t *SessionContextTool) Execute(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *SessionContextTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	action, err := GetStringParam(args, "action", true)
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
 
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	switch action {
 	case "show":

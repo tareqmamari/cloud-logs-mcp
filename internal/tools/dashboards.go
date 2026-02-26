@@ -330,7 +330,7 @@ func (t *ListDashboardsTool) Metadata() *ToolMetadata {
 
 // Execute lists all dashboards.
 func (t *ListDashboardsTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	req := &client.Request{
 		Method: "GET",
@@ -409,7 +409,7 @@ func (t *GetDashboardTool) Metadata() *ToolMetadata {
 
 // Execute gets a specific dashboard.
 func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	dashboardID, ok := arguments["dashboard_id"].(string)
 	if !ok || dashboardID == "" {

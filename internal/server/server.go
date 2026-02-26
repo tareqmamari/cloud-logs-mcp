@@ -285,6 +285,7 @@ func (s *Server) registerTool(t tools.Tool) {
 		// Add session to context for tool execution
 		// This enables per-request session injection for better testability
 		ctx = tools.WithSession(ctx, tools.GetSession())
+		ctx = tools.WithSessionProvider(ctx, tools.GetSessionManager())
 
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {

@@ -392,7 +392,7 @@ func addQueryMetadataToResult(result map[string]interface{}, metadata map[string
 
 // Execute executes the tool
 func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	// Validate fields
 	if err := validateQueryFields(arguments); err != nil {

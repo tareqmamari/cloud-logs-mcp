@@ -117,7 +117,7 @@ func (t *SmartInvestigateTool) InputSchema() interface{} {
 
 // Execute performs the smart investigation
 func (t *SmartInvestigateTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
+	session := GetSessionFromContext(ctx)
 
 	// Determine investigation mode from parameters
 	mode := t.strategyFactory.DetermineMode(args)
@@ -242,7 +242,7 @@ func (t *SmartInvestigateTool) executeQueries(ctx context.Context, plans []Query
 		// For global mode, use archive to ensure complete data coverage
 		tier := plan.Tier
 		if tier == "" {
-			session := GetSession()
+			session := GetSessionFromContext(ctx)
 			if invCtx.TargetService != "" {
 				// Component mode: use TCO-aware tier for the specific application
 				tier = session.GetTierForApplication(invCtx.TargetService)

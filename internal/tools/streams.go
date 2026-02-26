@@ -43,8 +43,8 @@ func (t *ListStreamsTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *ListStreamsTool) Execute(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
-	session := GetSession()
-	cacheHelper := GetCacheHelper()
+	session := GetSessionFromContext(ctx)
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	// Check cache first
 	if cached, ok := cacheHelper.Get(t.Name(), "all"); ok {
@@ -233,7 +233,7 @@ func (t *CreateStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *CreateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	cacheHelper := GetCacheHelper()
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	name, err := GetStringParam(arguments, "name", true)
 	if err != nil {
@@ -450,7 +450,7 @@ func (t *UpdateStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	cacheHelper := GetCacheHelper()
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
@@ -544,7 +544,7 @@ func (t *DeleteStreamTool) InputSchema() interface{} {
 
 // Execute executes the tool
 func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	cacheHelper := GetCacheHelper()
+	cacheHelper := GetCacheHelperFromContext(ctx)
 
 	streamID, err := GetStringParam(arguments, "stream_id", true)
 	if err != nil {
