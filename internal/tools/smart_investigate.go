@@ -313,16 +313,16 @@ func (t *SmartInvestigateTool) formatSmartResponse(
 
 	// Header
 	sb.WriteString("# Smart Investigation Report\n\n")
-	sb.WriteString(fmt.Sprintf("**Mode:** %s\n", invCtx.Mode))
-	sb.WriteString(fmt.Sprintf("**Time Range:** %s to %s\n",
+	fmt.Fprintf(&sb, "**Mode:** %s\n", invCtx.Mode)
+	fmt.Fprintf(&sb, "**Time Range:** %s to %s\n",
 		invCtx.TimeRange.Start.Format("15:04 MST"),
-		invCtx.TimeRange.End.Format("15:04 MST")))
+		invCtx.TimeRange.End.Format("15:04 MST"))
 
 	if invCtx.TargetService != "" {
-		sb.WriteString(fmt.Sprintf("**Target Service:** %s\n", invCtx.TargetService))
+		fmt.Fprintf(&sb, "**Target Service:** %s\n", invCtx.TargetService)
 	}
 	if invCtx.TraceID != "" {
-		sb.WriteString(fmt.Sprintf("**Trace ID:** %s\n", invCtx.TraceID))
+		fmt.Fprintf(&sb, "**Trace ID:** %s\n", invCtx.TraceID)
 	}
 	sb.WriteString("\n")
 
@@ -336,23 +336,23 @@ func (t *SmartInvestigateTool) formatSmartResponse(
 		} else {
 			successCount++
 		}
-		sb.WriteString(fmt.Sprintf("- **%s**: %s (%d events, %dms)\n",
-			r.QueryID, status, len(r.Events), r.Duration.Milliseconds()))
+		fmt.Fprintf(&sb, "- **%s**: %s (%d events, %dms)\n",
+			r.QueryID, status, len(r.Events), r.Duration.Milliseconds())
 	}
 	sb.WriteString("\n")
 
 	// Root Cause
 	sb.WriteString("## Root Cause\n\n")
 	if evidence.RootCause != "" {
-		sb.WriteString(fmt.Sprintf("> **%s**\n\n", evidence.RootCause))
-		sb.WriteString(fmt.Sprintf("_Confidence: %.0f%%_\n\n", evidence.Confidence*100))
+		fmt.Fprintf(&sb, "> **%s**\n\n", evidence.RootCause)
+		fmt.Fprintf(&sb, "_Confidence: %.0f%%_\n\n", evidence.Confidence*100)
 	} else {
 		sb.WriteString("> No critical issues identified.\n\n")
 	}
 
 	// Impact Summary
 	if evidence.ImpactSummary != "" {
-		sb.WriteString(fmt.Sprintf("**Impact:** %s\n\n", evidence.ImpactSummary))
+		fmt.Fprintf(&sb, "**Impact:** %s\n\n", evidence.ImpactSummary)
 	}
 
 	// Affected Services
@@ -371,17 +371,17 @@ func (t *SmartInvestigateTool) formatSmartResponse(
 
 		for i, f := range invCtx.Findings {
 			if i >= 10 { // Limit to top 10 findings
-				sb.WriteString(fmt.Sprintf("\n_... and %d more findings_\n", len(invCtx.Findings)-10))
+				fmt.Fprintf(&sb, "\n_... and %d more findings_\n", len(invCtx.Findings)-10)
 				break
 			}
 
 			icon := getSeverityIcon(f.Severity)
-			sb.WriteString(fmt.Sprintf("%d. %s **[%s]** %s\n", i+1, icon, f.Severity, f.Summary))
+			fmt.Fprintf(&sb, "%d. %s **[%s]** %s\n", i+1, icon, f.Severity, f.Summary)
 			if f.Evidence != "" {
-				sb.WriteString(fmt.Sprintf("   - Evidence: %s\n", f.Evidence))
+				fmt.Fprintf(&sb, "   - Evidence: %s\n", f.Evidence)
 			}
 			if f.Service != "" {
-				sb.WriteString(fmt.Sprintf("   - Service: %s\n", f.Service))
+				fmt.Fprintf(&sb, "   - Service: %s\n", f.Service)
 			}
 		}
 		sb.WriteString("\n")
@@ -394,10 +394,10 @@ func (t *SmartInvestigateTool) formatSmartResponse(
 			if i >= 5 { // Limit to top 5
 				break
 			}
-			sb.WriteString(fmt.Sprintf("**%d. %s**\n", i+1, action.Description))
-			sb.WriteString(fmt.Sprintf("   - Rationale: %s\n", action.Rationale))
+			fmt.Fprintf(&sb, "**%d. %s**\n", i+1, action.Description)
+			fmt.Fprintf(&sb, "   - Rationale: %s\n", action.Rationale)
 			if action.Query != "" {
-				sb.WriteString(fmt.Sprintf("   - Query: `%s`\n", truncateInvestigationQuery(action.Query)))
+				fmt.Fprintf(&sb, "   - Query: `%s`\n", truncateInvestigationQuery(action.Query))
 			}
 		}
 		sb.WriteString("\n")
@@ -416,9 +416,9 @@ func (t *SmartInvestigateTool) formatSmartResponse(
 		if len(sops) > 0 {
 			sb.WriteString("## Recommended Procedures\n\n")
 			for _, sop := range sops {
-				sb.WriteString(fmt.Sprintf("**%s**\n\n", sop.Trigger))
-				sb.WriteString(fmt.Sprintf("%s\n\n", sop.Procedure))
-				sb.WriteString(fmt.Sprintf("_Escalation: %s_\n\n", sop.Escalation))
+				fmt.Fprintf(&sb, "**%s**\n\n", sop.Trigger)
+				fmt.Fprintf(&sb, "%s\n\n", sop.Procedure)
+				fmt.Fprintf(&sb, "_Escalation: %s_\n\n", sop.Escalation)
 			}
 		}
 	}

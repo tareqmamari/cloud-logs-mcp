@@ -1129,7 +1129,7 @@ func (r *Registry) smartSuggestPrompt() *PromptDefinition {
 			}
 
 			var builder strings.Builder
-			builder.WriteString(fmt.Sprintf("# Smart Suggestions for: %s\n\n", goal))
+			fmt.Fprintf(&builder, "# Smart Suggestions for: %s\n\n", goal)
 
 			goalLower := strings.ToLower(goal)
 
@@ -1222,18 +1222,18 @@ func (r *Registry) smartSuggestPrompt() *PromptDefinition {
 			// Write recommendations
 			builder.WriteString("## Recommended Tools\n\n")
 			for i, tool := range primaryTools {
-				builder.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, tool))
+				fmt.Fprintf(&builder, "%d. `%s`\n", i+1, tool)
 			}
 			builder.WriteString("\n")
 
 			if workflow != "" {
-				builder.WriteString(fmt.Sprintf("## Suggested Workflow: %s\n\n", workflow))
+				fmt.Fprintf(&builder, "## Suggested Workflow: %s\n\n", workflow)
 				builder.WriteString("Use `discover_tools` with this intent to see the full workflow chain.\n\n")
 			}
 
 			builder.WriteString("## Tips\n\n")
 			for _, tip := range tips {
-				builder.WriteString(fmt.Sprintf("- %s\n", tip))
+				fmt.Fprintf(&builder, "- %s\n", tip)
 			}
 			builder.WriteString("\n")
 
@@ -1241,21 +1241,21 @@ func (r *Registry) smartSuggestPrompt() *PromptDefinition {
 			if r.contextProvider != nil {
 				if inv := r.contextProvider.GetInvestigation(); inv != nil {
 					builder.WriteString("## 💡 Context Note\n\n")
-					builder.WriteString(fmt.Sprintf("You have an active investigation (%s). ", inv.ID))
+					fmt.Fprintf(&builder, "You have an active investigation (%s). ", inv.ID)
 					builder.WriteString("Your new activity will be tracked as part of this investigation.\n\n")
 				}
 
 				if filters := r.contextProvider.GetAllFilters(); len(filters) > 0 {
 					builder.WriteString("## 🎯 Active Filters Applied\n\n")
 					for key, value := range filters {
-						builder.WriteString(fmt.Sprintf("- %s: `%s`\n", key, value))
+						fmt.Fprintf(&builder, "- %s: `%s`\n", key, value)
 					}
 					builder.WriteString("\n")
 				}
 			}
 
 			builder.WriteString("---\n")
-			builder.WriteString(fmt.Sprintf("*Ready to start? Try: `%s`*\n", primaryTools[0]))
+			fmt.Fprintf(&builder, "*Ready to start? Try: `%s`*\n", primaryTools[0])
 
 			return createPromptResult(fmt.Sprintf("Smart suggestions for: %s", goal), builder.String()), nil
 		},

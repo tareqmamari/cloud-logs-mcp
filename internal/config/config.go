@@ -17,7 +17,7 @@ import (
 type Config struct {
 	// IBM Cloud Logs Service Configuration
 	ServiceURL   string `json:"service_url"`
-	APIKey       string `json:"api_key,omitempty"` // Not stored in files, from env only
+	APIKey       string `json:"api_key,omitempty"` //nolint:gosec // Not stored in files, from env only
 	Region       string `json:"region"`
 	InstanceID   string `json:"instance_id,omitempty"`   // Service instance ID (alternative to service_url)
 	InstanceName string `json:"instance_name,omitempty"` // Optional friendly name for this instance
@@ -129,7 +129,7 @@ func loadFromFile(cfg *Config, path string) error {
 	}
 
 	// Read the file
-	data, err := os.ReadFile(cleanPath) // #nosec G304 -- path is validated above
+	data, err := os.ReadFile(cleanPath) // #nosec G304 G703 -- path is validated and sanitized above
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}

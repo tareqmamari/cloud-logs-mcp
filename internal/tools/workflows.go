@@ -23,10 +23,10 @@ func formatInstanceInfo(info *client.InstanceInfo) string {
 	var sb strings.Builder
 	sb.WriteString("---\n### Target Instance\n")
 	if info.InstanceName != "" {
-		sb.WriteString(fmt.Sprintf("- **Instance:** %s\n", info.InstanceName))
+		fmt.Fprintf(&sb, "- **Instance:** %s\n", info.InstanceName)
 	}
-	sb.WriteString(fmt.Sprintf("- **Region:** %s\n", info.Region))
-	sb.WriteString(fmt.Sprintf("- **Service URL:** %s\n", info.ServiceURL))
+	fmt.Fprintf(&sb, "- **Region:** %s\n", info.Region)
+	fmt.Fprintf(&sb, "- **Service URL:** %s\n", info.ServiceURL)
 	return sb.String()
 }
 
@@ -257,12 +257,12 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 func (t *InvestigateIncidentTool) formatInvestigationError(err error, query, _ string) (*mcp.CallToolResult, error) {
 	var response strings.Builder
 	response.WriteString("## ❌ Investigation Query Failed\n\n")
-	response.WriteString(fmt.Sprintf("**Error:** %s\n\n", err.Error()))
+	fmt.Fprintf(&response, "**Error:** %s\n\n", err.Error())
 	response.WriteString("### Troubleshooting Steps\n")
 	response.WriteString("1. Verify the application name is correct\n")
 	response.WriteString("2. Try expanding the time range\n")
 	response.WriteString("3. Check if logs exist for this application with: `query_logs`\n\n")
-	response.WriteString(fmt.Sprintf("### Query Used\n```\n%s\n```\n", query))
+	fmt.Fprintf(&response, "### Query Used\n```\n%s\n```\n", query)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -285,7 +285,7 @@ func (t *InvestigateIncidentTool) formatInvestigationResults(ctx context.Context
 		t.writeFindings(ctx, &response, result, events, timeRange)
 	}
 
-	response.WriteString(fmt.Sprintf("\n---\n### Query Used\n```dataprime\n%s\n```\n", query))
+	fmt.Fprintf(&response, "\n---\n### Query Used\n```dataprime\n%s\n```\n", query)
 
 	// Add instance info so users know which IBM Cloud Logs instance was queried
 	if apiClient, err := t.GetClient(ctx); err == nil {
@@ -620,7 +620,7 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 
 	var response strings.Builder
 	response.WriteString("# 🏥 System Health Check\n\n")
-	response.WriteString(fmt.Sprintf("**Time Range:** Last %s (ending %s UTC)\n\n", timeRange, endDate.Format("15:04")))
+	fmt.Fprintf(&response, "**Time Range:** Last %s (ending %s UTC)\n\n", timeRange, endDate.Format("15:04"))
 
 	// Query for health summary - use simple error count per app
 	healthQuery := `source logs
@@ -634,7 +634,7 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 	healthQuery, _, err := PrepareQuery(healthQuery, "archive", "dataprime")
 	if err != nil {
 		response.WriteString("## ⚠️ Health Check Failed\n\n")
-		response.WriteString(fmt.Sprintf("Query validation error: %s\n\n", err.Error()))
+		fmt.Fprintf(&response, "Query validation error: %s\n\n", err.Error())
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: response.String()},
@@ -657,7 +657,7 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 	result, err := t.ExecuteRequest(ctx, req)
 	if err != nil {
 		response.WriteString("## ⚠️ Health Check Failed\n\n")
-		response.WriteString(fmt.Sprintf("Unable to query logs: %s\n\n", err.Error()))
+		fmt.Fprintf(&response, "Unable to query logs: %s\n\n", err.Error())
 		response.WriteString("This may indicate connectivity issues or misconfiguration.\n")
 
 		return &mcp.CallToolResult{
@@ -727,21 +727,21 @@ func (t *HealthCheckTool) Execute(ctx context.Context, args map[string]interface
 		statusDesc = "Some errors present - keep monitoring"
 	}
 
-	response.WriteString(fmt.Sprintf("## %s\n\n", status))
-	response.WriteString(fmt.Sprintf("%s\n\n", statusDesc))
+	fmt.Fprintf(&response, "## %s\n\n", status)
+	fmt.Fprintf(&response, "%s\n\n", statusDesc)
 
 	// Summary statistics
 	response.WriteString("### Summary\n")
-	response.WriteString(fmt.Sprintf("- **Total Logs:** %d\n", totalLogs))
-	response.WriteString(fmt.Sprintf("- **Total Errors:** %d\n", totalErrors))
-	response.WriteString(fmt.Sprintf("- **Overall Error Rate:** %.2f%%\n", overallErrorRate))
-	response.WriteString(fmt.Sprintf("- **Applications Monitored:** %d\n\n", len(events)))
+	fmt.Fprintf(&response, "- **Total Logs:** %d\n", totalLogs)
+	fmt.Fprintf(&response, "- **Total Errors:** %d\n", totalErrors)
+	fmt.Fprintf(&response, "- **Overall Error Rate:** %.2f%%\n", overallErrorRate)
+	fmt.Fprintf(&response, "- **Applications Monitored:** %d\n\n", len(events))
 
 	// Unhealthy applications
 	if len(unhealthyApps) > 0 {
 		response.WriteString("### ⚠️ Applications Needing Attention\n")
 		for _, app := range unhealthyApps {
-			response.WriteString(fmt.Sprintf("- %s\n", app))
+			fmt.Fprintf(&response, "- %s\n", app)
 		}
 		response.WriteString("\n")
 	}

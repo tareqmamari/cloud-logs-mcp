@@ -1,5 +1,5 @@
 // Package metrics provides metrics collection and reporting for the MCP server.
-package metrics
+package metrics //nolint:revive // intentional package name
 
 import (
 	"fmt"

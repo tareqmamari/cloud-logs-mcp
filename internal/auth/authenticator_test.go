@@ -94,14 +94,14 @@ func TestParseJWTClaims(t *testing.T) {
 		wantSubject string
 		wantErr     bool
 	}{
-		{
+		{ //nolint:gosec // test token, not real credentials
 			name: "valid JWT token",
 			// This is a test token with claims: {"sub": "iam-ServiceId-12345", "iam_id": "iam-12345", "account": "account123"}
 			token:       "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJpYW0tU2VydmljZUlkLTEyMzQ1IiwiaWFtX2lkIjoiaWFtLTEyMzQ1IiwiYWNjb3VudCI6ImFjY291bnQxMjMifQ.signature", //nolint:gosec // pragma: allowlist secret
 			wantSubject: "iam-ServiceId-12345",
 			wantErr:     false,
 		},
-		{
+		{ //nolint:gosec // test token, not real credentials
 			name: "valid JWT with user email",
 			// Claims: {"sub": "IBMid-123456789", "email": "user@example.com", "name": "Test User"}
 			token:       "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJJQk1pZC0xMjM0NTY3ODkiLCJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJuYW1lIjoiVGVzdCBVc2VyIn0.sig", //nolint:gosec // pragma: allowlist secret
@@ -123,7 +123,7 @@ func TestParseJWTClaims(t *testing.T) {
 			token:   "header.!!!invalid!!!.signature",
 			wantErr: true,
 		},
-		{
+		{ //nolint:gosec // test token, not real credentials
 			name:    "invalid JSON in payload",
 			token:   "header.bm90anNvbg.signature", // "notjson" base64 encoded, pragma: allowlist secret
 			wantErr: true,

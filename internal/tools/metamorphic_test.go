@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -309,7 +310,7 @@ func TestConcurrent_SessionAccess(t *testing.T) {
 			session := GetSession()
 			session.RecordToolUse("test_tool", true, nil)
 			lastQuery := session.GetLastQuery()
-			session.SetLastQuery("test query " + string(rune('0'+id)))
+			session.SetLastQuery("test query " + strconv.Itoa(id))
 			// Verify session operations don't panic under concurrency
 			if session == nil {
 				t.Error("session should not be nil")

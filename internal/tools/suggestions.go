@@ -420,17 +420,17 @@ func FormatSmartSuggestions(suggestions []SmartSuggestion) string {
 			confidenceStr = fmt.Sprintf(" %s %.0f%% confidence", confidenceIcon, s.Confidence*100)
 		}
 
-		builder.WriteString(fmt.Sprintf("\n%s **%s** `%s`%s\n", urgencyIcon, strings.ToUpper(s.Urgency), s.Tool, confidenceStr))
-		builder.WriteString(fmt.Sprintf("   %s\n", s.Description))
+		fmt.Fprintf(&builder, "\n%s **%s** `%s`%s\n", urgencyIcon, strings.ToUpper(s.Urgency), s.Tool, confidenceStr)
+		fmt.Fprintf(&builder, "   %s\n", s.Description)
 		if s.Reason != "" {
-			builder.WriteString(fmt.Sprintf("   _Reason: %s_\n", s.Reason))
+			fmt.Fprintf(&builder, "   _Reason: %s_\n", s.Reason)
 		}
 
 		// Show evidence if available
 		if len(s.Evidence) > 0 {
 			builder.WriteString("   📋 Evidence:\n")
 			for _, e := range s.Evidence {
-				builder.WriteString(fmt.Sprintf("      • %s\n", e))
+				fmt.Fprintf(&builder, "      • %s\n", e)
 			}
 		}
 
@@ -668,7 +668,7 @@ func FormatProactiveSuggestions(suggestions []ProactiveSuggestion) string {
 	var builder strings.Builder
 	builder.WriteString("\n\n---\n💡 **Next Steps:**\n")
 	for _, s := range suggestions {
-		builder.WriteString(fmt.Sprintf("- `%s`: %s\n", s.Tool, s.Description))
+		fmt.Fprintf(&builder, "- `%s`: %s\n", s.Tool, s.Description)
 	}
 	return builder.String()
 }

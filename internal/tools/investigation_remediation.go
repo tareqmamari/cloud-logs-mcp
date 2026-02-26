@@ -426,11 +426,11 @@ func FormatAssetsAsMarkdown(assets *IncidentResponseAssets) string {
 
 	if assets.Alert != nil {
 		sb.WriteString("### Alert Configuration\n\n")
-		sb.WriteString(fmt.Sprintf("**Name:** %s\n", assets.Alert.Name))
-		sb.WriteString(fmt.Sprintf("**Description:** %s\n", assets.Alert.Description))
-		sb.WriteString(fmt.Sprintf("**Condition:** `%s`\n", assets.Alert.Condition))
-		sb.WriteString(fmt.Sprintf("**Threshold:** %.1f%%\n", assets.Alert.Threshold))
-		sb.WriteString(fmt.Sprintf("**Window:** %s\n\n", assets.Alert.EvaluationWindow))
+		fmt.Fprintf(&sb, "**Name:** %s\n", assets.Alert.Name)
+		fmt.Fprintf(&sb, "**Description:** %s\n", assets.Alert.Description)
+		fmt.Fprintf(&sb, "**Condition:** `%s`\n", assets.Alert.Condition)
+		fmt.Fprintf(&sb, "**Threshold:** %.1f%%\n", assets.Alert.Threshold)
+		fmt.Fprintf(&sb, "**Window:** %s\n\n", assets.Alert.EvaluationWindow)
 
 		sb.WriteString("<details>\n<summary>Terraform Configuration</summary>\n\n```hcl\n")
 		sb.WriteString(assets.Alert.Terraform)
@@ -444,11 +444,11 @@ func FormatAssetsAsMarkdown(assets *IncidentResponseAssets) string {
 
 	if assets.Dashboard != nil {
 		sb.WriteString("### Dashboard Configuration\n\n")
-		sb.WriteString(fmt.Sprintf("**Name:** %s\n", assets.Dashboard.Name))
-		sb.WriteString(fmt.Sprintf("**Widgets:** %d\n\n", len(assets.Dashboard.Widgets)))
+		fmt.Fprintf(&sb, "**Name:** %s\n", assets.Dashboard.Name)
+		fmt.Fprintf(&sb, "**Widgets:** %d\n\n", len(assets.Dashboard.Widgets))
 
 		for _, w := range assets.Dashboard.Widgets {
-			sb.WriteString(fmt.Sprintf("- **%s** (%s)\n", w.Title, w.Type))
+			fmt.Fprintf(&sb, "- **%s** (%s)\n", w.Title, w.Type)
 		}
 		sb.WriteString("\n")
 
@@ -461,9 +461,9 @@ func FormatAssetsAsMarkdown(assets *IncidentResponseAssets) string {
 	if len(assets.SOPRecommendations) > 0 {
 		sb.WriteString("### Standard Operating Procedures\n\n")
 		for _, sop := range assets.SOPRecommendations {
-			sb.WriteString(fmt.Sprintf("**Trigger:** %s\n\n", sop.Trigger))
-			sb.WriteString(fmt.Sprintf("**Procedure:**\n%s\n\n", sop.Procedure))
-			sb.WriteString(fmt.Sprintf("_Escalation: %s_\n\n---\n\n", sop.Escalation))
+			fmt.Fprintf(&sb, "**Trigger:** %s\n\n", sop.Trigger)
+			fmt.Fprintf(&sb, "**Procedure:**\n%s\n\n", sop.Procedure)
+			fmt.Fprintf(&sb, "_Escalation: %s_\n\n---\n\n", sop.Escalation)
 		}
 	}
 

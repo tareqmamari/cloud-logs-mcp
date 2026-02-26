@@ -310,7 +310,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	var builder strings.Builder
 
 	builder.WriteString("## Dry-Run Validation Result\n\n")
-	builder.WriteString(fmt.Sprintf("**Resource Type:** %s\n\n", resourceType))
+	fmt.Fprintf(&builder, "**Resource Type:** %s\n\n", resourceType)
 
 	if result.Valid {
 		builder.WriteString("✅ **Status:** Valid - configuration is ready for creation\n\n")
@@ -321,7 +321,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	if len(result.Errors) > 0 {
 		builder.WriteString("### Errors\n\n")
 		for _, err := range result.Errors {
-			builder.WriteString(fmt.Sprintf("- ❌ %s\n", err))
+			fmt.Fprintf(&builder, "- ❌ %s\n", err)
 		}
 		builder.WriteString("\n")
 	}
@@ -329,7 +329,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	if len(result.Warnings) > 0 {
 		builder.WriteString("### Warnings\n\n")
 		for _, warn := range result.Warnings {
-			builder.WriteString(fmt.Sprintf("- ⚠️ %s\n", warn))
+			fmt.Fprintf(&builder, "- ⚠️ %s\n", warn)
 		}
 		builder.WriteString("\n")
 	}
@@ -338,13 +338,13 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	if result.EstimatedImpact != nil {
 		builder.WriteString("### Estimated Impact\n\n")
 		if result.EstimatedImpact.AffectedResources > 0 {
-			builder.WriteString(fmt.Sprintf("- **Affected Resources:** %d\n", result.EstimatedImpact.AffectedResources))
+			fmt.Fprintf(&builder, "- **Affected Resources:** %d\n", result.EstimatedImpact.AffectedResources)
 		}
 		if result.EstimatedImpact.EstimatedCost != "" {
-			builder.WriteString(fmt.Sprintf("- **Estimated Cost:** %s\n", result.EstimatedImpact.EstimatedCost))
+			fmt.Fprintf(&builder, "- **Estimated Cost:** %s\n", result.EstimatedImpact.EstimatedCost)
 		}
 		if result.EstimatedImpact.EstimatedLatency != "" {
-			builder.WriteString(fmt.Sprintf("- **Estimated Latency:** %s\n", result.EstimatedImpact.EstimatedLatency))
+			fmt.Fprintf(&builder, "- **Estimated Latency:** %s\n", result.EstimatedImpact.EstimatedLatency)
 		}
 		if result.EstimatedImpact.RiskLevel != "" {
 			riskEmoji := "🟢"
@@ -354,7 +354,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 			case "high":
 				riskEmoji = "🔴"
 			}
-			builder.WriteString(fmt.Sprintf("- **Risk Level:** %s %s\n", riskEmoji, result.EstimatedImpact.RiskLevel))
+			fmt.Fprintf(&builder, "- **Risk Level:** %s %s\n", riskEmoji, result.EstimatedImpact.RiskLevel)
 		}
 		builder.WriteString("\n")
 	}
@@ -362,7 +362,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	if len(result.Summary) > 0 {
 		builder.WriteString("### Configuration Summary\n\n")
 		for key, val := range result.Summary {
-			builder.WriteString(fmt.Sprintf("- **%s:** %v\n", toTitleCase(key), val))
+			fmt.Fprintf(&builder, "- **%s:** %v\n", toTitleCase(key), val)
 		}
 		builder.WriteString("\n")
 	}
@@ -370,7 +370,7 @@ func FormatDryRunResult(result *ValidationResult, resourceType string, config ma
 	if len(result.Suggestions) > 0 {
 		builder.WriteString("### Suggestions\n\n")
 		for _, sug := range result.Suggestions {
-			builder.WriteString(fmt.Sprintf("- 💡 %s\n", sug))
+			fmt.Fprintf(&builder, "- 💡 %s\n", sug)
 		}
 		builder.WriteString("\n")
 	}

@@ -710,8 +710,8 @@ func FormatQueryError(query string, apiError string) string {
 	var sb strings.Builder
 
 	sb.WriteString("**Query Error**\n\n")
-	sb.WriteString(fmt.Sprintf("Query: `%s`\n\n", truncateQueryForDisplay(query, 200)))
-	sb.WriteString(fmt.Sprintf("Error: %s\n\n", apiError))
+	fmt.Fprintf(&sb, "Query: `%s`\n\n", truncateQueryForDisplay(query, 200))
+	fmt.Fprintf(&sb, "Error: %s\n\n", apiError)
 
 	suggestion := SuggestQueryFix(query, apiError)
 	if suggestion != "" {

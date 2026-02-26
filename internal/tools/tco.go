@@ -251,7 +251,7 @@ func GetTCOSummary(session *SessionContext) string {
 		return sb.String()
 	}
 
-	sb.WriteString(fmt.Sprintf("- %d policies configured\n", config.PolicyCount))
+	fmt.Fprintf(&sb, "- %d policies configured\n", config.PolicyCount)
 
 	if config.HasArchive {
 		sb.WriteString("- Archive tier: enabled\n")
@@ -265,20 +265,20 @@ func GetTCOSummary(session *SessionContext) string {
 	if len(config.Policies) > 0 {
 		sb.WriteString("- Policy rules (in order):\n")
 		for i, policy := range config.Policies {
-			sb.WriteString(fmt.Sprintf("  %d. ", i+1))
+			fmt.Fprintf(&sb, "  %d. ", i+1)
 			if policy.ApplicationRule != nil {
-				sb.WriteString(fmt.Sprintf("app %s '%s'", policy.ApplicationRule.RuleType, policy.ApplicationRule.Name))
+				fmt.Fprintf(&sb, "app %s '%s'", policy.ApplicationRule.RuleType, policy.ApplicationRule.Name)
 			}
 			if policy.SubsystemRule != nil {
 				if policy.ApplicationRule != nil {
 					sb.WriteString(" AND ")
 				}
-				sb.WriteString(fmt.Sprintf("subsystem %s '%s'", policy.SubsystemRule.RuleType, policy.SubsystemRule.Name))
+				fmt.Fprintf(&sb, "subsystem %s '%s'", policy.SubsystemRule.RuleType, policy.SubsystemRule.Name)
 			}
 			if policy.ApplicationRule == nil && policy.SubsystemRule == nil {
 				sb.WriteString("(all logs)")
 			}
-			sb.WriteString(fmt.Sprintf(" -> %s\n", policy.Tier))
+			fmt.Fprintf(&sb, " -> %s\n", policy.Tier)
 		}
 	}
 

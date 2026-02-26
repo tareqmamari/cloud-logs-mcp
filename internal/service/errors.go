@@ -157,25 +157,25 @@ func (e *AgentActionableError) ToJSON() string {
 func (e *AgentActionableError) FormatForAgent() string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## ⚠️ Error: %s\n\n", e.Message))
-	sb.WriteString(fmt.Sprintf("**Code:** `%s`\n", e.Code))
-	sb.WriteString(fmt.Sprintf("**Category:** %s\n", e.Category))
+	fmt.Fprintf(&sb, "## ⚠️ Error: %s\n\n", e.Message)
+	fmt.Fprintf(&sb, "**Code:** `%s`\n", e.Code)
+	fmt.Fprintf(&sb, "**Category:** %s\n", e.Category)
 
 	sb.WriteString("\n### Recommended Action\n\n")
-	sb.WriteString(fmt.Sprintf("**Action:** `%s`\n", e.Action))
-	sb.WriteString(fmt.Sprintf("**Reason:** %s\n", e.ActionReason))
+	fmt.Fprintf(&sb, "**Action:** `%s`\n", e.Action)
+	fmt.Fprintf(&sb, "**Reason:** %s\n", e.ActionReason)
 
 	if e.RetryAfterMs > 0 {
-		sb.WriteString(fmt.Sprintf("\n⏱️ Wait %dms before retrying.\n", e.RetryAfterMs))
+		fmt.Fprintf(&sb, "\n⏱️ Wait %dms before retrying.\n", e.RetryAfterMs)
 	}
 
 	if len(e.SuggestedParams) > 0 {
 		sb.WriteString("\n### Suggested Parameter Changes\n\n")
 		for _, p := range e.SuggestedParams {
 			if p.CurrentValue != "" {
-				sb.WriteString(fmt.Sprintf("- **%s:** Change from `%s` to `%s` (%s)\n", p.Param, p.CurrentValue, p.SuggestValue, p.Reason))
+				fmt.Fprintf(&sb, "- **%s:** Change from `%s` to `%s` (%s)\n", p.Param, p.CurrentValue, p.SuggestValue, p.Reason)
 			} else {
-				sb.WriteString(fmt.Sprintf("- **%s:** Set to `%s` (%s)\n", p.Param, p.SuggestValue, p.Reason))
+				fmt.Fprintf(&sb, "- **%s:** Set to `%s` (%s)\n", p.Param, p.SuggestValue, p.Reason)
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func (e *AgentActionableError) FormatForAgent() string {
 	if len(e.ElicitQuestions) > 0 {
 		sb.WriteString("\n### Questions to Ask User\n\n")
 		for i, q := range e.ElicitQuestions {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, q))
+			fmt.Fprintf(&sb, "%d. %s\n", i+1, q)
 		}
 	}
 

@@ -159,25 +159,25 @@ func (t *QueryCostEstimateTool) Execute(_ context.Context, params map[string]int
 		costEmoji = "🔴"
 	}
 
-	builder.WriteString(fmt.Sprintf("**Cost Level:** %s %s (Score: %d/100)\n\n", costEmoji, estimate.CostLevel, estimate.CostScore))
-	builder.WriteString(fmt.Sprintf("**Complexity:** %s\n", estimate.Complexity))
-	builder.WriteString(fmt.Sprintf("**Estimated Execution Time:** %s\n", estimate.EstimatedTime))
-	builder.WriteString(fmt.Sprintf("**Estimated Data Scan:** %s\n\n", estimate.EstimatedDataScan))
+	fmt.Fprintf(&builder, "**Cost Level:** %s %s (Score: %d/100)\n\n", costEmoji, estimate.CostLevel, estimate.CostScore)
+	fmt.Fprintf(&builder, "**Complexity:** %s\n", estimate.Complexity)
+	fmt.Fprintf(&builder, "**Estimated Execution Time:** %s\n", estimate.EstimatedTime)
+	fmt.Fprintf(&builder, "**Estimated Data Scan:** %s\n\n", estimate.EstimatedDataScan)
 
 	// Breakdown
 	builder.WriteString("### Cost Breakdown\n\n")
 	builder.WriteString("| Factor | Score | Notes |\n")
 	builder.WriteString("|--------|-------|-------|\n")
-	builder.WriteString(fmt.Sprintf("| Time Range | %d/25 | %s |\n", estimate.Breakdown.TimeRangeCost, estimate.Breakdown.TimeRangeNote))
-	builder.WriteString(fmt.Sprintf("| Filter Efficiency | %d/25 | %s |\n", estimate.Breakdown.FilterCost, estimate.Breakdown.FilterNote))
-	builder.WriteString(fmt.Sprintf("| Aggregations | %d/25 | %s |\n", estimate.Breakdown.AggregationCost, estimate.Breakdown.AggregationNote))
-	builder.WriteString(fmt.Sprintf("| Sorting | %d/25 | %s |\n\n", estimate.Breakdown.SortingCost, estimate.Breakdown.SortingNote))
+	fmt.Fprintf(&builder, "| Time Range | %d/25 | %s |\n", estimate.Breakdown.TimeRangeCost, estimate.Breakdown.TimeRangeNote)
+	fmt.Fprintf(&builder, "| Filter Efficiency | %d/25 | %s |\n", estimate.Breakdown.FilterCost, estimate.Breakdown.FilterNote)
+	fmt.Fprintf(&builder, "| Aggregations | %d/25 | %s |\n", estimate.Breakdown.AggregationCost, estimate.Breakdown.AggregationNote)
+	fmt.Fprintf(&builder, "| Sorting | %d/25 | %s |\n\n", estimate.Breakdown.SortingCost, estimate.Breakdown.SortingNote)
 
 	// Warnings
 	if len(estimate.Warnings) > 0 {
 		builder.WriteString("### ⚠️ Warnings\n\n")
 		for _, warning := range estimate.Warnings {
-			builder.WriteString(fmt.Sprintf("- %s\n", warning))
+			fmt.Fprintf(&builder, "- %s\n", warning)
 		}
 		builder.WriteString("\n")
 	}
@@ -186,7 +186,7 @@ func (t *QueryCostEstimateTool) Execute(_ context.Context, params map[string]int
 	if len(estimate.Optimizations) > 0 {
 		builder.WriteString("### 💡 Optimization Suggestions\n\n")
 		for _, opt := range estimate.Optimizations {
-			builder.WriteString(fmt.Sprintf("- %s\n", opt))
+			fmt.Fprintf(&builder, "- %s\n", opt)
 		}
 		builder.WriteString("\n")
 	}
@@ -196,7 +196,7 @@ func (t *QueryCostEstimateTool) Execute(_ context.Context, params map[string]int
 	builder.WriteString("```\n")
 	builder.WriteString(query)
 	builder.WriteString("\n```\n")
-	builder.WriteString(fmt.Sprintf("Time Range: %s | Limit: %d\n", timeRange, limit))
+	fmt.Fprintf(&builder, "Time Range: %s | Limit: %d\n", timeRange, limit)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

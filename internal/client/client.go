@@ -422,7 +422,7 @@ func (c *Client) executeRequest(httpReq *http.Request, req *Request, requestURL 
 	)
 
 	startTime := time.Now()
-	httpResp, err := c.httpClient.Do(httpReq)
+	httpResp, err := c.httpClient.Do(httpReq) //nolint:gosec // URL is constructed from validated service configuration
 	duration := time.Since(startTime)
 
 	if err != nil {

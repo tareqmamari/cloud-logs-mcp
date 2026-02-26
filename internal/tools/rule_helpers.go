@@ -181,12 +181,12 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	if appName != "" || subsysName != "" {
 		result.WriteString("## Filters Applied:\n")
 		if appName != "" {
-			result.WriteString(fmt.Sprintf("- Application: %s\n", appName))
+			fmt.Fprintf(&result, "- Application: %s\n", appName)
 		}
 		if subsysName != "" {
-			result.WriteString(fmt.Sprintf("- Subsystem: %s\n", subsysName))
+			fmt.Fprintf(&result, "- Subsystem: %s\n", subsysName)
 		}
-		result.WriteString(fmt.Sprintf("- Time Range: %s\n\n", timeRange))
+		fmt.Fprintf(&result, "- Time Range: %s\n\n", timeRange)
 	}
 
 	result.WriteString("## Available Fields for Parsing Rules:\n\n")
@@ -214,7 +214,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	if len(textFields) > 0 {
 		result.WriteString("### Text Fields (Main Log Content):\n")
 		for _, field := range textFields {
-			result.WriteString(fmt.Sprintf("- `%s`\n", field))
+			fmt.Fprintf(&result, "- `%s`\n", field)
 		}
 		result.WriteString("\n")
 	}
@@ -222,7 +222,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	if len(jsonFields) > 0 {
 		result.WriteString("### JSON Fields (Structured Data):\n")
 		for _, field := range jsonFields {
-			result.WriteString(fmt.Sprintf("- `%s`\n", field))
+			fmt.Fprintf(&result, "- `%s`\n", field)
 		}
 		result.WriteString("\n")
 	}
@@ -230,7 +230,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	if len(kubernetesFields) > 0 {
 		result.WriteString("### Kubernetes Fields (Metadata):\n")
 		for _, field := range kubernetesFields {
-			result.WriteString(fmt.Sprintf("- `%s`\n", field))
+			fmt.Fprintf(&result, "- `%s`\n", field)
 		}
 		result.WriteString("\n")
 	}
@@ -238,7 +238,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	if len(otherFields) > 0 {
 		result.WriteString("### Other Fields:\n")
 		for _, field := range otherFields {
-			result.WriteString(fmt.Sprintf("- `%s`\n", field))
+			fmt.Fprintf(&result, "- `%s`\n", field)
 		}
 		result.WriteString("\n")
 	}
@@ -251,7 +251,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 	result.WriteString("    \"rule_subgroups\": [{\n")
 	result.WriteString("      \"rules\": [{\n")
 	if len(textFields) > 0 {
-		result.WriteString(fmt.Sprintf("        \"source_field\": \"%s\",\n", textFields[0]))
+		fmt.Fprintf(&result, "        \"source_field\": \"%s\",\n", textFields[0])
 	} else {
 		result.WriteString("        \"source_field\": \"text\",\n")
 	}

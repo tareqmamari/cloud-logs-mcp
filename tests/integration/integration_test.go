@@ -32,7 +32,7 @@ import (
 
 // TestConfig holds configuration for integration tests
 type TestConfig struct {
-	APIKey     string
+	APIKey     string //nolint:gosec // config struct, not a hardcoded credential
 	InstanceID string
 	Region     string
 	ServiceURL string

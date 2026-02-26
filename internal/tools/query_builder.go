@@ -197,25 +197,25 @@ func (t *BuildQueryTool) Execute(_ context.Context, arguments map[string]interfa
 	// Show query summary
 	response.WriteString("### Query Summary\n")
 	if textSearch != "" {
-		response.WriteString(fmt.Sprintf("- **Text search:** \"%s\"\n", textSearch))
+		fmt.Fprintf(&response, "- **Text search:** \"%s\"\n", textSearch)
 	}
 	if excludeText != "" {
-		response.WriteString(fmt.Sprintf("- **Excluding:** \"%s\"\n", excludeText))
+		fmt.Fprintf(&response, "- **Excluding:** \"%s\"\n", excludeText)
 	}
 	if len(applications) > 0 {
-		response.WriteString(fmt.Sprintf("- **Applications:** %s\n", strings.Join(applications, ", ")))
+		fmt.Fprintf(&response, "- **Applications:** %s\n", strings.Join(applications, ", "))
 	}
 	if len(subsystems) > 0 {
-		response.WriteString(fmt.Sprintf("- **Subsystems:** %s\n", strings.Join(subsystems, ", ")))
+		fmt.Fprintf(&response, "- **Subsystems:** %s\n", strings.Join(subsystems, ", "))
 	}
 	if len(severities) > 0 {
-		response.WriteString(fmt.Sprintf("- **Severities:** %s\n", strings.Join(severities, ", ")))
+		fmt.Fprintf(&response, "- **Severities:** %s\n", strings.Join(severities, ", "))
 	}
 	if minSeverity != "" {
-		response.WriteString(fmt.Sprintf("- **Minimum severity:** %s\n", minSeverity))
+		fmt.Fprintf(&response, "- **Minimum severity:** %s\n", minSeverity)
 	}
 	if len(fields) > 0 {
-		response.WriteString(fmt.Sprintf("- **Field filters:** %d\n", len(fields)))
+		fmt.Fprintf(&response, "- **Field filters:** %d\n", len(fields))
 	}
 	response.WriteString("\n")
 
@@ -227,7 +227,7 @@ func (t *BuildQueryTool) Execute(_ context.Context, arguments map[string]interfa
 		response.WriteString("\n```\n\n")
 		response.WriteString("**Usage with query_logs:**\n")
 		response.WriteString("```json\n")
-		response.WriteString(fmt.Sprintf(`{"query": "%s", "syntax": "lucene"}`, escapeJSON(luceneQuery)))
+		fmt.Fprintf(&response, `{"query": "%s", "syntax": "lucene"}`, escapeJSON(luceneQuery))
 		response.WriteString("\n```\n\n")
 	}
 
@@ -238,7 +238,7 @@ func (t *BuildQueryTool) Execute(_ context.Context, arguments map[string]interfa
 		response.WriteString("\n```\n\n")
 		response.WriteString("**Usage with query_logs:**\n")
 		response.WriteString("```json\n")
-		response.WriteString(fmt.Sprintf(`{"query": "%s", "syntax": "dataprime"}`, escapeJSON(dataprimeQuery)))
+		fmt.Fprintf(&response, `{"query": "%s", "syntax": "dataprime"}`, escapeJSON(dataprimeQuery))
 		response.WriteString("\n```\n\n")
 	}
 

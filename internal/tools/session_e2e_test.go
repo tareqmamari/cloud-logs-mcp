@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -161,7 +162,7 @@ func TestE2E_ConcurrentSessionAccess(t *testing.T) {
 					_, err = sessionTool.Execute(ctx, map[string]interface{}{
 						"action":       "set_filter",
 						"filter_key":   "worker",
-						"filter_value": string(rune('0' + workerID)),
+						"filter_value": strconv.Itoa(workerID),
 					})
 				case 3:
 					// Record tool use to session

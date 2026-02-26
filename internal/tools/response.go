@@ -391,7 +391,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 	// Handle query results with events
 	if events, ok := result["events"].([]interface{}); ok {
 		summary.WriteString("## Query Results Summary\n\n")
-		summary.WriteString(fmt.Sprintf("**Total Results:** %d log entries\n\n", len(events)))
+		fmt.Fprintf(&summary, "**Total Results:** %d log entries\n\n", len(events))
 
 		if len(events) > 0 {
 			// Analyze severity distribution
@@ -399,7 +399,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			if len(severityDist) > 0 {
 				summary.WriteString("### Severity Distribution\n")
 				for sev, count := range severityDist {
-					summary.WriteString(fmt.Sprintf("- %s: %d\n", sev, count))
+					fmt.Fprintf(&summary, "- %s: %d\n", sev, count)
 				}
 				summary.WriteString("\n")
 			}
@@ -409,7 +409,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			if len(topApps) > 0 {
 				summary.WriteString("### Top Applications\n")
 				for _, app := range topApps {
-					summary.WriteString(fmt.Sprintf("- %s: %d entries\n", app.Value, app.Count))
+					fmt.Fprintf(&summary, "- %s: %d entries\n", app.Value, app.Count)
 				}
 				summary.WriteString("\n")
 			}
@@ -419,7 +419,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			if len(topSubs) > 0 {
 				summary.WriteString("### Top Subsystems\n")
 				for _, sub := range topSubs {
-					summary.WriteString(fmt.Sprintf("- %s: %d entries\n", sub.Value, sub.Count))
+					fmt.Fprintf(&summary, "- %s: %d entries\n", sub.Value, sub.Count)
 				}
 				summary.WriteString("\n")
 			}
@@ -427,7 +427,7 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 			// Time range
 			timeRange := extractTimeRange(events)
 			if timeRange != "" {
-				summary.WriteString(fmt.Sprintf("### Time Range\n%s\n\n", timeRange))
+				fmt.Fprintf(&summary, "### Time Range\n%s\n\n", timeRange)
 			}
 		}
 
@@ -437,18 +437,18 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 	// Handle list results (alerts, dashboards, policies, etc.)
 	for _, val := range result {
 		if arr, ok := val.([]interface{}); ok && len(arr) > 0 {
-			summary.WriteString(fmt.Sprintf("## %s Summary\n\n", toTitleCase(resultType)))
-			summary.WriteString(fmt.Sprintf("**Total Items:** %d\n\n", len(arr)))
+			fmt.Fprintf(&summary, "## %s Summary\n\n", toTitleCase(resultType))
+			fmt.Fprintf(&summary, "**Total Items:** %d\n\n", len(arr))
 
 			// Extract names/IDs for quick reference
 			names := extractFieldValues(arr, []string{"name", "title", "id"}, MaxSummaryItems)
 			if len(names) > 0 {
 				summary.WriteString("### Items\n")
 				for i, name := range names {
-					summary.WriteString(fmt.Sprintf("%d. %s\n", i+1, name))
+					fmt.Fprintf(&summary, "%d. %s\n", i+1, name)
 				}
 				if len(arr) > MaxSummaryItems {
-					summary.WriteString(fmt.Sprintf("... and %d more\n", len(arr)-MaxSummaryItems))
+					fmt.Fprintf(&summary, "... and %d more\n", len(arr)-MaxSummaryItems)
 				}
 				summary.WriteString("\n")
 			}
@@ -463,10 +463,10 @@ func GenerateResultSummary(result map[string]interface{}, resultType string) str
 		if name == "" {
 			name, _ = result["title"].(string)
 		}
-		summary.WriteString(fmt.Sprintf("## %s Details\n\n", toTitleCase(resultType)))
-		summary.WriteString(fmt.Sprintf("**ID:** %s\n", id))
+		fmt.Fprintf(&summary, "## %s Details\n\n", toTitleCase(resultType))
+		fmt.Fprintf(&summary, "**ID:** %s\n", id)
 		if name != "" {
-			summary.WriteString(fmt.Sprintf("**Name:** %s\n", name))
+			fmt.Fprintf(&summary, "**Name:** %s\n", name)
 		}
 		return summary.String()
 	}
@@ -535,7 +535,7 @@ func FormatClusteredSummary(events []interface{}, limit int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("## Clustered Log Summary (%d clusters from %d events)\n\n", len(clusters), len(events)))
+	fmt.Fprintf(&sb, "## Clustered Log Summary (%d clusters from %d events)\n\n", len(clusters), len(events))
 
 	shown := limit
 	if shown <= 0 || shown > len(clusters) {
@@ -544,11 +544,11 @@ func FormatClusteredSummary(events []interface{}, limit int) string {
 
 	for i := 0; i < shown; i++ {
 		c := clusters[i]
-		sb.WriteString(fmt.Sprintf("**[%s] %dx:** %s\n", c.Severity, c.Count, c.Pattern))
+		fmt.Fprintf(&sb, "**[%s] %dx:** %s\n", c.Severity, c.Count, c.Pattern)
 	}
 
 	if len(clusters) > shown {
-		sb.WriteString(fmt.Sprintf("\n... and %d more clusters\n", len(clusters)-shown))
+		fmt.Fprintf(&sb, "\n... and %d more clusters\n", len(clusters)-shown)
 	}
 
 	return sb.String()
@@ -1088,7 +1088,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 	// Extract events for analysis
 	events, hasEvents := result["events"].([]interface{})
 	if hasEvents && len(events) > 0 {
-		summary.WriteString(fmt.Sprintf("**Total Results:** %d log entries\n\n", len(events)))
+		fmt.Fprintf(&summary, "**Total Results:** %d log entries\n\n", len(events))
 
 		// Severity distribution
 		severityDist := analyzeSeverityDistribution(events)
@@ -1098,7 +1098,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 			severityOrder := []string{"Critical", "Error", "Warning", "Info", "Verbose", "Debug"}
 			for _, sev := range severityOrder {
 				if count, ok := severityDist[sev]; ok {
-					summary.WriteString(fmt.Sprintf("- **%s**: %d\n", sev, count))
+					fmt.Fprintf(&summary, "- **%s**: %d\n", sev, count)
 				}
 			}
 			summary.WriteString("\n")
@@ -1109,7 +1109,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 		if len(topApps) > 0 {
 			summary.WriteString("### Top Applications\n")
 			for _, app := range topApps {
-				summary.WriteString(fmt.Sprintf("- %s: %d entries\n", app.Value, app.Count))
+				fmt.Fprintf(&summary, "- %s: %d entries\n", app.Value, app.Count)
 			}
 			summary.WriteString("\n")
 		}
@@ -1119,7 +1119,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 		if len(topSubs) > 0 {
 			summary.WriteString("### Top Subsystems\n")
 			for _, sub := range topSubs {
-				summary.WriteString(fmt.Sprintf("- %s: %d entries\n", sub.Value, sub.Count))
+				fmt.Fprintf(&summary, "- %s: %d entries\n", sub.Value, sub.Count)
 			}
 			summary.WriteString("\n")
 		}
@@ -1127,7 +1127,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 		// Time range
 		timeRange := extractTimeRange(events)
 		if timeRange != "" {
-			summary.WriteString(fmt.Sprintf("### Time Range\n%s\n\n", timeRange))
+			fmt.Fprintf(&summary, "### Time Range\n%s\n\n", timeRange)
 		}
 
 		// Sample messages (first 3 unique error/warning messages)
@@ -1139,7 +1139,7 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 				if len(msg) > 150 {
 					msg = msg[:147] + "..."
 				}
-				summary.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, msg))
+				fmt.Fprintf(&summary, "%d. `%s`\n", i+1, msg)
 			}
 			summary.WriteString("\n")
 		}
@@ -1158,13 +1158,13 @@ func (t *BaseTool) FormatCompactSummary(result map[string]interface{}, _ string)
 	if meta, ok := result["_query_metadata"].(map[string]interface{}); ok {
 		summary.WriteString("### Query Info\n")
 		if tier, ok := meta["tier"].(string); ok {
-			summary.WriteString(fmt.Sprintf("- Tier: %s\n", tier))
+			fmt.Fprintf(&summary, "- Tier: %s\n", tier)
 		}
 		if start, ok := meta["start_date"].(string); ok {
-			summary.WriteString(fmt.Sprintf("- Start: %s\n", start))
+			fmt.Fprintf(&summary, "- Start: %s\n", start)
 		}
 		if end, ok := meta["end_date"].(string); ok {
-			summary.WriteString(fmt.Sprintf("- End: %s\n", end))
+			fmt.Fprintf(&summary, "- End: %s\n", end)
 		}
 		summary.WriteString("\n")
 	}
@@ -1263,14 +1263,14 @@ func formatLogsAsMarkdown(result map[string]interface{}, summary string) string 
 	if meta, ok := result["_query_metadata"].(map[string]interface{}); ok {
 		sb.WriteString("\n---\n### Query Metadata\n")
 		if tier, ok := meta["tier"].(string); ok {
-			sb.WriteString(fmt.Sprintf("- **Tier:** %s\n", tier))
+			fmt.Fprintf(&sb, "- **Tier:** %s\n", tier)
 		}
 		if inst, ok := meta["instance"].(map[string]interface{}); ok {
 			if name, ok := inst["instance_name"].(string); ok && name != "" {
-				sb.WriteString(fmt.Sprintf("- **Instance:** %s\n", name))
+				fmt.Fprintf(&sb, "- **Instance:** %s\n", name)
 			}
 			if region, ok := inst["region"].(string); ok {
-				sb.WriteString(fmt.Sprintf("- **Region:** %s\n", region))
+				fmt.Fprintf(&sb, "- **Region:** %s\n", region)
 			}
 		}
 	}
@@ -1312,7 +1312,7 @@ func formatLogsAsMarkdownTruncated(result map[string]interface{}, summary string
 	}
 
 	if shownLogs < totalLogs {
-		sb.WriteString(fmt.Sprintf("\n---\n⚠️ **Showing %d of %d log entries.** Use `summary_only: true` or add filters to reduce results.\n", shownLogs, totalLogs))
+		fmt.Fprintf(&sb, "\n---\n⚠️ **Showing %d of %d log entries.** Use `summary_only: true` or add filters to reduce results.\n", shownLogs, totalLogs)
 	}
 
 	return sb.String()
