@@ -13,14 +13,15 @@ on:
     - cron: '0 0 * * 0'  # Weekly on Sunday
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
+permissions: read-all
 
 jobs:
   gosec:
     name: Gosec Security Scanner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -53,6 +54,9 @@ jobs:
   govulncheck:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -91,6 +95,9 @@ jobs:
   trivy:
     name: Trivy Security Scanner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -121,6 +128,9 @@ jobs:
   semgrep:
     name: Semgrep Security Scanner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     container:
       # renovate: datasource=docker depName=semgrep/semgrep
       image: semgrep/semgrep@sha256:da5057ac7eea5374f4ceeaef09383d816c302e90a909ec7624a328a22b0aa4d7 # latest
