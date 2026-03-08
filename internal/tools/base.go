@@ -185,7 +185,7 @@ func parseSSEResponse(body []byte) map[string]interface{} {
 				continue // Keep counting but don't add more events
 			}
 			dataStr := strings.TrimPrefix(line, "data: ")
-			var data interface{}
+			var data map[string]interface{}
 			if err := json.Unmarshal([]byte(dataStr), &data); err == nil {
 				events = append(events, data)
 			}
