@@ -1,0 +1,66 @@
+name: Integration Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Nightly at 2am UTC
+  workflow_dispatch:
+
+concurrency:
+  group: integration-tests
+  cancel-in-progress: false
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      IBM_CLOUD_LOGS_API_KEY: ${{ secrets.IBM_CLOUD_LOGS_API_KEY }}
+      IBM_CLOUD_LOGS_INSTANCE_ID: ${{ secrets.IBM_CLOUD_LOGS_INSTANCE_ID }}
+      IBM_CLOUD_LOGS_REGION: ${{ secrets.IBM_CLOUD_LOGS_REGION }}
+      IBM_CLOUD_LOGS_ENDPOINT: ${{ secrets.IBM_CLOUD_LOGS_ENDPOINT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run integration tests
+        run: go test -v -tags=integration -timeout=10m ./tests/integration/...
+
+  fuzz-tests:
+    name: Fuzz Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run fuzz tests
+        run: |
+          # Run each fuzz test for 30 seconds
+          for func in $(grep -r 'func Fuzz' --include='*_test.go' -l .); do
+            dir=$(dirname "$func")
+            for name in $(grep -oP 'func \KFuzz\w+' "$func"); do
+              echo "Fuzzing $name in $dir for 30s..."
+              go test -fuzz="^${name}$" -fuzztime=30s -race "$dir" || true
+            done
+          done
