@@ -26,14 +26,14 @@ var ErrNoClientInContext = errors.New("no API client in context")
 // WithClient adds an API client to the context.
 // This allows tools to retrieve the client during execution,
 // enabling per-request client injection for future HTTP transport support.
-func WithClient(ctx context.Context, c *client.Client) context.Context {
+func WithClient(ctx context.Context, c client.Doer) context.Context {
 	return context.WithValue(ctx, clientContextKey, c)
 }
 
 // GetClientFromContext retrieves the API client from the context.
 // Returns ErrNoClientInContext if no client is present.
-func GetClientFromContext(ctx context.Context) (*client.Client, error) {
-	c, ok := ctx.Value(clientContextKey).(*client.Client)
+func GetClientFromContext(ctx context.Context) (client.Doer, error) {
+	c, ok := ctx.Value(clientContextKey).(client.Doer)
 	if !ok || c == nil {
 		return nil, ErrNoClientInContext
 	}

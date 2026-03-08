@@ -16,7 +16,7 @@ import (
 
 // FetchAndCacheTCOConfig fetches TCO policies from the API and caches the configuration
 // in the session context. This should be called at session initialization.
-func FetchAndCacheTCOConfig(ctx context.Context, c *client.Client, logger *zap.Logger) error {
+func FetchAndCacheTCOConfig(ctx context.Context, c client.Doer, logger *zap.Logger) error {
 	if c == nil {
 		return nil // No client, skip TCO discovery
 	}
@@ -54,7 +54,7 @@ func FetchAndCacheTCOConfig(ctx context.Context, c *client.Client, logger *zap.L
 }
 
 // fetchTCOConfig fetches policies from the API and analyzes them
-func fetchTCOConfig(ctx context.Context, c *client.Client, logger *zap.Logger) (*TCOConfig, error) {
+func fetchTCOConfig(ctx context.Context, c client.Doer, logger *zap.Logger) (*TCOConfig, error) {
 	req := &client.Request{
 		Method: "GET",
 		Path:   "/v1/policies",

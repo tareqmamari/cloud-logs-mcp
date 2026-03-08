@@ -186,7 +186,7 @@ type InstanceInfo struct {
 
 // ibmCloudLogsService implements LogsService for IBM Cloud Logs
 type ibmCloudLogsService struct {
-	client *client.Client
+	client client.Doer
 	logger *zap.Logger
 	config *Config
 }
@@ -215,7 +215,7 @@ func DefaultConfig() *Config {
 }
 
 // NewLogsService creates a new LogsService implementation
-func NewLogsService(c *client.Client, logger *zap.Logger, cfg *Config) LogsService {
+func NewLogsService(c client.Doer, logger *zap.Logger, cfg *Config) LogsService {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}

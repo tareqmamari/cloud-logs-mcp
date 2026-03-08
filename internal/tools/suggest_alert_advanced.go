@@ -23,7 +23,7 @@ type AdvancedSuggestAlertTool struct {
 }
 
 // NewAdvancedSuggestAlertTool creates a new AdvancedSuggestAlertTool
-func NewAdvancedSuggestAlertTool(c *client.Client, l *zap.Logger) *AdvancedSuggestAlertTool {
+func NewAdvancedSuggestAlertTool(c client.Doer, l *zap.Logger) *AdvancedSuggestAlertTool {
 	return &AdvancedSuggestAlertTool{NewBaseTool(c, l)}
 }
 

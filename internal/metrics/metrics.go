@@ -61,8 +61,16 @@ type Metrics struct {
 	promToolLatency        *prometheus.HistogramVec
 }
 
-// New creates a new metrics tracker with Prometheus integration
+// New creates a new metrics tracker with Prometheus integration using the default registry.
 func New(logger *zap.Logger) *Metrics {
+	return NewWithRegistry(logger, prometheus.DefaultRegisterer)
+}
+
+// NewWithRegistry creates a new metrics tracker using the provided Prometheus registerer.
+// This allows tests to pass their own registry to avoid global state conflicts.
+func NewWithRegistry(logger *zap.Logger, reg prometheus.Registerer) *Metrics {
+	factory := promauto.With(reg)
+
 	m := &Metrics{
 		errorsByStatus: make(map[int]uint64),
 		toolUsage:      make(map[string]uint64),
@@ -70,56 +78,56 @@ func New(logger *zap.Logger) *Metrics {
 		toolLatency:    make(map[string]int64),
 		logger:         logger,
 
-		// Initialize Prometheus metrics using promauto (auto-registers with default registry)
-		promRequestsTotal: promauto.NewCounter(prometheus.CounterOpts{
+		// Initialize Prometheus metrics using promauto with the given registerer
+		promRequestsTotal: factory.NewCounter(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "requests_total",
 			Help:      "Total number of API requests made to IBM Cloud Logs",
 		}),
-		promRequestsSuccessful: promauto.NewCounter(prometheus.CounterOpts{
+		promRequestsSuccessful: factory.NewCounter(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "requests_successful_total",
 			Help:      "Total number of successful API requests",
 		}),
-		promRequestsFailed: promauto.NewCounter(prometheus.CounterOpts{
+		promRequestsFailed: factory.NewCounter(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "requests_failed_total",
 			Help:      "Total number of failed API requests",
 		}),
-		promRequestsRetried: promauto.NewCounter(prometheus.CounterOpts{
+		promRequestsRetried: factory.NewCounter(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "requests_retried_total",
 			Help:      "Total number of retried API requests",
 		}),
-		promRateLimitHits: promauto.NewCounter(prometheus.CounterOpts{
+		promRateLimitHits: factory.NewCounter(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "rate_limit_hits_total",
 			Help:      "Total number of rate limit hits",
 		}),
-		promRequestLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+		promRequestLatency: factory.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "logs_mcp",
 			Name:      "request_latency_seconds",
 			Help:      "API request latency in seconds",
 			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 15), // 1ms to ~16s
 		}),
-		promErrorsByStatus: promauto.NewCounterVec(prometheus.CounterOpts{
+		promErrorsByStatus: factory.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "errors_by_status_total",
 			Help:      "Errors by HTTP status code",
 		}, []string{labelStatus}),
 
 		// Tool-specific metrics - tracks every tool call with labels for tool name
-		promToolCalls: promauto.NewCounterVec(prometheus.CounterOpts{
+		promToolCalls: factory.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "tool_calls_total",
 			Help:      "Total number of tool calls, labeled by tool name (e.g., query_logs, create_alert, list_dashboards)",
 		}, []string{labelTool}),
-		promToolErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+		promToolErrors: factory.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "logs_mcp",
 			Name:      "tool_errors_total",
 			Help:      "Total number of tool errors, labeled by tool name",
 		}, []string{labelTool}),
-		promToolLatency: promauto.NewHistogramVec(prometheus.HistogramOpts{
+		promToolLatency: factory.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: "logs_mcp",
 			Name:      "tool_latency_seconds",
 			Help:      "Tool execution latency in seconds, labeled by tool name",

@@ -13,7 +13,7 @@ import (
 type GetRuleGroupTool struct{ *BaseTool }
 
 // NewGetRuleGroupTool creates a new tool instance
-func NewGetRuleGroupTool(c *client.Client, l *zap.Logger) *GetRuleGroupTool {
+func NewGetRuleGroupTool(c client.Doer, l *zap.Logger) *GetRuleGroupTool {
 	return &GetRuleGroupTool{NewBaseTool(c, l)}
 }
 
@@ -56,7 +56,7 @@ func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interfac
 type ListRuleGroupsTool struct{ *BaseTool }
 
 // NewListRuleGroupsTool creates a new tool instance
-func NewListRuleGroupsTool(c *client.Client, l *zap.Logger) *ListRuleGroupsTool {
+func NewListRuleGroupsTool(c client.Doer, l *zap.Logger) *ListRuleGroupsTool {
 	return &ListRuleGroupsTool{NewBaseTool(c, l)}
 }
 
@@ -91,7 +91,7 @@ func (t *ListRuleGroupsTool) Execute(ctx context.Context, _ map[string]interface
 type CreateRuleGroupTool struct{ *BaseTool }
 
 // NewCreateRuleGroupTool creates a new tool instance
-func NewCreateRuleGroupTool(c *client.Client, l *zap.Logger) *CreateRuleGroupTool {
+func NewCreateRuleGroupTool(c client.Doer, l *zap.Logger) *CreateRuleGroupTool {
 	return &CreateRuleGroupTool{NewBaseTool(c, l)}
 }
 
@@ -402,7 +402,7 @@ func (t *CreateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 type UpdateRuleGroupTool struct{ *BaseTool }
 
 // NewUpdateRuleGroupTool creates a new tool instance
-func NewUpdateRuleGroupTool(c *client.Client, l *zap.Logger) *UpdateRuleGroupTool {
+func NewUpdateRuleGroupTool(c client.Doer, l *zap.Logger) *UpdateRuleGroupTool {
 	return &UpdateRuleGroupTool{NewBaseTool(c, l)}
 }
 
@@ -459,7 +459,7 @@ func (t *UpdateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 type DeleteRuleGroupTool struct{ *BaseTool }
 
 // NewDeleteRuleGroupTool creates a new tool instance
-func NewDeleteRuleGroupTool(c *client.Client, l *zap.Logger) *DeleteRuleGroupTool {
+func NewDeleteRuleGroupTool(c client.Doer, l *zap.Logger) *DeleteRuleGroupTool {
 	return &DeleteRuleGroupTool{NewBaseTool(c, l)}
 }
 

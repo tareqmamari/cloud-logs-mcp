@@ -1778,7 +1778,7 @@ type DiscoverToolsTool struct {
 }
 
 // NewDiscoverToolsTool creates a new DiscoverToolsTool
-func NewDiscoverToolsTool(c *client.Client, l *zap.Logger) *DiscoverToolsTool {
+func NewDiscoverToolsTool(c client.Doer, l *zap.Logger) *DiscoverToolsTool {
 	return &DiscoverToolsTool{NewBaseTool(c, l)}
 }
 

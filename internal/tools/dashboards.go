@@ -283,7 +283,7 @@ type ListDashboardsTool struct {
 }
 
 // NewListDashboardsTool creates a new ListDashboardsTool instance.
-func NewListDashboardsTool(client *client.Client, logger *zap.Logger) *ListDashboardsTool {
+func NewListDashboardsTool(client client.Doer, logger *zap.Logger) *ListDashboardsTool {
 	return &ListDashboardsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -356,7 +356,7 @@ type GetDashboardTool struct {
 }
 
 // NewGetDashboardTool creates a new GetDashboardTool instance.
-func NewGetDashboardTool(client *client.Client, logger *zap.Logger) *GetDashboardTool {
+func NewGetDashboardTool(client client.Doer, logger *zap.Logger) *GetDashboardTool {
 	return &GetDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -441,7 +441,7 @@ type CreateDashboardTool struct {
 }
 
 // NewCreateDashboardTool creates a new CreateDashboardTool instance.
-func NewCreateDashboardTool(client *client.Client, logger *zap.Logger) *CreateDashboardTool {
+func NewCreateDashboardTool(client client.Doer, logger *zap.Logger) *CreateDashboardTool {
 	return &CreateDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -970,7 +970,7 @@ type UpdateDashboardTool struct {
 }
 
 // NewUpdateDashboardTool creates a new UpdateDashboardTool instance.
-func NewUpdateDashboardTool(client *client.Client, logger *zap.Logger) *UpdateDashboardTool {
+func NewUpdateDashboardTool(client client.Doer, logger *zap.Logger) *UpdateDashboardTool {
 	return &UpdateDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -1095,7 +1095,7 @@ type DeleteDashboardTool struct {
 }
 
 // NewDeleteDashboardTool creates a new DeleteDashboardTool instance.
-func NewDeleteDashboardTool(client *client.Client, logger *zap.Logger) *DeleteDashboardTool {
+func NewDeleteDashboardTool(client client.Doer, logger *zap.Logger) *DeleteDashboardTool {
 	return &DeleteDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

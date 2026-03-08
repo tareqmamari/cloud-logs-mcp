@@ -15,7 +15,7 @@ type ExportDataUsageTool struct {
 }
 
 // NewExportDataUsageTool creates a new tool instance
-func NewExportDataUsageTool(client *client.Client, logger *zap.Logger) *ExportDataUsageTool {
+func NewExportDataUsageTool(client client.Doer, logger *zap.Logger) *ExportDataUsageTool {
 	return &ExportDataUsageTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -60,7 +60,7 @@ type UpdateDataUsageMetricsExportStatusTool struct {
 }
 
 // NewUpdateDataUsageMetricsExportStatusTool creates a new tool instance
-func NewUpdateDataUsageMetricsExportStatusTool(client *client.Client, logger *zap.Logger) *UpdateDataUsageMetricsExportStatusTool {
+func NewUpdateDataUsageMetricsExportStatusTool(client client.Doer, logger *zap.Logger) *UpdateDataUsageMetricsExportStatusTool {
 	return &UpdateDataUsageMetricsExportStatusTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

@@ -16,7 +16,7 @@ type GetAlertDefinitionTool struct {
 }
 
 // NewGetAlertDefinitionTool creates a new tool instance
-func NewGetAlertDefinitionTool(client *client.Client, logger *zap.Logger) *GetAlertDefinitionTool {
+func NewGetAlertDefinitionTool(client client.Doer, logger *zap.Logger) *GetAlertDefinitionTool {
 	return &GetAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
@@ -60,7 +60,7 @@ type ListAlertDefinitionsTool struct {
 }
 
 // NewListAlertDefinitionsTool creates a new tool instance
-func NewListAlertDefinitionsTool(client *client.Client, logger *zap.Logger) *ListAlertDefinitionsTool {
+func NewListAlertDefinitionsTool(client client.Doer, logger *zap.Logger) *ListAlertDefinitionsTool {
 	return &ListAlertDefinitionsTool{BaseTool: NewBaseTool(client, logger)}
 }
 
@@ -95,7 +95,7 @@ type CreateAlertDefinitionTool struct {
 }
 
 // NewCreateAlertDefinitionTool creates a new tool instance
-func NewCreateAlertDefinitionTool(client *client.Client, logger *zap.Logger) *CreateAlertDefinitionTool {
+func NewCreateAlertDefinitionTool(client client.Doer, logger *zap.Logger) *CreateAlertDefinitionTool {
 	return &CreateAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
@@ -249,7 +249,7 @@ type UpdateAlertDefinitionTool struct {
 }
 
 // NewUpdateAlertDefinitionTool creates a new tool instance
-func NewUpdateAlertDefinitionTool(client *client.Client, logger *zap.Logger) *UpdateAlertDefinitionTool {
+func NewUpdateAlertDefinitionTool(client client.Doer, logger *zap.Logger) *UpdateAlertDefinitionTool {
 	return &UpdateAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 
@@ -296,7 +296,7 @@ type DeleteAlertDefinitionTool struct {
 }
 
 // NewDeleteAlertDefinitionTool creates a new tool instance
-func NewDeleteAlertDefinitionTool(client *client.Client, logger *zap.Logger) *DeleteAlertDefinitionTool {
+func NewDeleteAlertDefinitionTool(client client.Doer, logger *zap.Logger) *DeleteAlertDefinitionTool {
 	return &DeleteAlertDefinitionTool{BaseTool: NewBaseTool(client, logger)}
 }
 

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"testing"
+	"unicode/utf8"
 )
 
 // FuzzParseSSEResponse tests SSE parsing with arbitrary input to catch
@@ -59,6 +60,12 @@ func FuzzCursorRoundtrip(f *testing.F) {
 	f.Add("2024-06-01T00:00:00Z", "", "forward", 50, 25)
 
 	f.Fuzz(func(t *testing.T, timestamp, lastID, direction string, offset, limit int) {
+		// Skip invalid UTF-8 inputs — JSON marshal replaces invalid bytes
+		// with U+FFFD, so roundtrip equality can't hold for non-UTF-8 strings.
+		if !utf8.ValidString(timestamp) || !utf8.ValidString(lastID) || !utf8.ValidString(direction) {
+			return
+		}
+
 		cursor := &PaginationCursor{
 			Type:      CursorTypeTime,
 			Timestamp: timestamp,

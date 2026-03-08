@@ -16,7 +16,7 @@ type ListDashboardFoldersTool struct {
 }
 
 // NewListDashboardFoldersTool creates a new ListDashboardFoldersTool instance.
-func NewListDashboardFoldersTool(client *client.Client, logger *zap.Logger) *ListDashboardFoldersTool {
+func NewListDashboardFoldersTool(client client.Doer, logger *zap.Logger) *ListDashboardFoldersTool {
 	return &ListDashboardFoldersTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -61,7 +61,7 @@ type GetDashboardFolderTool struct {
 }
 
 // NewGetDashboardFolderTool creates a new GetDashboardFolderTool instance.
-func NewGetDashboardFolderTool(client *client.Client, logger *zap.Logger) *GetDashboardFolderTool {
+func NewGetDashboardFolderTool(client client.Doer, logger *zap.Logger) *GetDashboardFolderTool {
 	return &GetDashboardFolderTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -117,7 +117,7 @@ type CreateDashboardFolderTool struct {
 }
 
 // NewCreateDashboardFolderTool creates a new CreateDashboardFolderTool instance.
-func NewCreateDashboardFolderTool(client *client.Client, logger *zap.Logger) *CreateDashboardFolderTool {
+func NewCreateDashboardFolderTool(client client.Doer, logger *zap.Logger) *CreateDashboardFolderTool {
 	return &CreateDashboardFolderTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -186,7 +186,7 @@ type UpdateDashboardFolderTool struct {
 }
 
 // NewUpdateDashboardFolderTool creates a new UpdateDashboardFolderTool instance.
-func NewUpdateDashboardFolderTool(client *client.Client, logger *zap.Logger) *UpdateDashboardFolderTool {
+func NewUpdateDashboardFolderTool(client client.Doer, logger *zap.Logger) *UpdateDashboardFolderTool {
 	return &UpdateDashboardFolderTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -264,7 +264,7 @@ type DeleteDashboardFolderTool struct {
 }
 
 // NewDeleteDashboardFolderTool creates a new DeleteDashboardFolderTool instance.
-func NewDeleteDashboardFolderTool(client *client.Client, logger *zap.Logger) *DeleteDashboardFolderTool {
+func NewDeleteDashboardFolderTool(client client.Doer, logger *zap.Logger) *DeleteDashboardFolderTool {
 	return &DeleteDashboardFolderTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -325,7 +325,7 @@ type MoveDashboardToFolderTool struct {
 }
 
 // NewMoveDashboardToFolderTool creates a new MoveDashboardToFolderTool instance.
-func NewMoveDashboardToFolderTool(client *client.Client, logger *zap.Logger) *MoveDashboardToFolderTool {
+func NewMoveDashboardToFolderTool(client client.Doer, logger *zap.Logger) *MoveDashboardToFolderTool {
 	return &MoveDashboardToFolderTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -390,7 +390,7 @@ type PinDashboardTool struct {
 }
 
 // NewPinDashboardTool creates a new PinDashboardTool instance.
-func NewPinDashboardTool(client *client.Client, logger *zap.Logger) *PinDashboardTool {
+func NewPinDashboardTool(client client.Doer, logger *zap.Logger) *PinDashboardTool {
 	return &PinDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -446,7 +446,7 @@ type UnpinDashboardTool struct {
 }
 
 // NewUnpinDashboardTool creates a new UnpinDashboardTool instance.
-func NewUnpinDashboardTool(client *client.Client, logger *zap.Logger) *UnpinDashboardTool {
+func NewUnpinDashboardTool(client client.Doer, logger *zap.Logger) *UnpinDashboardTool {
 	return &UnpinDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -502,7 +502,7 @@ type SetDefaultDashboardTool struct {
 }
 
 // NewSetDefaultDashboardTool creates a new SetDefaultDashboardTool instance.
-func NewSetDefaultDashboardTool(client *client.Client, logger *zap.Logger) *SetDefaultDashboardTool {
+func NewSetDefaultDashboardTool(client client.Doer, logger *zap.Logger) *SetDefaultDashboardTool {
 	return &SetDefaultDashboardTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

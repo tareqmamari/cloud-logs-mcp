@@ -34,7 +34,7 @@ var (
 
 // InitializeServiceProvider initializes the global service provider.
 // This should be called once during server startup.
-func InitializeServiceProvider(c *client.Client, logger *zap.Logger) {
+func InitializeServiceProvider(c client.Doer, logger *zap.Logger) {
 	serviceProviderOnce.Do(func() {
 		globalServiceProvider = &serviceProviderImpl{
 			service: service.NewLogsService(c, logger, nil),
@@ -73,7 +73,7 @@ type ServiceAwareTool struct {
 }
 
 // NewServiceAwareTool creates a new service-aware tool
-func NewServiceAwareTool(c *client.Client, logger *zap.Logger) *ServiceAwareTool {
+func NewServiceAwareTool(c client.Doer, logger *zap.Logger) *ServiceAwareTool {
 	return &ServiceAwareTool{
 		BaseTool:        NewBaseTool(c, logger),
 		serviceProvider: globalServiceProvider,

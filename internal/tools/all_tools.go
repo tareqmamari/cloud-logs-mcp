@@ -15,7 +15,7 @@ import (
 type GetOutgoingWebhookTool struct{ *BaseTool }
 
 // NewGetOutgoingWebhookTool creates a new tool instance
-func NewGetOutgoingWebhookTool(c *client.Client, l *zap.Logger) *GetOutgoingWebhookTool {
+func NewGetOutgoingWebhookTool(c client.Doer, l *zap.Logger) *GetOutgoingWebhookTool {
 	return &GetOutgoingWebhookTool{NewBaseTool(c, l)}
 }
 
@@ -47,7 +47,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 type ListOutgoingWebhooksTool struct{ *BaseTool }
 
 // NewListOutgoingWebhooksTool creates a new tool instance
-func NewListOutgoingWebhooksTool(c *client.Client, l *zap.Logger) *ListOutgoingWebhooksTool {
+func NewListOutgoingWebhooksTool(c client.Doer, l *zap.Logger) *ListOutgoingWebhooksTool {
 	return &ListOutgoingWebhooksTool{NewBaseTool(c, l)}
 }
 
@@ -79,7 +79,7 @@ func (t *ListOutgoingWebhooksTool) Execute(ctx context.Context, _ map[string]int
 type CreateOutgoingWebhookTool struct{ *BaseTool }
 
 // NewCreateOutgoingWebhookTool creates a new tool instance
-func NewCreateOutgoingWebhookTool(c *client.Client, l *zap.Logger) *CreateOutgoingWebhookTool {
+func NewCreateOutgoingWebhookTool(c client.Doer, l *zap.Logger) *CreateOutgoingWebhookTool {
 	return &CreateOutgoingWebhookTool{NewBaseTool(c, l)}
 }
 
@@ -230,7 +230,7 @@ func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (
 type UpdateOutgoingWebhookTool struct{ *BaseTool }
 
 // NewUpdateOutgoingWebhookTool creates a new tool instance
-func NewUpdateOutgoingWebhookTool(c *client.Client, l *zap.Logger) *UpdateOutgoingWebhookTool {
+func NewUpdateOutgoingWebhookTool(c client.Doer, l *zap.Logger) *UpdateOutgoingWebhookTool {
 	return &UpdateOutgoingWebhookTool{NewBaseTool(c, l)}
 }
 
@@ -266,7 +266,7 @@ func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 type DeleteOutgoingWebhookTool struct{ *BaseTool }
 
 // NewDeleteOutgoingWebhookTool creates a new tool instance
-func NewDeleteOutgoingWebhookTool(c *client.Client, l *zap.Logger) *DeleteOutgoingWebhookTool {
+func NewDeleteOutgoingWebhookTool(c client.Doer, l *zap.Logger) *DeleteOutgoingWebhookTool {
 	return &DeleteOutgoingWebhookTool{NewBaseTool(c, l)}
 }
 
@@ -303,7 +303,7 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 type GetPolicyTool struct{ *BaseTool }
 
 // NewGetPolicyTool creates a new tool instance
-func NewGetPolicyTool(c *client.Client, l *zap.Logger) *GetPolicyTool {
+func NewGetPolicyTool(c client.Doer, l *zap.Logger) *GetPolicyTool {
 	return &GetPolicyTool{NewBaseTool(c, l)}
 }
 
@@ -335,7 +335,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 type ListPoliciesTool struct{ *BaseTool }
 
 // NewListPoliciesTool creates a new tool instance
-func NewListPoliciesTool(c *client.Client, l *zap.Logger) *ListPoliciesTool {
+func NewListPoliciesTool(c client.Doer, l *zap.Logger) *ListPoliciesTool {
 	return &ListPoliciesTool{NewBaseTool(c, l)}
 }
 
@@ -367,7 +367,7 @@ func (t *ListPoliciesTool) Execute(ctx context.Context, _ map[string]interface{}
 type CreatePolicyTool struct{ *BaseTool }
 
 // NewCreatePolicyTool creates a new tool instance
-func NewCreatePolicyTool(c *client.Client, l *zap.Logger) *CreatePolicyTool {
+func NewCreatePolicyTool(c client.Doer, l *zap.Logger) *CreatePolicyTool {
 	return &CreatePolicyTool{NewBaseTool(c, l)}
 }
 
@@ -544,7 +544,7 @@ func (t *CreatePolicyTool) validatePolicy(policy map[string]interface{}) (*mcp.C
 type UpdatePolicyTool struct{ *BaseTool }
 
 // NewUpdatePolicyTool creates a new tool instance
-func NewUpdatePolicyTool(c *client.Client, l *zap.Logger) *UpdatePolicyTool {
+func NewUpdatePolicyTool(c client.Doer, l *zap.Logger) *UpdatePolicyTool {
 	return &UpdatePolicyTool{NewBaseTool(c, l)}
 }
 
@@ -580,7 +580,7 @@ func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 type DeletePolicyTool struct{ *BaseTool }
 
 // NewDeletePolicyTool creates a new tool instance
-func NewDeletePolicyTool(c *client.Client, l *zap.Logger) *DeletePolicyTool {
+func NewDeletePolicyTool(c client.Doer, l *zap.Logger) *DeletePolicyTool {
 	return &DeletePolicyTool{NewBaseTool(c, l)}
 }
 
@@ -617,7 +617,7 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 type GetE2MTool struct{ *BaseTool }
 
 // NewGetE2MTool creates a new tool instance
-func NewGetE2MTool(c *client.Client, l *zap.Logger) *GetE2MTool {
+func NewGetE2MTool(c client.Doer, l *zap.Logger) *GetE2MTool {
 	return &GetE2MTool{NewBaseTool(c, l)}
 }
 
@@ -649,7 +649,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 type ListE2MTool struct{ *BaseTool }
 
 // NewListE2MTool creates a new tool instance
-func NewListE2MTool(c *client.Client, l *zap.Logger) *ListE2MTool {
+func NewListE2MTool(c client.Doer, l *zap.Logger) *ListE2MTool {
 	return &ListE2MTool{NewBaseTool(c, l)}
 }
 
@@ -681,7 +681,7 @@ func (t *ListE2MTool) Execute(ctx context.Context, _ map[string]interface{}) (*m
 type CreateE2MTool struct{ *BaseTool }
 
 // NewCreateE2MTool creates a new tool instance
-func NewCreateE2MTool(c *client.Client, l *zap.Logger) *CreateE2MTool {
+func NewCreateE2MTool(c client.Doer, l *zap.Logger) *CreateE2MTool {
 	return &CreateE2MTool{NewBaseTool(c, l)}
 }
 
@@ -881,7 +881,7 @@ func (t *CreateE2MTool) validateE2M(e2m map[string]interface{}) (*mcp.CallToolRe
 type ReplaceE2MTool struct{ *BaseTool }
 
 // NewReplaceE2MTool creates a new tool instance
-func NewReplaceE2MTool(c *client.Client, l *zap.Logger) *ReplaceE2MTool {
+func NewReplaceE2MTool(c client.Doer, l *zap.Logger) *ReplaceE2MTool {
 	return &ReplaceE2MTool{NewBaseTool(c, l)}
 }
 
@@ -917,7 +917,7 @@ func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{
 type DeleteE2MTool struct{ *BaseTool }
 
 // NewDeleteE2MTool creates a new tool instance
-func NewDeleteE2MTool(c *client.Client, l *zap.Logger) *DeleteE2MTool {
+func NewDeleteE2MTool(c client.Doer, l *zap.Logger) *DeleteE2MTool {
 	return &DeleteE2MTool{NewBaseTool(c, l)}
 }
 
@@ -954,7 +954,7 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 type ListDataAccessRulesTool struct{ *BaseTool }
 
 // NewListDataAccessRulesTool creates a new tool instance
-func NewListDataAccessRulesTool(c *client.Client, l *zap.Logger) *ListDataAccessRulesTool {
+func NewListDataAccessRulesTool(c client.Doer, l *zap.Logger) *ListDataAccessRulesTool {
 	return &ListDataAccessRulesTool{NewBaseTool(c, l)}
 }
 
@@ -986,7 +986,7 @@ func (t *ListDataAccessRulesTool) Execute(ctx context.Context, _ map[string]inte
 type GetDataAccessRuleTool struct{ *BaseTool }
 
 // NewGetDataAccessRuleTool creates a new tool instance
-func NewGetDataAccessRuleTool(c *client.Client, l *zap.Logger) *GetDataAccessRuleTool {
+func NewGetDataAccessRuleTool(c client.Doer, l *zap.Logger) *GetDataAccessRuleTool {
 	return &GetDataAccessRuleTool{NewBaseTool(c, l)}
 }
 
@@ -1018,7 +1018,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 type CreateDataAccessRuleTool struct{ *BaseTool }
 
 // NewCreateDataAccessRuleTool creates a new tool instance
-func NewCreateDataAccessRuleTool(c *client.Client, l *zap.Logger) *CreateDataAccessRuleTool {
+func NewCreateDataAccessRuleTool(c client.Doer, l *zap.Logger) *CreateDataAccessRuleTool {
 	return &CreateDataAccessRuleTool{NewBaseTool(c, l)}
 }
 
@@ -1159,7 +1159,7 @@ func (t *CreateDataAccessRuleTool) validateDataAccessRule(rule map[string]interf
 type UpdateDataAccessRuleTool struct{ *BaseTool }
 
 // NewUpdateDataAccessRuleTool creates a new tool instance
-func NewUpdateDataAccessRuleTool(c *client.Client, l *zap.Logger) *UpdateDataAccessRuleTool {
+func NewUpdateDataAccessRuleTool(c client.Doer, l *zap.Logger) *UpdateDataAccessRuleTool {
 	return &UpdateDataAccessRuleTool{NewBaseTool(c, l)}
 }
 
@@ -1195,7 +1195,7 @@ func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 type DeleteDataAccessRuleTool struct{ *BaseTool }
 
 // NewDeleteDataAccessRuleTool creates a new tool instance
-func NewDeleteDataAccessRuleTool(c *client.Client, l *zap.Logger) *DeleteDataAccessRuleTool {
+func NewDeleteDataAccessRuleTool(c client.Doer, l *zap.Logger) *DeleteDataAccessRuleTool {
 	return &DeleteDataAccessRuleTool{NewBaseTool(c, l)}
 }
 
@@ -1232,7 +1232,7 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 type ListEnrichmentsTool struct{ *BaseTool }
 
 // NewListEnrichmentsTool creates a new tool instance
-func NewListEnrichmentsTool(c *client.Client, l *zap.Logger) *ListEnrichmentsTool {
+func NewListEnrichmentsTool(c client.Doer, l *zap.Logger) *ListEnrichmentsTool {
 	return &ListEnrichmentsTool{NewBaseTool(c, l)}
 }
 
@@ -1264,7 +1264,7 @@ func (t *ListEnrichmentsTool) Execute(ctx context.Context, _ map[string]interfac
 type CreateEnrichmentTool struct{ *BaseTool }
 
 // NewCreateEnrichmentTool creates a new tool instance
-func NewCreateEnrichmentTool(c *client.Client, l *zap.Logger) *CreateEnrichmentTool {
+func NewCreateEnrichmentTool(c client.Doer, l *zap.Logger) *CreateEnrichmentTool {
 	return &CreateEnrichmentTool{NewBaseTool(c, l)}
 }
 
@@ -1367,7 +1367,7 @@ func (t *CreateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 type UpdateEnrichmentTool struct{ *BaseTool }
 
 // NewUpdateEnrichmentTool creates a new tool instance
-func NewUpdateEnrichmentTool(c *client.Client, l *zap.Logger) *UpdateEnrichmentTool {
+func NewUpdateEnrichmentTool(c client.Doer, l *zap.Logger) *UpdateEnrichmentTool {
 	return &UpdateEnrichmentTool{NewBaseTool(c, l)}
 }
 
@@ -1403,7 +1403,7 @@ func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 type DeleteEnrichmentTool struct{ *BaseTool }
 
 // NewDeleteEnrichmentTool creates a new tool instance
-func NewDeleteEnrichmentTool(c *client.Client, l *zap.Logger) *DeleteEnrichmentTool {
+func NewDeleteEnrichmentTool(c client.Doer, l *zap.Logger) *DeleteEnrichmentTool {
 	return &DeleteEnrichmentTool{NewBaseTool(c, l)}
 }
 
@@ -1440,7 +1440,7 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 type GetEnrichmentsTool struct{ *BaseTool }
 
 // NewGetEnrichmentsTool creates a new tool instance
-func NewGetEnrichmentsTool(c *client.Client, l *zap.Logger) *GetEnrichmentsTool {
+func NewGetEnrichmentsTool(c client.Doer, l *zap.Logger) *GetEnrichmentsTool {
 	return &GetEnrichmentsTool{NewBaseTool(c, l)}
 }
 
@@ -1470,7 +1470,7 @@ func (t *GetEnrichmentsTool) Execute(ctx context.Context, _ map[string]interface
 type ListViewsTool struct{ *BaseTool }
 
 // NewListViewsTool creates a new tool instance
-func NewListViewsTool(c *client.Client, l *zap.Logger) *ListViewsTool {
+func NewListViewsTool(c client.Doer, l *zap.Logger) *ListViewsTool {
 	return &ListViewsTool{NewBaseTool(c, l)}
 }
 
@@ -1502,7 +1502,7 @@ func (t *ListViewsTool) Execute(ctx context.Context, _ map[string]interface{}) (
 type CreateViewTool struct{ *BaseTool }
 
 // NewCreateViewTool creates a new tool instance
-func NewCreateViewTool(c *client.Client, l *zap.Logger) *CreateViewTool {
+func NewCreateViewTool(c client.Doer, l *zap.Logger) *CreateViewTool {
 	return &CreateViewTool{NewBaseTool(c, l)}
 }
 
@@ -1607,7 +1607,7 @@ func (t *CreateViewTool) Execute(ctx context.Context, args map[string]interface{
 type GetViewTool struct{ *BaseTool }
 
 // NewGetViewTool creates a new tool instance
-func NewGetViewTool(c *client.Client, l *zap.Logger) *GetViewTool {
+func NewGetViewTool(c client.Doer, l *zap.Logger) *GetViewTool {
 	return &GetViewTool{NewBaseTool(c, l)}
 }
 
@@ -1639,7 +1639,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 type ReplaceViewTool struct{ *BaseTool }
 
 // NewReplaceViewTool creates a new tool instance
-func NewReplaceViewTool(c *client.Client, l *zap.Logger) *ReplaceViewTool {
+func NewReplaceViewTool(c client.Doer, l *zap.Logger) *ReplaceViewTool {
 	return &ReplaceViewTool{NewBaseTool(c, l)}
 }
 
@@ -1675,7 +1675,7 @@ func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface
 type DeleteViewTool struct{ *BaseTool }
 
 // NewDeleteViewTool creates a new tool instance
-func NewDeleteViewTool(c *client.Client, l *zap.Logger) *DeleteViewTool {
+func NewDeleteViewTool(c client.Doer, l *zap.Logger) *DeleteViewTool {
 	return &DeleteViewTool{NewBaseTool(c, l)}
 }
 
@@ -1712,7 +1712,7 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 type ListViewFoldersTool struct{ *BaseTool }
 
 // NewListViewFoldersTool creates a new tool instance
-func NewListViewFoldersTool(c *client.Client, l *zap.Logger) *ListViewFoldersTool {
+func NewListViewFoldersTool(c client.Doer, l *zap.Logger) *ListViewFoldersTool {
 	return &ListViewFoldersTool{NewBaseTool(c, l)}
 }
 
@@ -1740,7 +1740,7 @@ func (t *ListViewFoldersTool) Execute(ctx context.Context, _ map[string]interfac
 type CreateViewFolderTool struct{ *BaseTool }
 
 // NewCreateViewFolderTool creates a new tool instance
-func NewCreateViewFolderTool(c *client.Client, l *zap.Logger) *CreateViewFolderTool {
+func NewCreateViewFolderTool(c client.Doer, l *zap.Logger) *CreateViewFolderTool {
 	return &CreateViewFolderTool{NewBaseTool(c, l)}
 }
 
@@ -1772,7 +1772,7 @@ func (t *CreateViewFolderTool) Execute(ctx context.Context, args map[string]inte
 type GetViewFolderTool struct{ *BaseTool }
 
 // NewGetViewFolderTool creates a new tool instance
-func NewGetViewFolderTool(c *client.Client, l *zap.Logger) *GetViewFolderTool {
+func NewGetViewFolderTool(c client.Doer, l *zap.Logger) *GetViewFolderTool {
 	return &GetViewFolderTool{NewBaseTool(c, l)}
 }
 
@@ -1804,7 +1804,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 type ReplaceViewFolderTool struct{ *BaseTool }
 
 // NewReplaceViewFolderTool creates a new tool instance
-func NewReplaceViewFolderTool(c *client.Client, l *zap.Logger) *ReplaceViewFolderTool {
+func NewReplaceViewFolderTool(c client.Doer, l *zap.Logger) *ReplaceViewFolderTool {
 	return &ReplaceViewFolderTool{NewBaseTool(c, l)}
 }
 
@@ -1840,7 +1840,7 @@ func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]int
 type DeleteViewFolderTool struct{ *BaseTool }
 
 // NewDeleteViewFolderTool creates a new tool instance
-func NewDeleteViewFolderTool(c *client.Client, l *zap.Logger) *DeleteViewFolderTool {
+func NewDeleteViewFolderTool(c client.Doer, l *zap.Logger) *DeleteViewFolderTool {
 	return &DeleteViewFolderTool{NewBaseTool(c, l)}
 }
 

@@ -24,7 +24,7 @@ type SmartInvestigateTool struct {
 }
 
 // NewSmartInvestigateTool creates a new smart investigation tool
-func NewSmartInvestigateTool(c *client.Client, l *zap.Logger) *SmartInvestigateTool {
+func NewSmartInvestigateTool(c client.Doer, l *zap.Logger) *SmartInvestigateTool {
 	return &SmartInvestigateTool{
 		BaseTool:        NewBaseTool(c, l),
 		strategyFactory: NewQueryStrategyFactory(),

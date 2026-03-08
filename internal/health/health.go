@@ -8,9 +8,14 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/auth"
 	"github.com/tareqmamari/logs-mcp-server/internal/client"
 )
+
+// TokenValidator validates authentication tokens.
+// *auth.Authenticator satisfies this interface.
+type TokenValidator interface {
+	ValidateToken() error
+}
 
 // Status represents the health status
 type Status string
@@ -35,15 +40,15 @@ type Check struct {
 
 // Checker performs health checks
 type Checker struct {
-	client        *client.Client
-	authenticator *auth.Authenticator
+	client        client.Doer
+	authenticator TokenValidator
 	logger        *zap.Logger
 }
 
 // New creates a new health checker
-func New(client *client.Client, authenticator *auth.Authenticator, logger *zap.Logger) *Checker {
+func New(c client.Doer, authenticator TokenValidator, logger *zap.Logger) *Checker {
 	return &Checker{
-		client:        client,
+		client:        c,
 		authenticator: authenticator,
 		logger:        logger,
 	}

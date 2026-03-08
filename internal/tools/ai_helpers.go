@@ -21,7 +21,7 @@ type ExplainQueryTool struct {
 }
 
 // NewExplainQueryTool creates a new ExplainQueryTool
-func NewExplainQueryTool(c *client.Client, l *zap.Logger) *ExplainQueryTool {
+func NewExplainQueryTool(c client.Doer, l *zap.Logger) *ExplainQueryTool {
 	return &ExplainQueryTool{NewBaseTool(c, l)}
 }
 
@@ -505,7 +505,7 @@ type SuggestAlertTool struct {
 }
 
 // NewSuggestAlertTool creates a new SuggestAlertTool
-func NewSuggestAlertTool(c *client.Client, l *zap.Logger) *SuggestAlertTool {
+func NewSuggestAlertTool(c client.Doer, l *zap.Logger) *SuggestAlertTool {
 	return &SuggestAlertTool{NewBaseTool(c, l)}
 }
 
@@ -844,7 +844,7 @@ type GetAuditLogTool struct {
 }
 
 // NewGetAuditLogTool creates a new GetAuditLogTool
-func NewGetAuditLogTool(c *client.Client, l *zap.Logger) *GetAuditLogTool {
+func NewGetAuditLogTool(c client.Doer, l *zap.Logger) *GetAuditLogTool {
 	return &GetAuditLogTool{NewBaseTool(c, l)}
 }
 
