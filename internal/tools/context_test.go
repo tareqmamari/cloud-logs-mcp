@@ -19,8 +19,8 @@ func TestWithClientAndGetClientFromContext(t *testing.T) {
 		t.Errorf("Expected ErrNoClientInContext, got: %v", err)
 	}
 
-	// Test: With nil client should return error
-	ctxWithNil := context.WithValue(ctx, clientContextKey, (*client.Client)(nil))
+	// Test: With nil Doer should return error
+	ctxWithNil := WithClient(ctx, nil)
 	_, err = GetClientFromContext(ctxWithNil)
 	if err == nil {
 		t.Error("Expected error when nil client in context")

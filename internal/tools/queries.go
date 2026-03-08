@@ -95,7 +95,7 @@ type QueryTool struct {
 }
 
 // NewQueryTool creates a new tool instance
-func NewQueryTool(client *client.Client, logger *zap.Logger) *QueryTool {
+func NewQueryTool(client client.Doer, logger *zap.Logger) *QueryTool {
 	return &QueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -496,7 +496,7 @@ type SubmitBackgroundQueryTool struct {
 }
 
 // NewSubmitBackgroundQueryTool creates a new tool instance
-func NewSubmitBackgroundQueryTool(client *client.Client, logger *zap.Logger) *SubmitBackgroundQueryTool {
+func NewSubmitBackgroundQueryTool(client client.Doer, logger *zap.Logger) *SubmitBackgroundQueryTool {
 	return &SubmitBackgroundQueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -607,7 +607,7 @@ type GetBackgroundQueryStatusTool struct {
 }
 
 // NewGetBackgroundQueryStatusTool creates a new tool instance
-func NewGetBackgroundQueryStatusTool(client *client.Client, logger *zap.Logger) *GetBackgroundQueryStatusTool {
+func NewGetBackgroundQueryStatusTool(client client.Doer, logger *zap.Logger) *GetBackgroundQueryStatusTool {
 	return &GetBackgroundQueryStatusTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -668,7 +668,7 @@ type GetBackgroundQueryDataTool struct {
 }
 
 // NewGetBackgroundQueryDataTool creates a new tool instance
-func NewGetBackgroundQueryDataTool(client *client.Client, logger *zap.Logger) *GetBackgroundQueryDataTool {
+func NewGetBackgroundQueryDataTool(client client.Doer, logger *zap.Logger) *GetBackgroundQueryDataTool {
 	return &GetBackgroundQueryDataTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -729,7 +729,7 @@ type CancelBackgroundQueryTool struct {
 }
 
 // NewCancelBackgroundQueryTool creates a new CancelBackgroundQueryTool
-func NewCancelBackgroundQueryTool(client *client.Client, logger *zap.Logger) *CancelBackgroundQueryTool {
+func NewCancelBackgroundQueryTool(client client.Doer, logger *zap.Logger) *CancelBackgroundQueryTool {
 	return &CancelBackgroundQueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

@@ -40,7 +40,7 @@ type QueryTemplatesTool struct {
 }
 
 // NewQueryTemplatesTool creates a new QueryTemplatesTool
-func NewQueryTemplatesTool(c *client.Client, l *zap.Logger) *QueryTemplatesTool {
+func NewQueryTemplatesTool(c client.Doer, l *zap.Logger) *QueryTemplatesTool {
 	return &QueryTemplatesTool{NewBaseTool(c, l)}
 }
 

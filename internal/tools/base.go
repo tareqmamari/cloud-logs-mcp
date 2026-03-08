@@ -44,14 +44,14 @@ const (
 
 // BaseTool provides common functionality for all tools
 type BaseTool struct {
-	client *client.Client
+	client client.Doer
 	logger *zap.Logger
 }
 
 // NewBaseTool creates a new BaseTool
-func NewBaseTool(client *client.Client, logger *zap.Logger) *BaseTool {
+func NewBaseTool(c client.Doer, logger *zap.Logger) *BaseTool {
 	return &BaseTool{
-		client: client,
+		client: c,
 		logger: logger,
 	}
 }
@@ -73,7 +73,7 @@ func (t *BaseTool) DefaultTimeout() time.Duration {
 // GetClient returns the API client, preferring context over stored client.
 // This enables per-request client injection for future HTTP transport support
 // while maintaining backward compatibility with the current STDIO mode.
-func (t *BaseTool) GetClient(ctx context.Context) (*client.Client, error) {
+func (t *BaseTool) GetClient(ctx context.Context) (client.Doer, error) {
 	// First try context (future HTTP mode, testing)
 	if c, err := GetClientFromContext(ctx); err == nil {
 		return c, nil

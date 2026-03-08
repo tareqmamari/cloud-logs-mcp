@@ -89,7 +89,7 @@ type SearchToolsTool struct {
 }
 
 // NewSearchToolsTool creates a new SearchToolsTool
-func NewSearchToolsTool(c *client.Client, l *zap.Logger) *SearchToolsTool {
+func NewSearchToolsTool(c client.Doer, l *zap.Logger) *SearchToolsTool {
 	return &SearchToolsTool{NewBaseTool(c, l)}
 }
 
@@ -207,7 +207,7 @@ type DescribeToolsTool struct {
 }
 
 // NewDescribeToolsTool creates a new DescribeToolsTool
-func NewDescribeToolsTool(c *client.Client, l *zap.Logger) *DescribeToolsTool {
+func NewDescribeToolsTool(c client.Doer, l *zap.Logger) *DescribeToolsTool {
 	return &DescribeToolsTool{NewBaseTool(c, l)}
 }
 
@@ -319,7 +319,7 @@ type ListToolCategoriesBrief struct {
 }
 
 // NewListToolCategoriesBrief creates a new tool
-func NewListToolCategoriesBrief(c *client.Client, l *zap.Logger) *ListToolCategoriesBrief {
+func NewListToolCategoriesBrief(c client.Doer, l *zap.Logger) *ListToolCategoriesBrief {
 	return &ListToolCategoriesBrief{NewBaseTool(c, l)}
 }
 

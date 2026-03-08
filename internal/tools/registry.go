@@ -10,7 +10,7 @@ import (
 // GetAllTools returns all available MCP tools organized by category.
 // This factory function centralizes tool creation and makes it easy to
 // add new tools or modify tool registration.
-func GetAllTools(c *client.Client, logger *zap.Logger) []Tool {
+func GetAllTools(c client.Doer, logger *zap.Logger) []Tool {
 	return []Tool{
 		// Alert tools
 		NewGetAlertTool(c, logger),

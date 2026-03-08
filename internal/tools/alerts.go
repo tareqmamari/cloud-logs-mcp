@@ -15,7 +15,7 @@ type GetAlertTool struct {
 }
 
 // NewGetAlertTool creates a new tool instance
-func NewGetAlertTool(client *client.Client, logger *zap.Logger) *GetAlertTool {
+func NewGetAlertTool(client client.Doer, logger *zap.Logger) *GetAlertTool {
 	return &GetAlertTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -106,7 +106,7 @@ type ListAlertsTool struct {
 }
 
 // NewListAlertsTool creates a new tool instance
-func NewListAlertsTool(client *client.Client, logger *zap.Logger) *ListAlertsTool {
+func NewListAlertsTool(client client.Doer, logger *zap.Logger) *ListAlertsTool {
 	return &ListAlertsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -226,7 +226,7 @@ type CreateAlertTool struct {
 }
 
 // NewCreateAlertTool creates a new tool instance
-func NewCreateAlertTool(client *client.Client, logger *zap.Logger) *CreateAlertTool {
+func NewCreateAlertTool(client client.Doer, logger *zap.Logger) *CreateAlertTool {
 	return &CreateAlertTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -440,7 +440,7 @@ type UpdateAlertTool struct {
 }
 
 // NewUpdateAlertTool creates a new tool instance
-func NewUpdateAlertTool(client *client.Client, logger *zap.Logger) *UpdateAlertTool {
+func NewUpdateAlertTool(client client.Doer, logger *zap.Logger) *UpdateAlertTool {
 	return &UpdateAlertTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -535,7 +535,7 @@ type DeleteAlertTool struct {
 }
 
 // NewDeleteAlertTool creates a new tool instance
-func NewDeleteAlertTool(client *client.Client, logger *zap.Logger) *DeleteAlertTool {
+func NewDeleteAlertTool(client client.Doer, logger *zap.Logger) *DeleteAlertTool {
 	return &DeleteAlertTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

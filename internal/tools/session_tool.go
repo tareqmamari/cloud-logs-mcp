@@ -18,7 +18,7 @@ type SessionContextTool struct {
 }
 
 // NewSessionContextTool creates a new SessionContextTool
-func NewSessionContextTool(c *client.Client, l *zap.Logger) *SessionContextTool {
+func NewSessionContextTool(c client.Doer, l *zap.Logger) *SessionContextTool {
 	return &SessionContextTool{NewBaseTool(c, l)}
 }
 

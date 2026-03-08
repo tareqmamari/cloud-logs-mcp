@@ -15,7 +15,7 @@ type GetEventStreamTargetsTool struct {
 }
 
 // NewGetEventStreamTargetsTool creates a new tool instance
-func NewGetEventStreamTargetsTool(client *client.Client, logger *zap.Logger) *GetEventStreamTargetsTool {
+func NewGetEventStreamTargetsTool(client client.Doer, logger *zap.Logger) *GetEventStreamTargetsTool {
 	return &GetEventStreamTargetsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -60,7 +60,7 @@ type CreateEventStreamTargetTool struct {
 }
 
 // NewCreateEventStreamTargetTool creates a new tool instance
-func NewCreateEventStreamTargetTool(client *client.Client, logger *zap.Logger) *CreateEventStreamTargetTool {
+func NewCreateEventStreamTargetTool(client client.Doer, logger *zap.Logger) *CreateEventStreamTargetTool {
 	return &CreateEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -167,7 +167,7 @@ type UpdateEventStreamTargetTool struct {
 }
 
 // NewUpdateEventStreamTargetTool creates a new tool instance
-func NewUpdateEventStreamTargetTool(client *client.Client, logger *zap.Logger) *UpdateEventStreamTargetTool {
+func NewUpdateEventStreamTargetTool(client client.Doer, logger *zap.Logger) *UpdateEventStreamTargetTool {
 	return &UpdateEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -273,7 +273,7 @@ type DeleteEventStreamTargetTool struct {
 }
 
 // NewDeleteEventStreamTargetTool creates a new tool instance
-func NewDeleteEventStreamTargetTool(client *client.Client, logger *zap.Logger) *DeleteEventStreamTargetTool {
+func NewDeleteEventStreamTargetTool(client client.Doer, logger *zap.Logger) *DeleteEventStreamTargetTool {
 	return &DeleteEventStreamTargetTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

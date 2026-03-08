@@ -14,7 +14,7 @@ import (
 type DiscoverLogFieldsTool struct{ *BaseTool }
 
 // NewDiscoverLogFieldsTool creates a new tool instance
-func NewDiscoverLogFieldsTool(c *client.Client, l *zap.Logger) *DiscoverLogFieldsTool {
+func NewDiscoverLogFieldsTool(c client.Doer, l *zap.Logger) *DiscoverLogFieldsTool {
 	return &DiscoverLogFieldsTool{NewBaseTool(c, l)}
 }
 
@@ -274,7 +274,7 @@ func formatFieldDiscovery(fields map[string]bool, appName, subsysName, timeRange
 type TestRuleGroupTool struct{ *BaseTool }
 
 // NewTestRuleGroupTool creates a new tool instance
-func NewTestRuleGroupTool(c *client.Client, l *zap.Logger) *TestRuleGroupTool {
+func NewTestRuleGroupTool(c client.Doer, l *zap.Logger) *TestRuleGroupTool {
 	return &TestRuleGroupTool{NewBaseTool(c, l)}
 }
 

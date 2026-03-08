@@ -20,19 +20,26 @@ import (
 	"github.com/tareqmamari/logs-mcp-server/internal/tools"
 )
 
+// Authenticator defines the authentication interface needed by the server.
+// *auth.Authenticator satisfies this interface.
+type Authenticator interface {
+	health.TokenValidator
+	GetUserIdentity() (string, error)
+}
+
 // Server represents the MCP server
 type Server struct {
 	mcpServer     *mcp.Server
-	apiClient     *client.Client
+	apiClient     client.Doer
 	config        *config.Config
 	logger        *zap.Logger
 	metrics       *metrics.Metrics
 	version       string
 	healthServer  *health.Server
-	authenticator *auth.Authenticator
+	authenticator Authenticator
 }
 
-// New creates a new MCP server instance.
+// New creates a new MCP server instance using real IBM Cloud credentials.
 func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
 	// Create IBM Cloud Logs API client
 	apiClient, err := client.New(cfg, logger, version)
@@ -46,6 +53,12 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
 
+	return NewWithDeps(cfg, apiClient, authenticator, logger, version)
+}
+
+// NewWithDeps creates a new MCP server instance with injectable dependencies.
+// This constructor enables testing with mock clients and authenticators.
+func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authenticator, logger *zap.Logger, version string) (*Server, error) {
 	// Create MCP server with tools, prompts, and resources capabilities
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "IBM Cloud Logs MCP Server",
@@ -405,4 +418,9 @@ func (s *Server) Start(ctx context.Context) error {
 // GetMetrics returns the server's metrics tracker for external access
 func (s *Server) GetMetrics() *metrics.Metrics {
 	return s.metrics
+}
+
+// MCPServer returns the underlying MCP server for testing.
+func (s *Server) MCPServer() *mcp.Server {
+	return s.mcpServer
 }

@@ -18,7 +18,7 @@ type QueryCostEstimateTool struct {
 }
 
 // NewQueryCostEstimateTool creates a new QueryCostEstimateTool instance
-func NewQueryCostEstimateTool(client *client.Client, logger *zap.Logger) *QueryCostEstimateTool {
+func NewQueryCostEstimateTool(client client.Doer, logger *zap.Logger) *QueryCostEstimateTool {
 	return &QueryCostEstimateTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

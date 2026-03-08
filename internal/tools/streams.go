@@ -17,7 +17,7 @@ type ListStreamsTool struct {
 }
 
 // NewListStreamsTool creates a new tool instance
-func NewListStreamsTool(client *client.Client, logger *zap.Logger) *ListStreamsTool {
+func NewListStreamsTool(client client.Doer, logger *zap.Logger) *ListStreamsTool {
 	return &ListStreamsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -80,7 +80,7 @@ type GetStreamTool struct {
 }
 
 // NewGetStreamTool creates a new tool instance
-func NewGetStreamTool(client *client.Client, logger *zap.Logger) *GetStreamTool {
+func NewGetStreamTool(client client.Doer, logger *zap.Logger) *GetStreamTool {
 	return &GetStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -159,7 +159,7 @@ type CreateStreamTool struct {
 }
 
 // NewCreateStreamTool creates a new tool instance
-func NewCreateStreamTool(client *client.Client, logger *zap.Logger) *CreateStreamTool {
+func NewCreateStreamTool(client client.Doer, logger *zap.Logger) *CreateStreamTool {
 	return &CreateStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -390,7 +390,7 @@ type UpdateStreamTool struct {
 }
 
 // NewUpdateStreamTool creates a new tool instance
-func NewUpdateStreamTool(client *client.Client, logger *zap.Logger) *UpdateStreamTool {
+func NewUpdateStreamTool(client client.Doer, logger *zap.Logger) *UpdateStreamTool {
 	return &UpdateStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -507,7 +507,7 @@ type DeleteStreamTool struct {
 }
 
 // NewDeleteStreamTool creates a new tool instance
-func NewDeleteStreamTool(client *client.Client, logger *zap.Logger) *DeleteStreamTool {
+func NewDeleteStreamTool(client client.Doer, logger *zap.Logger) *DeleteStreamTool {
 	return &DeleteStreamTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

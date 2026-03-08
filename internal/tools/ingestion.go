@@ -25,7 +25,7 @@ type IngestLogsTool struct {
 }
 
 // NewIngestLogsTool creates a new IngestLogsTool instance.
-func NewIngestLogsTool(client *client.Client, logger *zap.Logger) *IngestLogsTool {
+func NewIngestLogsTool(client client.Doer, logger *zap.Logger) *IngestLogsTool {
 	return &IngestLogsTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

@@ -18,7 +18,7 @@ type BuildQueryTool struct {
 }
 
 // NewBuildQueryTool creates a new BuildQueryTool instance.
-func NewBuildQueryTool(client *client.Client, logger *zap.Logger) *BuildQueryTool {
+func NewBuildQueryTool(client client.Doer, logger *zap.Logger) *BuildQueryTool {
 	return &BuildQueryTool{
 		BaseTool: NewBaseTool(client, logger),
 	}
@@ -622,7 +622,7 @@ type DataPrimeReferenceTool struct {
 }
 
 // NewDataPrimeReferenceTool creates a new DataPrimeReferenceTool instance.
-func NewDataPrimeReferenceTool(client *client.Client, logger *zap.Logger) *DataPrimeReferenceTool {
+func NewDataPrimeReferenceTool(client client.Doer, logger *zap.Logger) *DataPrimeReferenceTool {
 	return &DataPrimeReferenceTool{
 		BaseTool: NewBaseTool(client, logger),
 	}

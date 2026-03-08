@@ -29,6 +29,18 @@ type Authenticator interface {
 	Authenticate(req *http.Request) error
 }
 
+// Doer defines the interface for executing API requests.
+// This enables mock-based testing of components that depend on the client
+// without requiring real IBM Cloud credentials or network access.
+type Doer interface {
+	Do(ctx context.Context, req *Request) (*Response, error)
+	GetInstanceInfo() InstanceInfo
+	Close() error
+}
+
+// Verify Client implements Doer at compile time.
+var _ Doer = (*Client)(nil)
+
 // Client is an HTTP client for the IBM Cloud Logs API
 type Client struct {
 	httpClient    *http.Client

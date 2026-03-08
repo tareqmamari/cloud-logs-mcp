@@ -36,7 +36,7 @@ type InvestigateIncidentTool struct {
 }
 
 // NewInvestigateIncidentTool creates a new InvestigateIncidentTool
-func NewInvestigateIncidentTool(c *client.Client, l *zap.Logger) *InvestigateIncidentTool {
+func NewInvestigateIncidentTool(c client.Doer, l *zap.Logger) *InvestigateIncidentTool {
 	return &InvestigateIncidentTool{NewBaseTool(c, l)}
 }
 
@@ -528,7 +528,7 @@ type HealthCheckTool struct {
 }
 
 // NewHealthCheckTool creates a new HealthCheckTool
-func NewHealthCheckTool(c *client.Client, l *zap.Logger) *HealthCheckTool {
+func NewHealthCheckTool(c client.Doer, l *zap.Logger) *HealthCheckTool {
 	return &HealthCheckTool{NewBaseTool(c, l)}
 }
 
@@ -775,7 +775,7 @@ type ValidateQueryTool struct {
 }
 
 // NewValidateQueryTool creates a new ValidateQueryTool
-func NewValidateQueryTool(c *client.Client, l *zap.Logger) *ValidateQueryTool {
+func NewValidateQueryTool(c client.Doer, l *zap.Logger) *ValidateQueryTool {
 	return &ValidateQueryTool{NewBaseTool(c, l)}
 }
 
