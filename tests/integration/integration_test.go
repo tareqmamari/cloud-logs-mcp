@@ -87,7 +87,6 @@ func NewTestContext(t *testing.T) *TestContext {
 		RateLimitBurst:  20,
 		MaxIdleConns:    10,
 		IdleConnTimeout: 90 * time.Second,
-		TLSVerify:       true,
 	}
 
 	// Create client

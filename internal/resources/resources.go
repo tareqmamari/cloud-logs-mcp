@@ -137,7 +137,6 @@ func (r *Registry) configResource() RegisteredResource {
 				"rate_limit":             r.config.RateLimit,
 				"rate_limit_burst":       r.config.RateLimitBurst,
 				"rate_limit_enabled":     r.config.EnableRateLimit,
-				"tls_verify":             r.config.TLSVerify,
 				"tracing_enabled":        r.config.EnableTracing,
 				"audit_log_enabled":      r.config.EnableAuditLog,
 				"log_level":              r.config.LogLevel,

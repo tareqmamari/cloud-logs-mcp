@@ -59,7 +59,6 @@ func newTestConfig(serverURL string) *config.Config {
 		RetryWaitMax:    500 * time.Millisecond,
 		MaxIdleConns:    10,
 		IdleConnTimeout: 30 * time.Second,
-		TLSVerify:       true,
 		EnableRateLimit: false,
 	}
 }
