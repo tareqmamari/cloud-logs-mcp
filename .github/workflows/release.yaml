@@ -5,16 +5,17 @@ on:
     types:
       - published
 
-permissions:
-  contents: write
-  id-token: write
-  packages: write
-  attestations: write
+permissions: read-all
 
 jobs:
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+      attestations: write
     steps:
       - name: Generate Homebrew Tap Token
         id: app-token

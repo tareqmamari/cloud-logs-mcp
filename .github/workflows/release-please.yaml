@@ -8,14 +8,15 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: read-all
 
 jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     # Only run if CI workflow succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
