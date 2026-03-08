@@ -304,8 +304,9 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		return nil, err
 	}
 
-	ctx, cancel := c.applyTimeout(ctx, req)
-	if cancel != nil {
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
 		defer cancel()
 	}
 
@@ -341,13 +342,6 @@ func (c *Client) applyRateLimit(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func (c *Client) applyTimeout(ctx context.Context, req *Request) (context.Context, context.CancelFunc) {
-	if req.Timeout > 0 {
-		return context.WithTimeout(ctx, req.Timeout)
-	}
-	return ctx, nil
 }
 
 func (c *Client) buildRequestURL(req *Request) string {

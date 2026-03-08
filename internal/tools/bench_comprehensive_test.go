@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -192,7 +193,7 @@ func BenchmarkConcurrentToolExecution(b *testing.B) {
 	concurrencyLevels := []int{1, 4, 8, 16, 32}
 
 	for _, concurrency := range concurrencyLevels {
-		b.Run(strings.ReplaceAll(string(rune('0'+concurrency)), "", "concurrent_")+"_workers", func(b *testing.B) {
+		b.Run(fmt.Sprintf("concurrent_%d_workers", concurrency), func(b *testing.B) {
 			b.SetParallelism(concurrency)
 			b.RunParallel(func(pb *testing.PB) {
 				result := createMockQueryResult(50)
