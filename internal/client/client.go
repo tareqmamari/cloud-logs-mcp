@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,25 +56,11 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
 
-	// Configure TLS with secure defaults
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12, // Enforce minimum TLS 1.2
-	}
-
-	// Only disable TLS verification if explicitly configured (for testing environments)
-	// By default, cfg.TLSVerify is true, so verification is enabled
-	if !cfg.TLSVerify {
-		tlsConfig.InsecureSkipVerify = true
-		logger.Warn("TLS certificate verification is DISABLED - this is insecure and should only be used for testing",
-			zap.String("service_url", cfg.ServiceURL),
-		)
-	}
-
 	transport := &http.Transport{
 		MaxIdleConns:        cfg.MaxIdleConns,
 		IdleConnTimeout:     cfg.IdleConnTimeout,
 		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig:     tlsConfig,
+		TLSClientConfig:     newTLSConfig(cfg, logger),
 	}
 
 	httpClient := &http.Client{
