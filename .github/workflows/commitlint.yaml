@@ -23,8 +23,7 @@ jobs:
           node-version: '24'
 
       - name: Install commitlint
-        run: |
-          npm install --save-dev @commitlint/config-conventional @commitlint/cli
+        run: npm install --save-dev @commitlint/config-conventional@20.0.0 @commitlint/cli@20.4.3
 
       - name: Validate all commits from PR
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
