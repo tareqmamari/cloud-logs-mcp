@@ -82,10 +82,6 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("Expected default rate_limit 100, got %d", cfg.RateLimit)
 	}
 
-	if !cfg.TLSVerify {
-		t.Error("Expected TLSVerify to be true by default")
-	}
-
 	if !cfg.EnableRateLimit {
 		t.Error("Expected EnableRateLimit to be true by default")
 	}

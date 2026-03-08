@@ -60,7 +60,7 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error
 		MaxIdleConns:        cfg.MaxIdleConns,
 		IdleConnTimeout:     cfg.IdleConnTimeout,
 		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig:     newTLSConfig(cfg, logger),
+		TLSClientConfig:     newTLSConfig(),
 	}
 
 	httpClient := &http.Client{

@@ -16,7 +16,6 @@
   "rate_limit": 100,
   "rate_limit_burst": 20,
 
-  "tls_verify": true,
   "allowed_ip_ranges": [],
 
   "log_level": "info",

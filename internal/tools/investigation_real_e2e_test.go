@@ -42,7 +42,6 @@ func getTestClient(t *testing.T) *client.Client {
 		RetryWaitMax:    30 * time.Second,
 		MaxIdleConns:    10,
 		IdleConnTimeout: 90 * time.Second,
-		TLSVerify:       true,
 		EnableRateLimit: false,
 	}
 

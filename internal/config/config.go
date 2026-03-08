@@ -41,9 +41,6 @@ type Config struct {
 	RateLimitBurst  int  `json:"rate_limit_burst"` // burst size
 	EnableRateLimit bool `json:"enable_rate_limit"`
 
-	// Security
-	TLSVerify bool `json:"tls_verify"`
-
 	// Observability
 	EnableTracing   bool `json:"enable_tracing"`   // Enable distributed tracing (default: true)
 	EnableAuditLog  bool `json:"enable_audit_log"` // Enable audit logging (default: true)
@@ -72,7 +69,6 @@ func Load() (*Config, error) {
 		RateLimit:       100,
 		RateLimitBurst:  20,
 		EnableRateLimit: true,
-		TLSVerify:       true,
 		LogLevel:        "info",
 		LogFormat:       "json",
 		// Operation-specific timeouts
@@ -232,9 +228,6 @@ func loadIntEnvs(cfg *Config) {
 func loadBoolEnvs(cfg *Config) {
 	if v := os.Getenv("LOGS_ENABLE_RATE_LIMIT"); v != "" {
 		cfg.EnableRateLimit = v == "true" || v == "1"
-	}
-	if v := os.Getenv("LOGS_TLS_VERIFY"); v != "" {
-		cfg.TLSVerify = v == "true" || v == "1"
 	}
 	if v := os.Getenv("LOGS_ENABLE_TRACING"); v != "" {
 		cfg.EnableTracing = v == "true" || v == "1"
