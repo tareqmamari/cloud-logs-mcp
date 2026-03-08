@@ -17,13 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.3.2
         with:
-          node-version: '24'
-
-      - name: Install commitlint
-        run: npm install --save-dev @commitlint/config-conventional@20.0.0 @commitlint/cli@20.4.3
-
-      - name: Validate all commits from PR
-        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+          configFile: .commitlintrc.json
