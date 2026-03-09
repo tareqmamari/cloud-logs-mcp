@@ -63,45 +63,58 @@ func NewMockClient() *MockClient {
 // Do executes a mock API request. It records the request and returns the
 // configured response.
 func (m *MockClient) Do(ctx context.Context, req *Request) (*Response, error) {
+	doFunc, resp, respErr, defaultResp, defaultErr := m.popRequest(req)
+
+	// Custom handler takes priority.
+	if doFunc != nil {
+		return doFunc(ctx, req)
+	}
+
+	// Queued error.
+	if respErr != nil {
+		return nil, respErr
+	}
+
+	// Queued response.
+	if resp != nil {
+		return resp, nil
+	}
+
+	// Defaults.
+	if defaultErr != nil {
+		return nil, defaultErr
+	}
+	return defaultResp, nil
+}
+
+// popRequest records the request and extracts the next response under the lock.
+func (m *MockClient) popRequest(req *Request) (
+	doFunc func(ctx context.Context, req *Request) (*Response, error),
+	resp *Response, respErr error,
+	defaultResp *Response, defaultErr error,
+) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.Requests = append(m.Requests, req)
 
-	// Custom handler takes priority
 	if m.DoFunc != nil {
-		m.mu.Unlock()
-		return m.DoFunc(ctx, req)
+		doFunc = m.DoFunc
+		return
 	}
 
-	// Pop from queues
-	if len(m.Responses) > 0 || len(m.Errors) > 0 {
-		var resp *Response
-		var err error
-
-		if len(m.Responses) > 0 {
-			resp = m.Responses[0]
-			m.Responses = m.Responses[1:]
-		}
-		if len(m.Errors) > 0 {
-			err = m.Errors[0]
-			m.Errors = m.Errors[1:]
-		}
-
-		m.mu.Unlock()
-		if err != nil {
-			return nil, err
-		}
-		if resp != nil {
-			return resp, nil
-		}
-	} else {
-		m.mu.Unlock()
+	if len(m.Responses) > 0 {
+		resp = m.Responses[0]
+		m.Responses = m.Responses[1:]
+	}
+	if len(m.Errors) > 0 {
+		respErr = m.Errors[0]
+		m.Errors = m.Errors[1:]
 	}
 
-	// Defaults
-	if m.DefaultError != nil {
-		return nil, m.DefaultError
-	}
-	return m.DefaultResponse, nil
+	defaultResp = m.DefaultResponse
+	defaultErr = m.DefaultError
+	return
 }
 
 // GetInstanceInfo returns the configured instance info.
