@@ -6,6 +6,24 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.9.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.9.0...v0.9.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* **ci:** add top-level read-all permissions to integration tests workflow ([fcacf71](https://github.com/tareqmamari/cloud-logs-mcp/commit/fcacf718aaa660bb5370ec73fedb7e63666771b5))
+* **ci:** enable SAST scanning on pull requests ([d26af20](https://github.com/tareqmamari/cloud-logs-mcp/commit/d26af202e0fad9f9bf5abff13c58ae69397661f4))
+* **ci:** pin commitlint dependency versions ([c394292](https://github.com/tareqmamari/cloud-logs-mcp/commit/c39429217d7ebb9e70be9cd92b0dcc3c1f71505e))
+* **ci:** replace npm-based commitlint with GitHub Action ([e14ba55](https://github.com/tareqmamari/cloud-logs-mcp/commit/e14ba551a921cfd94e7d5ad88ff523a886c7d1b4))
+* **ci:** run SAST on all commits to main, not just Go file changes ([cb92c49](https://github.com/tareqmamari/cloud-logs-mcp/commit/cb92c49d79b9da01b6f88e16d4c52fa3fc141d62))
+* **ci:** scope SAST workflow permissions to job level ([19ce1b3](https://github.com/tareqmamari/cloud-logs-mcp/commit/19ce1b328e48244fa458ad6545915047bb9edfb3))
+* **ci:** scope workflow token permissions to job level ([ed6f6c2](https://github.com/tareqmamari/cloud-logs-mcp/commit/ed6f6c24a1bf4c02b6f917df65ea32d720488c46))
+* **client, tools:** resolve gosec G118 and G115 warnings ([fc0bfce](https://github.com/tareqmamari/cloud-logs-mcp/commit/fc0bfce5133d0041562c8f7821930e059f342558))
+* **client:** isolate insecure TLS verification behind build tag ([d88e647](https://github.com/tareqmamari/cloud-logs-mcp/commit/d88e647fae3284c435eb71b85ae93fcd18da9362))
+* **client:** refactor MockClient.Do to use defer-based mutex unlock ([af673fd](https://github.com/tareqmamari/cloud-logs-mcp/commit/af673fdca89ab49e493b842ce95324822758f499))
+* **client:** remove TLSVerify config and enforce TLS verification ([e021830](https://github.com/tareqmamari/cloud-logs-mcp/commit/e021830b68471bc3ac39b7f96a745772c20451f6))
+* **tools:** use concrete type for SSE event deserialization ([0f3e3e1](https://github.com/tareqmamari/cloud-logs-mcp/commit/0f3e3e1153db403e4e8b5cda2494929143b63ee0))
+
 ## [0.9.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.8.0...v0.9.0) (2026-02-26)
 
 
