@@ -5,6 +5,8 @@ on:
     - cron: '0 2 * * *' # Nightly at 2am UTC
   workflow_dispatch:
 
+permissions: read-all
+
 concurrency:
   group: integration-tests
   cancel-in-progress: false
