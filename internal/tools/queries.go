@@ -149,8 +149,9 @@ var validQueryFields = map[string]bool{
 	"default_source":           true,
 	"strict_fields_validation": true,
 	"now_date":                 true,
-	// Token optimization field
+	// Response format controls
 	"summary_only": true,
+	"raw_output":   true,
 	// Convenience filter aliases (resolved to query filters)
 	"applicationName":  true,
 	"namespace":        true,
@@ -230,6 +231,11 @@ func (t *QueryTool) InputSchema() interface{} {
 			"summary_only": map[string]interface{}{
 				"type":        "boolean",
 				"description": "If true, return only statistical summary (severity distribution, top apps, counts) without raw events. Reduces response tokens by ~90%. Default: false.",
+				"default":     false,
+			},
+			"raw_output": map[string]interface{}{
+				"type":        "boolean",
+				"description": "If true, return the full uncompacted log entries including the complete user_data JSON payload. Use when log messages contain structured JSON that you need to inspect. Default: false.",
 				"default":     false,
 			},
 			// Application filter with aliases
@@ -485,6 +491,11 @@ func (t *QueryTool) Execute(ctx context.Context, arguments map[string]interface{
 	summaryOnly, _ := GetBoolParam(arguments, "summary_only", false)
 	if summaryOnly {
 		return t.FormatCompactSummary(result, "query_logs")
+	}
+
+	rawOutput, _ := GetBoolParam(arguments, "raw_output", false)
+	if rawOutput {
+		return t.FormatResponseWithSummaryAndSuggestions(result, "raw query results", "query_logs")
 	}
 
 	return t.FormatResponseWithSummaryAndSuggestions(result, "query results", "query_logs")

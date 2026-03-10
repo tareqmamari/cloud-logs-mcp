@@ -142,6 +142,19 @@ func TestQueryTool_MissingRequiredQuery(t *testing.T) {
 	assert.Contains(t, err.Error(), "query", "error message should mention the missing parameter")
 }
 
+// TestQueryTool_RawOutputSchema verifies raw_output parameter is defined in the schema
+func TestQueryTool_RawOutputSchema(t *testing.T) {
+	tool := &QueryTool{}
+	schema := tool.InputSchema().(map[string]interface{})
+	props := schema["properties"].(map[string]interface{})
+
+	rawProp, ok := props["raw_output"].(map[string]interface{})
+	assert.True(t, ok, "raw_output property should exist in schema")
+	assert.Equal(t, "boolean", rawProp["type"])
+	assert.Equal(t, false, rawProp["default"])
+	assert.Contains(t, rawProp["description"].(string), "user_data")
+}
+
 // TestQueryTool_ValidFields verifies that validQueryFields contains all expected fields
 func TestQueryTool_ValidFields(t *testing.T) {
 	// API fields from OpenAPI spec
@@ -163,6 +176,12 @@ func TestQueryTool_ValidFields(t *testing.T) {
 	subsysAliases := []string{"subsystemName", "component", "resource", "subsystem", "module", "component_name", "subsystem_name", "resource_name"}
 	for _, alias := range subsysAliases {
 		assert.True(t, validQueryFields[alias], "Subsystem alias '%s' should be in validQueryFields", alias)
+	}
+
+	// Response format controls
+	formatFields := []string{"summary_only", "raw_output"}
+	for _, field := range formatFields {
+		assert.True(t, validQueryFields[field], "Format field '%s' should be in validQueryFields", field)
 	}
 
 	// Invalid fields should not be in the map

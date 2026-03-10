@@ -1304,6 +1304,8 @@ func formatLogsAsMarkdown(result map[string]interface{}, summary string) string 
 		}
 	}
 
+	sb.WriteString("\n---\n💡 Log entries are compacted to save tokens. To see the full JSON payload (including complete `user_data`), re-run with `raw_output: true`.\n")
+
 	return sb.String()
 }
 
@@ -1343,6 +1345,8 @@ func formatLogsAsMarkdownTruncated(result map[string]interface{}, summary string
 	if shownLogs < totalLogs {
 		fmt.Fprintf(&sb, "\n---\n⚠️ **Showing %d of %d log entries.** Use `summary_only: true` or add filters to reduce results.\n", shownLogs, totalLogs)
 	}
+
+	sb.WriteString("\n💡 Log entries are compacted to save tokens. To see the full JSON payload (including complete `user_data`), re-run with `raw_output: true`.\n")
 
 	return sb.String()
 }

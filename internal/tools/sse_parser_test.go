@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Realistic SSE data modeled after IBM Cloud Logs (cxint eu-gb instance) responses.
@@ -599,6 +601,111 @@ func TestParseSSEResponse_ResultWithoutResults(t *testing.T) {
 	if event["message"] != "direct result format" {
 		t.Errorf("message = %v", event["message"])
 	}
+}
+
+func TestCleanQueryResults_StripsUserData(t *testing.T) {
+	// Simulate what happens when raw_output is false (default):
+	// CleanQueryResults → transformLogEntry → extractUserData discards unknown fields
+	result := map[string]interface{}{
+		"events": []interface{}{
+			map[string]interface{}{
+				"applicationname": "my-app",
+				"subsystemname":   "worker",
+				"timestamp":       "2026-03-09T10:00:00Z",
+				"severity":        "3",
+				"user_data": map[string]interface{}{
+					"message":     "order processed",
+					"order_id":    "ORD-12345",
+					"amount":      99.99,
+					"items":       []interface{}{"widget-a", "widget-b"},
+					"customer":    map[string]interface{}{"id": "C-100", "tier": "premium"},
+					"level":       "INFO",
+					"trace_id":    "tr-abc",
+					"logger_name": "com.example.orders.OrderProcessor",
+				},
+			},
+		},
+	}
+
+	cleaned := CleanQueryResults(result)
+	logs := cleaned["logs"].([]interface{})
+	entry := logs[0].(map[string]interface{})
+
+	// Known fields should be extracted
+	assert.Equal(t, "order processed", entry["message"])
+	assert.Equal(t, "INFO", entry["level"])
+	assert.Equal(t, "tr-abc", entry["trace_id"])
+
+	// Custom fields from user_data are NOT preserved in compact mode
+	assert.Nil(t, entry["order_id"], "compact mode should not include custom user_data fields")
+	assert.Nil(t, entry["amount"], "compact mode should not include custom user_data fields")
+	assert.Nil(t, entry["items"], "compact mode should not include custom user_data fields")
+	assert.Nil(t, entry["customer"], "compact mode should not include custom user_data fields")
+}
+
+func TestRawOutput_PreservesFullUserData(t *testing.T) {
+	// When raw_output is true, CleanQueryResults is skipped entirely.
+	// The flattened events from the SSE parser should retain full user_data.
+	sseBody := `data: {"result":{"results":[{"labels":[{"key":"applicationname","value":"my-app"}],"metadata":[{"key":"timestamp","value":"2026-03-09T10:00:00Z"},{"key":"severity","value":"3"}],"user_data":"{\"message\":\"order processed\",\"order_id\":\"ORD-12345\",\"amount\":99.99,\"items\":[\"widget-a\",\"widget-b\"],\"customer\":{\"id\":\"C-100\",\"tier\":\"premium\"}}"}]}}`
+
+	result := parseSSEResponse([]byte(sseBody))
+	assert.NotNil(t, result)
+
+	events := result["events"].([]interface{})
+	assert.Len(t, events, 1)
+
+	entry := events[0].(map[string]interface{})
+
+	// In raw mode (no CleanQueryResults), user_data is a parsed map
+	ud, ok := entry["user_data"].(map[string]interface{})
+	assert.True(t, ok, "user_data should be a parsed map, not a string")
+	assert.Equal(t, "order processed", ud["message"])
+	assert.Equal(t, "ORD-12345", ud["order_id"])
+	assert.Equal(t, 99.99, ud["amount"])
+
+	items, ok := ud["items"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, items, 2)
+
+	customer, ok := ud["customer"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "C-100", customer["id"])
+	assert.Equal(t, "premium", customer["tier"])
+}
+
+func TestFormatLogsAsMarkdown_IncludesRawOutputHint(t *testing.T) {
+	result := map[string]interface{}{
+		"logs": []interface{}{
+			map[string]interface{}{
+				"time":     "2026-03-09T10:00:00Z",
+				"severity": "3",
+				"app":      "my-app",
+				"message":  "test log entry",
+			},
+		},
+	}
+
+	output := formatLogsAsMarkdown(result, "")
+	assert.Contains(t, output, "raw_output: true",
+		"compact log output should hint about raw_output for full JSON")
+	assert.Contains(t, output, "user_data")
+}
+
+func TestFormatLogsAsMarkdownTruncated_IncludesRawOutputHint(t *testing.T) {
+	result := map[string]interface{}{
+		"logs": []interface{}{
+			map[string]interface{}{
+				"time":     "2026-03-09T10:00:00Z",
+				"severity": "3",
+				"app":      "my-app",
+				"message":  "test log entry",
+			},
+		},
+	}
+
+	output := formatLogsAsMarkdownTruncated(result, "", 100000)
+	assert.Contains(t, output, "raw_output: true",
+		"truncated log output should hint about raw_output for full JSON")
 }
 
 // Benchmark the new parser against realistic payloads
