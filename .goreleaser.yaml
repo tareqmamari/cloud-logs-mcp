@@ -107,7 +107,15 @@ release:
 
     ### Installation
 
-    Download the appropriate archive for your platform below.
+    **Homebrew (recommended):**
+    ```bash
+    brew tap tareqmamari/tap
+    brew install logs-mcp-server
+    ```
+
+    **Or download a binary** from the assets below and add it to your `PATH`.
+
+    See the [README](https://github.com/tareqmamari/cloud-logs-mcp#installation) for full setup instructions including Claude Desktop configuration.
 
   footer: |
     ---
