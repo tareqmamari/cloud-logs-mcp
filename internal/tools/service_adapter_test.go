@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/service"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/service"
 )
 
 // TestMockLogsService verifies the mock service implementation

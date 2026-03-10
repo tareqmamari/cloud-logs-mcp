@@ -10,8 +10,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/metrics"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
 )
 
 // Registry holds all registered resources and their handlers

@@ -40,8 +40,8 @@ logs-mcp-server --version
 **Option 2: Build from Source**
 
 ```bash
-git clone https://github.com/tareqmamari/logs-mcp-server.git
-cd logs-mcp-server
+git clone https://github.com/tareqmamari/cloud-logs-mcp.git
+cd cloud-logs-mcp
 make deps && make build
 ```
 
@@ -403,7 +403,7 @@ make lint      # Run linters
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/tareqmamari/logs-mcp-server/issues)
+- **Issues**: [GitHub Issues](https://github.com/tareqmamari/cloud-logs-mcp/issues)
 - **IBM Cloud Logs Docs**: https://cloud.ibm.com/docs/cloud-logs
 - **IBM Cloud Logs API**: https://cloud.ibm.com/apidocs/logs-service-api
 

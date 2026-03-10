@@ -12,8 +12,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/metrics"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
 )
 
 var (

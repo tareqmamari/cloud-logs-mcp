@@ -12,7 +12,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 // AdvancedSuggestAlertTool generates SRE-grade alert recommendations

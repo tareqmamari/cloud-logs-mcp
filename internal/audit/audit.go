@@ -10,7 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/tracing"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
 
 // Entry represents a single audit log entry

@@ -13,10 +13,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/health"
-	"github.com/tareqmamari/logs-mcp-server/internal/server"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/health"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/server"
 )
 
 // mockAuthenticator implements server.Authenticator for testing.

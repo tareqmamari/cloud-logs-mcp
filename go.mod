@@ -1,4 +1,4 @@
-module github.com/tareqmamari/logs-mcp-server
+module github.com/tareqmamari/cloud-logs-mcp
 
 go 1.25.0
 

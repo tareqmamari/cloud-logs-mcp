@@ -212,6 +212,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace observability-c with tareqmamari in all references
 
 
-[v0.2.0]: https://github.com/tareqmamari/logs-mcp-server/compare/v0.1.0...v0.2.0
-[v0.1.0]: https://github.com/tareqmamari/logs-mcp-server/compare/v0.0.0...v0.1.0
-[v0.3.0]: https://github.com/tareqmamari/logs-mcp-server/compare/v0.3.0...v0.3.0
+[v0.2.0]: https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.1.0...v0.2.0
+[v0.1.0]: https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.0.0...v0.1.0
+[v0.3.0]: https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.3.0...v0.3.0

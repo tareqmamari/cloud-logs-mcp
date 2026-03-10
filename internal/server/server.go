@@ -10,14 +10,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/auth"
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/health"
-	"github.com/tareqmamari/logs-mcp-server/internal/metrics"
-	"github.com/tareqmamari/logs-mcp-server/internal/prompts"
-	"github.com/tareqmamari/logs-mcp-server/internal/resources"
-	"github.com/tareqmamari/logs-mcp-server/internal/tools"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/auth"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/health"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/prompts"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/resources"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/tools"
 )
 
 // Authenticator defines the authentication interface needed by the server.

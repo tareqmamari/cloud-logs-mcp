@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"go.uber.org/zap"
 )
 

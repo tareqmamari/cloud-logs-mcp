@@ -65,7 +65,7 @@ Tests successfully run against **production IBM Cloud Logs** (AU-SYD region):
     --- PASS: TestAlertsWithFilters/AlertWithApplicationFilter (0.89s)
 
 PASS - All 13 alert tests passing ✅
-ok  	github.com/tareqmamari/logs-mcp-server/tests/integration	18.548s
+ok  	github.com/tareqmamari/cloud-logs-mcp/tests/integration	18.548s
 ```
 
 ## 📊 Coverage Statistics

@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 // formatInstanceInfo returns a markdown section with IBM Cloud Logs instance information

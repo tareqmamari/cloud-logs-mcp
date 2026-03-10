@@ -96,7 +96,7 @@ go test -v -tags=integration ./tests/integration/ -run TestAlertsCRUD
     --- PASS: TestAlertsCRUD/UpdateAlert (1.15s)
     --- PASS: TestAlertsCRUD/DeleteAlert (0.58s)
 PASS
-ok      github.com/tareqmamari/logs-mcp-server/tests/integration    5.234s
+ok      github.com/tareqmamari/cloud-logs-mcp/tests/integration    5.234s
 ```
 
 ### Failed Test

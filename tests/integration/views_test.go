@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func safeGetID(t *testing.T, data map[string]interface{}) string {

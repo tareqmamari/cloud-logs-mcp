@@ -12,8 +12,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
 )
 
 // These tests require real IBM Cloud Logs credentials

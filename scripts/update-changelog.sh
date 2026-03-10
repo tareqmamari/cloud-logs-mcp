@@ -74,7 +74,7 @@ if [ -f "CHANGELOG.md" ]; then
     # Add compare link at the bottom if it doesn't exist
     if ! grep -q "\[${VERSION}\]:" CHANGELOG.md; then
         if [ -n "$PREV_TAG" ]; then
-            echo "[${VERSION}]: https://github.com/tareqmamari/logs-mcp-server/compare/${PREV_TAG}...${VERSION}" >> CHANGELOG.md
+            echo "[${VERSION}]: https://github.com/tareqmamari/cloud-logs-mcp/compare/${PREV_TAG}...${VERSION}" >> CHANGELOG.md
         fi
     fi
 

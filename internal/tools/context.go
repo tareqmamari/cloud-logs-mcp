@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 // contextKey is a custom type for context keys to avoid collisions.

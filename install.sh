@@ -2,7 +2,7 @@
 # IBM Cloud Logs MCP Server Installation Script
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/tareqmamari/logs-mcp-server/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tareqmamari/cloud-logs-mcp/main/install.sh | bash
 #   OR
 #   ./install.sh
 
@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO="tareqmamari/logs-mcp-server"
+REPO="tareqmamari/cloud-logs-mcp"
 BINARY_NAME="logs-mcp-server"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 

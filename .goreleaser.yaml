@@ -92,22 +92,6 @@ sboms:
     documents:
       - "${artifact}.sbom.json"
 
-
-# Docker images (optional - can be enabled if needed)
-# dockers:
-#   - image_templates:
-#       - "ghcr.io/tareqmamari/logs-mcp-server:{{ .Version }}-amd64"
-#       - "ghcr.io/tareqmamari/logs-mcp-server:latest-amd64"
-#     use: buildx
-#     goos: linux
-#     goarch: amd64
-#     build_flag_templates:
-#       - "--platform=linux/amd64"
-#       - "--label=org.opencontainers.image.created={{.Date}}"
-#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
-#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-#       - "--label=org.opencontainers.image.version={{.Version}}"
-
 # Release configuration
 release:
   github:
@@ -138,7 +122,7 @@ brews:
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: https://github.com/tareqmamari/logs-mcp-server
+    homepage: https://github.com/tareqmamari/cloud-logs-mcp
     description: "IBM Cloud Logs MCP Server - Model Context Protocol server for IBM Cloud Logs"
     license: "UNLICENSED"
     test: |
@@ -153,7 +137,7 @@ brews:
            export LOGS_SERVICE_URL='https://[instance-id].api.[region].logs.cloud.ibm.com'
         3. Configure in Claude Desktop
 
-      For more information, see: https://github.com/tareqmamari/logs-mcp-server
+      For more information, see: https://github.com/tareqmamari/cloud-logs-mcp
 
 # Announce release (optional)
 # announce:

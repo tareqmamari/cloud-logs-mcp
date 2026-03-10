@@ -31,8 +31,8 @@ import (
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/server"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/server"
 )
 
 // Build information - set at build time via ldflags

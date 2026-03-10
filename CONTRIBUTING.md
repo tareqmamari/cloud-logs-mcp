@@ -12,7 +12,7 @@ This project follows the IBM Code of Conduct. By participating, you are expected
 2. **Clone your fork**:
    ```bash
    git clone https://github.com/your-username/logs-mcp-server.git
-   cd logs-mcp-server
+   cd cloud-logs-mcp
    ```
 
 3. **Set up development environment**:

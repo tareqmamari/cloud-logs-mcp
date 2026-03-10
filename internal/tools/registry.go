@@ -4,7 +4,7 @@ package tools
 import (
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 // GetAllTools returns all available MCP tools organized by category.

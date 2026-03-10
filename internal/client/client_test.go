@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
 )
 
 // mockAuthenticator implements the Authenticator interface for testing

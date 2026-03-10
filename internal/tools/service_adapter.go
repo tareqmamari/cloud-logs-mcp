@@ -11,8 +11,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
-	"github.com/tareqmamari/logs-mcp-server/internal/service"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/service"
 )
 
 // ServiceProvider provides access to the LogsService interface.

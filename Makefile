@@ -441,7 +441,7 @@ docs: ## Generate documentation
 		go install golang.org/x/tools/cmd/godoc@latest; \
 	fi
 	@echo "Starting godoc server on :6060"
-	@echo "Visit http://localhost:6060/pkg/github.com/tareqmamari/logs-mcp-server/"
+	@echo "Visit http://localhost:6060/pkg/github.com/tareqmamari/cloud-logs-mcp/"
 	@$(shell go env GOPATH)/bin/godoc -http=:6060
 
 # API Update helpers

@@ -19,9 +19,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/auth"
-	"github.com/tareqmamari/logs-mcp-server/internal/config"
-	"github.com/tareqmamari/logs-mcp-server/internal/tracing"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/auth"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
 
 // Authenticator is the interface for adding authentication to requests

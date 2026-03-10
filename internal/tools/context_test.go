@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tareqmamari/logs-mcp-server/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func TestWithClientAndGetClientFromContext(t *testing.T) {
