@@ -6,6 +6,18 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.10.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.9.1...v0.10.0) (2026-03-10)
+
+
+### Features
+
+* **tools:** add raw_output param to expose full log payloads ([3938981](https://github.com/tareqmamari/cloud-logs-mcp/commit/3938981978b9fef10ea4a095613372b6c337ec2b))
+
+
+### Bug Fixes
+
+* **tools:** stop dumping raw JSON when using raw_output mode ([23ad487](https://github.com/tareqmamari/cloud-logs-mcp/commit/23ad487f5c620476068d03ae36a5d823d7fe3dcd))
+
 ## [0.9.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.9.0...v0.9.1) (2026-03-09)
 
 
