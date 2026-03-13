@@ -1,0 +1,788 @@
+{
+  "timestamp": "2026-03-12T13:15:27Z",
+  "tokenizer": "Claude (native)",
+  "mcp": {
+    "tool_count": 98,
+    "wire_payload_bytes": 71195,
+    "fixed_overhead_tokens": 18794,
+    "response_avg_tokens": 593,
+    "per_convo_tokens": 26224,
+    "tools": [
+      {
+        "name": "create_rule_group",
+        "total_wire_bytes": 5014,
+        "desc_bytes": 1257,
+        "schema_bytes": 3699
+      },
+      {
+        "name": "query_logs",
+        "total_wire_bytes": 4014,
+        "desc_bytes": 713,
+        "schema_bytes": 3149
+      },
+      {
+        "name": "build_query",
+        "total_wire_bytes": 3948,
+        "desc_bytes": 1078,
+        "schema_bytes": 2716
+      },
+      {
+        "name": "suggest_alert",
+        "total_wire_bytes": 3086,
+        "desc_bytes": 885,
+        "schema_bytes": 2147
+      },
+      {
+        "name": "create_e2m",
+        "total_wire_bytes": 2535,
+        "desc_bytes": 521,
+        "schema_bytes": 1963
+      },
+      {
+        "name": "create_policy",
+        "total_wire_bytes": 2133,
+        "desc_bytes": 511,
+        "schema_bytes": 1568
+      },
+      {
+        "name": "ingest_logs",
+        "total_wire_bytes": 2014,
+        "desc_bytes": 487,
+        "schema_bytes": 1391
+      },
+      {
+        "name": "session_context",
+        "total_wire_bytes": 2009,
+        "desc_bytes": 953,
+        "schema_bytes": 958
+      },
+      {
+        "name": "create_dashboard",
+        "total_wire_bytes": 1978,
+        "desc_bytes": 438,
+        "schema_bytes": 1483
+      },
+      {
+        "name": "investigate_incident",
+        "total_wire_bytes": 1782,
+        "desc_bytes": 790,
+        "schema_bytes": 820
+      },
+      {
+        "name": "create_enrichment",
+        "total_wire_bytes": 1696,
+        "desc_bytes": 479,
+        "schema_bytes": 1159
+      },
+      {
+        "name": "estimate_query_cost",
+        "total_wire_bytes": 1645,
+        "desc_bytes": 1135,
+        "schema_bytes": 340
+      },
+      {
+        "name": "create_data_access_rule",
+        "total_wire_bytes": 1508,
+        "desc_bytes": 428,
+        "schema_bytes": 1016
+      },
+      {
+        "name": "create_stream",
+        "total_wire_bytes": 1477,
+        "desc_bytes": 69,
+        "schema_bytes": 1354
+      },
+      {
+        "name": "create_alert_definition",
+        "total_wire_bytes": 1454,
+        "desc_bytes": 531,
+        "schema_bytes": 859
+      },
+      {
+        "name": "create_view",
+        "total_wire_bytes": 1381,
+        "desc_bytes": 396,
+        "schema_bytes": 933
+      },
+      {
+        "name": "discover_tools",
+        "total_wire_bytes": 1365,
+        "desc_bytes": 635,
+        "schema_bytes": 570
+      },
+      {
+        "name": "submit_background_query",
+        "total_wire_bytes": 1362,
+        "desc_bytes": 576,
+        "schema_bytes": 626
+      },
+      {
+        "name": "create_outgoing_webhook",
+        "total_wire_bytes": 1353,
+        "desc_bytes": 443,
+        "schema_bytes": 846
+      },
+      {
+        "name": "get_query_templates",
+        "total_wire_bytes": 1282,
+        "desc_bytes": 746,
+        "schema_bytes": 476
+      },
+      {
+        "name": "create_alert",
+        "total_wire_bytes": 1161,
+        "desc_bytes": 447,
+        "schema_bytes": 576
+      },
+      {
+        "name": "discover_log_fields",
+        "total_wire_bytes": 1038,
+        "desc_bytes": 468,
+        "schema_bytes": 510
+      },
+      {
+        "name": "update_stream",
+        "total_wire_bytes": 999,
+        "desc_bytes": 118,
+        "schema_bytes": 827
+      },
+      {
+        "name": "create_event_stream_target",
+        "total_wire_bytes": 976,
+        "desc_bytes": 82,
+        "schema_bytes": 827
+      },
+      {
+        "name": "test_rule_pattern",
+        "total_wire_bytes": 873,
+        "desc_bytes": 314,
+        "schema_bytes": 501
+      },
+      {
+        "name": "get_dataprime_reference",
+        "total_wire_bytes": 863,
+        "desc_bytes": 415,
+        "schema_bytes": 274
+      },
+      {
+        "name": "list_alerts",
+        "total_wire_bytes": 835,
+        "desc_bytes": 389,
+        "schema_bytes": 292
+      },
+      {
+        "name": "update_event_stream_target",
+        "total_wire_bytes": 813,
+        "desc_bytes": 54,
+        "schema_bytes": 692
+      },
+      {
+        "name": "health_check",
+        "total_wire_bytes": 749,
+        "desc_bytes": 427,
+        "schema_bytes": 166
+      },
+      {
+        "name": "get_audit_log",
+        "total_wire_bytes": 742,
+        "desc_bytes": 323,
+        "schema_bytes": 365
+      },
+      {
+        "name": "explain_query",
+        "total_wire_bytes": 717,
+        "desc_bytes": 367,
+        "schema_bytes": 296
+      },
+      {
+        "name": "validate_query",
+        "total_wire_bytes": 710,
+        "desc_bytes": 423,
+        "schema_bytes": 127
+      },
+      {
+        "name": "search_tools",
+        "total_wire_bytes": 683,
+        "desc_bytes": 133,
+        "schema_bytes": 394
+      },
+      {
+        "name": "update_dashboard",
+        "total_wire_bytes": 577,
+        "desc_bytes": 80,
+        "schema_bytes": 440
+      },
+      {
+        "name": "describe_tools",
+        "total_wire_bytes": 460,
+        "desc_bytes": 116,
+        "schema_bytes": 184
+      },
+      {
+        "name": "update_alert",
+        "total_wire_bytes": 420,
+        "desc_bytes": 44,
+        "schema_bytes": 216
+      },
+      {
+        "name": "update_dashboard_folder",
+        "total_wire_bytes": 402,
+        "desc_bytes": 37,
+        "schema_bytes": 301
+      },
+      {
+        "name": "move_dashboard_to_folder",
+        "total_wire_bytes": 385,
+        "desc_bytes": 63,
+        "schema_bytes": 257
+      },
+      {
+        "name": "get_background_query_data",
+        "total_wire_bytes": 383,
+        "desc_bytes": 54,
+        "schema_bytes": 147
+      },
+      {
+        "name": "cancel_background_query",
+        "total_wire_bytes": 373,
+        "desc_bytes": 35,
+        "schema_bytes": 157
+      },
+      {
+        "name": "delete_event_stream_target",
+        "total_wire_bytes": 373,
+        "desc_bytes": 31,
+        "schema_bytes": 155
+      },
+      {
+        "name": "get_background_query_status",
+        "total_wire_bytes": 373,
+        "desc_bytes": 40,
+        "schema_bytes": 147
+      },
+      {
+        "name": "delete_dashboard",
+        "total_wire_bytes": 365,
+        "desc_bytes": 40,
+        "schema_bytes": 158
+      },
+      {
+        "name": "delete_dashboard_folder",
+        "total_wire_bytes": 357,
+        "desc_bytes": 27,
+        "schema_bytes": 149
+      },
+      {
+        "name": "get_alert",
+        "total_wire_bytes": 331,
+        "desc_bytes": 57,
+        "schema_bytes": 124
+      },
+      {
+        "name": "delete_alert",
+        "total_wire_bytes": 330,
+        "desc_bytes": 37,
+        "schema_bytes": 134
+      },
+      {
+        "name": "create_dashboard_folder",
+        "total_wire_bytes": 328,
+        "desc_bytes": 57,
+        "schema_bytes": 207
+      },
+      {
+        "name": "delete_stream",
+        "total_wire_bytes": 327,
+        "desc_bytes": 17,
+        "schema_bytes": 149
+      },
+      {
+        "name": "update_rule_group",
+        "total_wire_bytes": 323,
+        "desc_bytes": 21,
+        "schema_bytes": 244
+      },
+      {
+        "name": "delete_alert_definition",
+        "total_wire_bytes": 318,
+        "desc_bytes": 28,
+        "schema_bytes": 109
+      },
+      {
+        "name": "delete_rule_group",
+        "total_wire_bytes": 303,
+        "desc_bytes": 21,
+        "schema_bytes": 113
+      },
+      {
+        "name": "update_data_usage_metrics_export_status",
+        "total_wire_bytes": 297,
+        "desc_bytes": 62,
+        "schema_bytes": 155
+      },
+      {
+        "name": "list_outgoing_webhooks",
+        "total_wire_bytes": 292,
+        "desc_bytes": 196,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_tool_categories",
+        "total_wire_bytes": 290,
+        "desc_bytes": 90,
+        "schema_bytes": 33
+      },
+      {
+        "name": "update_alert_definition",
+        "total_wire_bytes": 289,
+        "desc_bytes": 37,
+        "schema_bytes": 188
+      },
+      {
+        "name": "set_default_dashboard",
+        "total_wire_bytes": 288,
+        "desc_bytes": 60,
+        "schema_bytes": 166
+      },
+      {
+        "name": "delete_e2m",
+        "total_wire_bytes": 285,
+        "desc_bytes": 43,
+        "schema_bytes": 73
+      },
+      {
+        "name": "delete_outgoing_webhook",
+        "total_wire_bytes": 282,
+        "desc_bytes": 28,
+        "schema_bytes": 73
+      },
+      {
+        "name": "delete_data_access_rule",
+        "total_wire_bytes": 281,
+        "desc_bytes": 27,
+        "schema_bytes": 73
+      },
+      {
+        "name": "list_data_access_rules",
+        "total_wire_bytes": 270,
+        "desc_bytes": 174,
+        "schema_bytes": 33
+      },
+      {
+        "name": "delete_view_folder",
+        "total_wire_bytes": 266,
+        "desc_bytes": 22,
+        "schema_bytes": 73
+      },
+      {
+        "name": "delete_enrichment",
+        "total_wire_bytes": 264,
+        "desc_bytes": 22,
+        "schema_bytes": 73
+      },
+      {
+        "name": "update_enrichment",
+        "total_wire_bytes": 262,
+        "desc_bytes": 31,
+        "schema_bytes": 173
+      },
+      {
+        "name": "pin_dashboard",
+        "total_wire_bytes": 261,
+        "desc_bytes": 52,
+        "schema_bytes": 155
+      },
+      {
+        "name": "get_dashboard",
+        "total_wire_bytes": 254,
+        "desc_bytes": 52,
+        "schema_bytes": 148
+      },
+      {
+        "name": "delete_policy",
+        "total_wire_bytes": 251,
+        "desc_bytes": 17,
+        "schema_bytes": 73
+      },
+      {
+        "name": "get_dashboard_folder",
+        "total_wire_bytes": 250,
+        "desc_bytes": 50,
+        "schema_bytes": 139
+      },
+      {
+        "name": "unpin_dashboard",
+        "total_wire_bytes": 250,
+        "desc_bytes": 37,
+        "schema_bytes": 157
+      },
+      {
+        "name": "list_enrichments",
+        "total_wire_bytes": 247,
+        "desc_bytes": 157,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_rule_groups",
+        "total_wire_bytes": 245,
+        "desc_bytes": 155,
+        "schema_bytes": 33
+      },
+      {
+        "name": "delete_view",
+        "total_wire_bytes": 245,
+        "desc_bytes": 15,
+        "schema_bytes": 73
+      },
+      {
+        "name": "list_views",
+        "total_wire_bytes": 240,
+        "desc_bytes": 156,
+        "schema_bytes": 33
+      },
+      {
+        "name": "get_data_access_rule",
+        "total_wire_bytes": 235,
+        "desc_bytes": 39,
+        "schema_bytes": 135
+      },
+      {
+        "name": "list_e2m",
+        "total_wire_bytes": 230,
+        "desc_bytes": 148,
+        "schema_bytes": 33
+      },
+      {
+        "name": "get_stream",
+        "total_wire_bytes": 230,
+        "desc_bytes": 40,
+        "schema_bytes": 139
+      },
+      {
+        "name": "list_policies",
+        "total_wire_bytes": 226,
+        "desc_bytes": 139,
+        "schema_bytes": 33
+      },
+      {
+        "name": "get_alert_definition",
+        "total_wire_bytes": 218,
+        "desc_bytes": 48,
+        "schema_bytes": 109
+      },
+      {
+        "name": "update_outgoing_webhook",
+        "total_wire_bytes": 203,
+        "desc_bytes": 28,
+        "schema_bytes": 111
+      },
+      {
+        "name": "replace_e2m",
+        "total_wire_bytes": 199,
+        "desc_bytes": 44,
+        "schema_bytes": 103
+      },
+      {
+        "name": "update_data_access_rule",
+        "total_wire_bytes": 196,
+        "desc_bytes": 27,
+        "schema_bytes": 105
+      },
+      {
+        "name": "replace_view_folder",
+        "total_wire_bytes": 192,
+        "desc_bytes": 23,
+        "schema_bytes": 109
+      },
+      {
+        "name": "get_rule_group",
+        "total_wire_bytes": 182,
+        "desc_bytes": 24,
+        "schema_bytes": 103
+      },
+      {
+        "name": "update_policy",
+        "total_wire_bytes": 180,
+        "desc_bytes": 17,
+        "schema_bytes": 109
+      },
+      {
+        "name": "replace_view",
+        "total_wire_bytes": 174,
+        "desc_bytes": 16,
+        "schema_bytes": 105
+      },
+      {
+        "name": "get_event_stream_targets",
+        "total_wire_bytes": 171,
+        "desc_bytes": 73,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_dashboard_folders",
+        "total_wire_bytes": 168,
+        "desc_bytes": 72,
+        "schema_bytes": 33
+      },
+      {
+        "name": "get_e2m",
+        "total_wire_bytes": 167,
+        "desc_bytes": 46,
+        "schema_bytes": 73
+      },
+      {
+        "name": "create_view_folder",
+        "total_wire_bytes": 166,
+        "desc_bytes": 26,
+        "schema_bytes": 81
+      },
+      {
+        "name": "get_outgoing_webhook",
+        "total_wire_bytes": 165,
+        "desc_bytes": 31,
+        "schema_bytes": 73
+      },
+      {
+        "name": "get_view_folder",
+        "total_wire_bytes": 154,
+        "desc_bytes": 25,
+        "schema_bytes": 73
+      },
+      {
+        "name": "list_dashboards",
+        "total_wire_bytes": 150,
+        "desc_bytes": 61,
+        "schema_bytes": 33
+      },
+      {
+        "name": "export_data_usage",
+        "total_wire_bytes": 150,
+        "desc_bytes": 59,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_streams",
+        "total_wire_bytes": 147,
+        "desc_bytes": 61,
+        "schema_bytes": 33
+      },
+      {
+        "name": "get_policy",
+        "total_wire_bytes": 144,
+        "desc_bytes": 20,
+        "schema_bytes": 73
+      },
+      {
+        "name": "get_view",
+        "total_wire_bytes": 140,
+        "desc_bytes": 18,
+        "schema_bytes": 73
+      },
+      {
+        "name": "get_enrichments",
+        "total_wire_bytes": 139,
+        "desc_bytes": 50,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_alert_definitions",
+        "total_wire_bytes": 124,
+        "desc_bytes": 28,
+        "schema_bytes": 33
+      },
+      {
+        "name": "list_view_folders",
+        "total_wire_bytes": 114,
+        "desc_bytes": 23,
+        "schema_bytes": 33
+      }
+    ]
+  },
+  "skills": {
+    "skill_count": 8,
+    "total_files": 42,
+    "total_tokens": 98018,
+    "per_convo_tokens": 4608,
+    "skills": [
+      {
+        "name": "ibm-cloud-logs-access-control",
+        "short_name": "access-control",
+        "skill_md_tokens": 3081,
+        "skill_md_lines": 292,
+        "skill_md_bytes": 12071,
+        "references_tokens": 1649,
+        "references_count": 1,
+        "scripts_tokens": 0,
+        "scripts_count": 0,
+        "assets_tokens": 1110,
+        "assets_count": 1,
+        "total_tokens": 5840,
+        "total_bytes": 21780,
+        "total_files": 3
+      },
+      {
+        "name": "ibm-cloud-logs-alerting",
+        "short_name": "alerting",
+        "skill_md_tokens": 4745,
+        "skill_md_lines": 382,
+        "skill_md_bytes": 15612,
+        "references_tokens": 9287,
+        "references_count": 4,
+        "scripts_tokens": 1976,
+        "scripts_count": 1,
+        "assets_tokens": 1193,
+        "assets_count": 2,
+        "total_tokens": 17201,
+        "total_bytes": 56480,
+        "total_files": 8
+      },
+      {
+        "name": "ibm-cloud-logs-api-reference",
+        "short_name": "api-reference",
+        "skill_md_tokens": 5123,
+        "skill_md_lines": 422,
+        "skill_md_bytes": 16224,
+        "references_tokens": 3731,
+        "references_count": 2,
+        "scripts_tokens": 0,
+        "scripts_count": 0,
+        "assets_tokens": 3844,
+        "assets_count": 1,
+        "total_tokens": 12698,
+        "total_bytes": 38812,
+        "total_files": 4
+      },
+      {
+        "name": "ibm-cloud-logs-cost-optimization",
+        "short_name": "cost-optimization",
+        "skill_md_tokens": 3628,
+        "skill_md_lines": 286,
+        "skill_md_bytes": 12852,
+        "references_tokens": 3693,
+        "references_count": 2,
+        "scripts_tokens": 0,
+        "scripts_count": 0,
+        "assets_tokens": 1507,
+        "assets_count": 1,
+        "total_tokens": 8828,
+        "total_bytes": 30740,
+        "total_files": 4
+      },
+      {
+        "name": "ibm-cloud-logs-dashboards",
+        "short_name": "dashboards",
+        "skill_md_tokens": 2597,
+        "skill_md_lines": 230,
+        "skill_md_bytes": 8963,
+        "references_tokens": 4383,
+        "references_count": 2,
+        "scripts_tokens": 0,
+        "scripts_count": 0,
+        "assets_tokens": 4363,
+        "assets_count": 2,
+        "total_tokens": 11343,
+        "total_bytes": 40196,
+        "total_files": 5
+      },
+      {
+        "name": "ibm-cloud-logs-incident-investigation",
+        "short_name": "incident-investigation",
+        "skill_md_tokens": 3024,
+        "skill_md_lines": 243,
+        "skill_md_bytes": 12807,
+        "references_tokens": 5604,
+        "references_count": 3,
+        "scripts_tokens": 0,
+        "scripts_count": 0,
+        "assets_tokens": 1402,
+        "assets_count": 1,
+        "total_tokens": 10030,
+        "total_bytes": 39268,
+        "total_files": 5
+      },
+      {
+        "name": "ibm-cloud-logs-ingestion",
+        "short_name": "ingestion",
+        "skill_md_tokens": 3142,
+        "skill_md_lines": 310,
+        "skill_md_bytes": 10958,
+        "references_tokens": 3957,
+        "references_count": 3,
+        "scripts_tokens": 1338,
+        "scripts_count": 1,
+        "assets_tokens": 687,
+        "assets_count": 1,
+        "total_tokens": 9124,
+        "total_bytes": 30226,
+        "total_files": 6
+      },
+      {
+        "name": "ibm-cloud-logs-query",
+        "short_name": "query",
+        "skill_md_tokens": 3526,
+        "skill_md_lines": 268,
+        "skill_md_bytes": 10884,
+        "references_tokens": 12292,
+        "references_count": 4,
+        "scripts_tokens": 3254,
+        "scripts_count": 1,
+        "assets_tokens": 3882,
+        "assets_count": 1,
+        "total_tokens": 22954,
+        "total_bytes": 77519,
+        "total_files": 7
+      }
+    ]
+  },
+  "binary": {
+    "build_time_s": 0.883,
+    "build_success": true,
+    "binary_size_bytes": 27885960,
+    "binary_size_mb": 26.59,
+    "skills_list_avg_ms": 109.0,
+    "skills_list_p99_ms": 427.2,
+    "skills_install_avg_ms": 56.5
+  },
+  "real_tool_responses": [
+    {
+      "name": "build_query",
+      "text_bytes": 448,
+      "json_bytes": 499
+    },
+    {
+      "name": "validate_query",
+      "text_bytes": 248,
+      "json_bytes": 313
+    },
+    {
+      "name": "estimate_query_cost",
+      "text_bytes": 507,
+      "json_bytes": 569
+    },
+    {
+      "name": "search_tools",
+      "text_bytes": 658,
+      "json_bytes": 799
+    },
+    {
+      "name": "list_tool_categories",
+      "text_bytes": 2037,
+      "json_bytes": 2302
+    },
+    {
+      "name": "session_context",
+      "text_bytes": 19,
+      "json_bytes": 73
+    },
+    {
+      "name": "get_dataprime_reference",
+      "text_bytes": 549,
+      "json_bytes": 706
+    },
+    {
+      "name": "get_query_templates",
+      "text_bytes": 37,
+      "json_bytes": 91
+    }
+  ]
+}
