@@ -7,16 +7,24 @@
 [![License](https://img.shields.io/github/license/tareqmamari/cloud-logs-mcp)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/tareqmamari/cloud-logs-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/tareqmamari/cloud-logs-mcp)
 
-Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs instances.
+Model Context Protocol (MCP) server for IBM Cloud Logs, enabling AI assistants to interact with IBM Cloud Logs instances. Includes 8 portable Agent Skills for use with Claude Code, Cursor, Gemini CLI, GitHub Copilot, and 30+ other agents.
 
 ---
 
 ## Overview
 
-This MCP server provides comprehensive access to IBM Cloud Logs through 88 tools covering queries, alerts, dashboards, policies, webhooks, streams, and more.
+This project provides two complementary ways to work with IBM Cloud Logs through AI agents:
+
+| | MCP Server | Agent Skills |
+|---|---|---|
+| **What** | Running Go server with 88 tools via JSON-RPC | 8 portable instruction bundles (markdown + JSON) |
+| **When** | Real-time log queries, CRUD operations, live monitoring | Query writing, architecture guidance, offline reference |
+| **Requires** | Binary + API key + network | Nothing — loaded on-demand by your agent |
+| **Works with** | Claude Desktop, any MCP client | Claude Code, Cursor, Gemini CLI, GitHub Copilot, 30+ agents |
 
 **Key Features:**
 - Complete IBM Cloud Logs API coverage (88 tools)
+- 8 embedded Agent Skills following the [agentskills.io](https://agentskills.io) open standard
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
 - Configurable rate limiting
@@ -36,6 +44,8 @@ brew tap tareqmamari/tap
 brew install logs-mcp-server
 logs-mcp-server --version
 ```
+
+Agent Skills are automatically installed to `~/.agents/skills/` after Homebrew install.
 
 **Option 2: Build from Source**
 
@@ -259,6 +269,82 @@ The alerting engine implements recommendations from:
 
 ---
 
+## Agent Skills
+
+The binary embeds 8 Agent Skills following the [agentskills.io](https://agentskills.io) open standard. Skills are portable instruction bundles that work across 30+ AI agents — no runtime, authentication, or network required.
+
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `ibm-cloud-logs-query` | DataPrime and Lucene query writing, validation, and auto-correction |
+| `ibm-cloud-logs-alerting` | SRE-grade alerting with RED/USE methodologies and burn rate math |
+| `ibm-cloud-logs-incident-investigation` | Systematic incident investigation with heuristic pattern matching |
+| `ibm-cloud-logs-dashboards` | Dashboard design with DataPrime-powered widgets |
+| `ibm-cloud-logs-cost-optimization` | TCO policies, data tier selection, and Events-to-Metrics |
+| `ibm-cloud-logs-ingestion` | Log ingestion, parsing rules, and enrichments |
+| `ibm-cloud-logs-access-control` | Data access rules, audit logging, and compliance patterns |
+| `ibm-cloud-logs-api-reference` | Full API reference for all 88 tool endpoints |
+
+### Installing Skills
+
+Skills are embedded in the binary. Use the `skills` subcommand to manage them.
+
+```bash
+# Install to ~/.agents/skills/ (user-level, available to all projects)
+logs-mcp-server skills install
+
+# Install to ./.agents/skills/ (project-level, current project only)
+logs-mcp-server skills install --project
+
+# List all available skills
+logs-mcp-server skills list
+
+# Remove installed skills
+logs-mcp-server skills remove
+```
+
+If you installed via Homebrew, skills are automatically installed to `~/.agents/skills/` on first install.
+
+### How Skills Work
+
+Skills use a **progressive disclosure** model to minimize context window usage:
+
+1. **Catalog** (~200 tokens) — your agent sees skill names and descriptions
+2. **SKILL.md** (~300 lines) — loaded on-demand when a skill activates
+3. **References** — detailed docs loaded only when deeper information is needed
+
+This means skills consume **~2K tokens on-demand** compared to the MCP server's **~25K fixed overhead** per conversation. See [BENCHMARK.md](BENCHMARK.md) for a detailed comparison.
+
+### Compatible Agents
+
+Skills work with any agent that can read markdown files from `~/.agents/skills/` or `./.agents/skills/`:
+
+- **Claude Code** — auto-discovers skills from `~/.agents/skills/`
+- **Cursor** — reads project-level `.agents/skills/`
+- **Gemini CLI** — reads `~/.agents/skills/`
+- **GitHub Copilot** — reads project-level skills
+- **Bob, Windsurf, Cline, Aider** — and 20+ more via the agentskills.io standard
+
+### When to Use Skills vs MCP
+
+| Scenario | Use |
+|----------|-----|
+| Query real-time logs | MCP |
+| Write a DataPrime query (no execution) | Skills |
+| Create or manage alerts | MCP |
+| Design an alerting strategy | Skills |
+| Debug a live production incident | MCP |
+| Learn investigation methodology | Skills |
+| Set up dashboards | MCP |
+| Plan dashboard layout and queries | Skills |
+| Offline query/config guidance (no execution) | Skills |
+| Any CRUD operation on IBM Cloud Logs | MCP |
+
+For maximum effectiveness, use both together — skills provide the domain knowledge, MCP executes the actions.
+
+---
+
 ## Usage Examples
 
 ```
@@ -328,12 +414,22 @@ Configure multiple IBM Cloud Logs instances:
 
 ## Security
 
-**Best Practices:**
+**MCP Server Best Practices:**
 - Use environment variables for API keys (never hardcode)
 - Use service IDs instead of personal API keys for production
 - Enable TLS verification (`LOGS_TLS_VERIFY=true`)
 - Rotate API keys regularly (recommended: 90 days)
 - Apply principle of least privilege (Viewer/Operator roles)
+- Use data access rules to restrict log visibility by team or role
+- Enable audit logging (`LOG_LEVEL=debug`) for compliance tracking
+
+**Agent Skills Security:**
+- Skills contain no credentials, tokens, or connection strings
+- Embedded in the binary via `go:embed` — immutable after build
+- Zero network attack surface — no API calls, no data access
+- The `ibm-cloud-logs-access-control` skill includes security query templates (auth failures, privilege escalation, sensitive data access) and compliance patterns (GDPR, SOC 2, multi-tenant isolation)
+
+See [BENCHMARK.md](BENCHMARK.md#7-security-analysis) for a detailed MCP vs Skills security comparison.
 
 **See [SECURITY.md](SECURITY.md)** for comprehensive security guidance.
 
@@ -357,12 +453,23 @@ make lint      # Run linters
 ### Project Structure
 
 ```
-├── main.go                    # Entry point
+├── main.go                    # Entry point with skills subcommand
+├── embed_skills.go            # Embeds .agents/skills/ into binary
+├── .agents/skills/            # 8 Agent Skills (agentskills.io format)
+│   ├── ibm-cloud-logs-query/         # DataPrime query writing & validation
+│   ├── ibm-cloud-logs-alerting/      # SRE-grade alerting with burn rate math
+│   ├── ibm-cloud-logs-incident-investigation/
+│   ├── ibm-cloud-logs-dashboards/
+│   ├── ibm-cloud-logs-cost-optimization/
+│   ├── ibm-cloud-logs-ingestion/
+│   ├── ibm-cloud-logs-access-control/
+│   └── ibm-cloud-logs-api-reference/
 ├── internal/
 │   ├── auth/                  # IBM Cloud IAM authentication
 │   ├── client/                # HTTP client with retry/rate limiting
 │   ├── config/                # Configuration management
-│   ├── tools/                 # MCP tool implementations (70+ tools)
+│   ├── tools/                 # MCP tool implementations (88 tools)
+│   ├── skills/                # Skill installer
 │   ├── server/                # MCP server
 │   ├── health/                # Health checks
 │   └── metrics/               # Metrics tracking
