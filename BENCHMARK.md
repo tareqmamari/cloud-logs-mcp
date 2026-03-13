@@ -13,17 +13,19 @@
 |--------|---------------:|------------------:|------:|
 | Fixed context overhead | 18,794 tokens | 0 tokens | — |
 | Per-conversation cost (typical) | ~26,224 tokens | ~4,608 tokens | 5.7x |
-| **3-scenario total (measured)** | **69,382 tokens** | **48,990 tokens** | **1.4x** |
+| 3-scenario total (happy-path) | 69,382 tokens | 48,990 tokens | 1.4x |
+| **3-scenario total (realistic)** | **71,382 tokens** | **71,190 tokens** | **~1.0x** |
 | Domain knowledge available | 98 tool definitions | 98,018 tokens across 8 skills | — |
 | Wire payload size | 71,195 bytes (69.5 KB) | N/A | — |
 | Avg tool response size | 593 tokens | N/A (in-context) | — |
 | Binary size impact | — | +335,021 bytes embedded | — |
 
-**Key finding:** Across 3 real-world scenarios (incident investigation, cost optimization,
-monitoring setup) with live IBM Cloud Logs data, Skills + CLI consumed **48,990 tokens**
-vs MCP's **69,382 tokens** — **29% fewer tokens overall**. Skills wins for aggregation-heavy
-workflows. MCP wins when server-side summarization avoids raw log token blast (4.2x more
-efficient for raw log investigation). See [Section 7](#7-real-world-scenario-benchmark-measured).
+**Key finding:** On the happy path, Skills + CLI consumed **48,990 tokens** vs MCP's
+**69,382 tokens** (29% less). But factoring in real-world iteration costs (query retries,
+CLI flag discovery, tier misses, SSE parsing), Skills rises to **71,190 tokens** — nearly
+identical to MCP's **71,382 tokens**. Skills pays a **45% iteration tax**; MCP pays only
+**3%** because it handles retries, auth, and formatting server-side. MCP is also **4x
+faster** (53s vs 213s). See [Section 7](#7-real-world-scenario-benchmark-measured).
 
 ---
 
@@ -282,27 +284,75 @@ Discover patterns → create alert with burn rate → create webhook → build d
 | Tool responses (6) | 3,650 | query_logs, suggest_alert, create_alert, webhook, dashboard, pin |
 | **Total** | **22,444** | Fixed overhead + 6 tool calls |
 
-### When MCP Wins Despite Higher Fixed Cost
+### Realistic Cost: The Iteration Tax
 
-MCP's `investigate_incident` tool is uniquely efficient for incident investigation because it:
+The happy-path numbers above assume every query is correct on the first try, every CLI flag
+is known, and every response is parsed cleanly. In practice, Skills + CLI workflows involve
+**trial-and-error loops** that MCP avoids entirely because it handles queries, auth, tier
+selection, and response formatting server-side.
+
+**Iteration cost sources (observed during testing):**
+
+| Cost Source | Tokens per Occurrence | Typical Frequency |
+|-------------|----------------------:|:-----------------:|
+| DataPrime syntax retry (AND→&&, =→==, quotes) | ~1,000 | 1-3 per scenario |
+| CLI flag discovery (--prototype, no dashboard CLI) | ~1,000 | 1-2 per scenario |
+| Tier miss (frequent_search empty → retry archive) | ~1,200 | 0-1 per scenario |
+| SSE response format parsing | ~500 | First query only |
+| Auth setup (IAM token exchange) | ~400 | Once per session |
+| Agent reasoning per step | ~200 | Every step |
+| Response data extraction per query | ~300 | Every query |
+
+**With iteration costs included:**
+
+| Scenario | Skills (happy) | Skills (realistic) | MCP | Winner |
+|----------|---------------:|-------------------:|----:|--------|
+| 1: Incident Investigation | 18,053 | 27,253 (+51%) | 25,244 | **MCP** |
+| 2: Cost Optimization | 13,669 | 18,269 (+34%) | 23,094 | **Skills** |
+| 3: Monitoring Setup | 17,268 | 25,668 (+49%) | 23,044 | **MCP** |
+| **Total** | **48,990** | **71,190** (+45%) | **71,382** | **Tied** |
+
+Skills iteration overhead: **+22,200 tokens** (45% of happy-path).
+MCP iteration overhead: **+2,000 tokens** (3% of happy-path).
+
+### Time Cost
+
+Skills workflows take **4x longer** due to sequential query execution and retry loops:
+
+| Scenario | Skills Time | MCP Time | Skills Steps | MCP Steps |
+|----------|:----------:|:--------:|:-----------:|:---------:|
+| 1: Incident Investigation | ~82s | ~27s | 14 | 7 |
+| 2: Cost Optimization | ~51s | ~14s | 9 | 7 |
+| 3: Monitoring Setup | ~80s | ~12s | 13 | 6 |
+| **Total** | **~213s** | **~53s** | **36** | **20** |
+
+MCP's compound tools (`investigate_incident`, `suggest_alert`) execute multiple queries
+in a single server-side call, avoiding per-query LLM reasoning and network round-trips.
+
+### Why MCP Wins for Investigation
+
+MCP's `investigate_incident` tool is uniquely efficient because it:
 1. Executes 4-7 queries **server-side** (zero token cost for intermediate results)
 2. Applies heuristic pattern matching server-side
 3. Returns only a summarized report (~3K tokens vs ~80K for raw query results)
+4. Handles auth, tier selection, and retry logic internally (zero iteration tax)
 
 If a Skills-based agent fetches raw logs, MCP is **4.2x more efficient**.
-If it uses only aggregation queries, Skills is **27% more efficient**.
+If it uses only aggregation queries with zero retries, Skills is **27% more efficient**.
+With realistic retries factored in, they are **roughly equivalent** on tokens.
 
 ### Data-Driven Decision Matrix
 
 | Scenario Type | Recommended | Why |
 |---------------|:-----------:|-----|
-| Incident investigation (raw logs) | **MCP** | Server-side summarization avoids 80K+ token blast |
-| Incident investigation (agg-only) | **Skills** | 27% fewer tokens with aggregation queries |
-| Cost/policy analysis | **Skills** | Small responses, no 18,794 token overhead |
-| Monitoring setup | **Skills** | Config generation is knowledge-heavy, data-light |
+| Incident investigation | **MCP** | Server-side summarization + zero iteration tax |
+| Cost/policy analysis | **Skills** | Aggregation queries, still wins with retries |
+| Monitoring setup (execution) | **MCP** | Dashboard/alert creation needs API, fewer retries |
+| Monitoring setup (planning) | **Skills** | Architecture guidance needs no execution |
 | Query writing (no execution) | **Skills** | Zero data needed, pure syntax knowledge |
 | Live debugging with raw logs | **MCP** | `summary_only` flag reduces token blast |
 | Architecture/design guidance | **Skills** | Zero overhead, pure knowledge |
+| **Hybrid (plan + execute)** | **Both** | Skills for design, MCP for execution |
 
 ---
 
