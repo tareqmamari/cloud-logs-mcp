@@ -1,0 +1,96 @@
+{
+  "description": "DataPrime queries for IBM Cloud Logs cost and volume analysis. Use with query_logs or submit_background_query tools.",
+  "note": "For DataPrime syntax reference, see ../ibm-cloud-logs-query/SKILL.md",
+  "queries": [
+    {
+      "id": "volume-by-application",
+      "name": "Log Volume by Application",
+      "description": "Identify top applications by log count over the last 24 hours",
+      "query": "source logs | groupby $l.applicationname aggregate count() as log_count | orderby log_count desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "medium",
+      "use_case": "Find which applications generate the most logs to prioritize TCO policy creation"
+    },
+    {
+      "id": "volume-by-subsystem",
+      "name": "Log Volume by Subsystem",
+      "description": "Identify top subsystems by log count",
+      "query": "source logs | groupby $l.subsystemname aggregate count() as log_count | orderby log_count desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "medium",
+      "use_case": "Find noisy subsystems that could be dropped or archived"
+    },
+    {
+      "id": "volume-by-severity",
+      "name": "Log Volume by Severity",
+      "description": "Distribution of logs across severity levels",
+      "query": "source logs | groupby $m.severity aggregate count() as log_count | orderby log_count desc",
+      "recommended_time_range": "24h",
+      "cost_estimate": "medium",
+      "use_case": "Determine if debug/info logs dominate volume -- candidates for dropping or archiving"
+    },
+    {
+      "id": "volume-by-app-and-severity",
+      "name": "Log Volume by Application and Severity",
+      "description": "Cross-reference applications with severity to find optimization targets",
+      "query": "source logs | groupby $l.applicationname, $m.severity aggregate count() as log_count | orderby log_count desc | limit 50",
+      "recommended_time_range": "24h",
+      "cost_estimate": "high",
+      "use_case": "Identify applications producing high volumes of low-severity logs"
+    },
+    {
+      "id": "volume-by-app-and-subsystem",
+      "name": "Log Volume by Application and Subsystem",
+      "description": "Detailed breakdown of log sources for precise TCO policy targeting",
+      "query": "source logs | groupby $l.applicationname, $l.subsystemname aggregate count() as log_count | orderby log_count desc | limit 50",
+      "recommended_time_range": "24h",
+      "cost_estimate": "high",
+      "use_case": "Pinpoint exact application-subsystem pairs for policy rules"
+    },
+    {
+      "id": "debug-log-volume",
+      "name": "Debug Log Volume Assessment",
+      "description": "Measure debug/verbose log volume that could be dropped",
+      "query": "source logs | filter $m.severity == 'debug' || $m.severity == 'verbose' | groupby $l.applicationname aggregate count() as debug_count | orderby debug_count desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "medium",
+      "use_case": "Quantify savings from dropping debug logs via type_low TCO policy"
+    },
+    {
+      "id": "health-check-volume",
+      "name": "Health Check Log Volume",
+      "description": "Estimate volume from health check endpoints that could be dropped",
+      "query": "source logs | filter $d.message ~= /health|healthcheck|health-check|readiness|liveness|ping/ | groupby $l.applicationname aggregate count() as health_count | orderby health_count desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "medium",
+      "use_case": "Quantify savings from dropping health check logs"
+    },
+    {
+      "id": "hourly-ingestion-trend",
+      "name": "Hourly Ingestion Trend",
+      "description": "Track log ingestion volume over time to identify peaks and patterns",
+      "query": "source logs | groupby $m.timestamp.truncate(1h) as hour aggregate count() as log_count | orderby hour asc",
+      "recommended_time_range": "7d",
+      "cost_estimate": "high",
+      "use_case": "Identify ingestion patterns for capacity planning and burst management"
+    },
+    {
+      "id": "error-ratio-by-app",
+      "name": "Error Ratio by Application",
+      "description": "Calculate the error-to-total log ratio per application",
+      "query": "source logs | groupby $l.applicationname aggregate count() as total, countif($m.severity == 'error' || $m.severity == 'critical') as errors | create error_ratio from errors / total * 100 | orderby total desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "high",
+      "use_case": "Applications with low error ratios and high volume are good candidates for archiving info/debug logs"
+    },
+    {
+      "id": "e2m-candidate-detection",
+      "name": "E2M Candidate Detection",
+      "description": "Find high-volume log patterns that repeat with consistent structure -- ideal for E2M conversion",
+      "query": "source logs | filter $m.severity == 'info' | groupby $l.applicationname, $l.subsystemname aggregate count() as log_count | filter log_count > 10000 | orderby log_count desc | limit 20",
+      "recommended_time_range": "24h",
+      "cost_estimate": "high",
+      "use_case": "Identify high-volume info-level log streams that could be converted to metrics via E2M"
+    }
+  ]
+}

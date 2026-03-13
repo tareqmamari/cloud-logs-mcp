@@ -1,0 +1,173 @@
+{
+  "name": "my-service - Incident Analysis",
+  "description": "Auto-generated incident analysis dashboard for: High error rate in my-service",
+  "folder_id": null,
+  "layout": {
+    "sections": [
+      {
+        "id": { "value": "main" },
+        "rows": [
+          {
+            "id": { "value": "row-0" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget_0" },
+                "title": "Error Rate Over Time",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "legend": {
+                      "is_visible": true,
+                      "group_by_query": true
+                    },
+                    "tooltip": {
+                      "show_labels": false,
+                      "type": "all"
+                    },
+                    "stacked_line": "unspecified",
+                    "query_definitions": [
+                      {
+                        "id": "qd-error-rate",
+                        "is_visible": true,
+                        "name": "ErrorRate",
+                        "color_scheme": "classic",
+                        "data_mode_type": "high_unspecified",
+                        "scale_type": "linear",
+                        "unit": "unspecified",
+                        "series_count_limit": "20",
+                        "resolution": {
+                          "buckets_presented": 96
+                        },
+                        "query": {
+                          "logs": {
+                            "dataprime_query": {
+                              "text": "source logs\n| filter $m.severity >= 5 && ($l.applicationname == 'my-service')\n| groupby roundTime($m.timestamp, 1m) as time_bucket\n| aggregate count() as errors"
+                            },
+                            "filters": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget_1" },
+                "title": "Errors by Service",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "pie_chart": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $m.severity >= 5 && ($l.applicationname == 'my-service')\n| groupby $l.applicationname\n| calculate count() as errors"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-1" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget_2" },
+                "title": "Latency Distribution",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "legend": {
+                      "is_visible": true,
+                      "group_by_query": true
+                    },
+                    "tooltip": {
+                      "show_labels": false,
+                      "type": "all"
+                    },
+                    "stacked_line": "unspecified",
+                    "query_definitions": [
+                      {
+                        "id": "qd-latency",
+                        "is_visible": true,
+                        "name": "Latency",
+                        "color_scheme": "classic",
+                        "data_mode_type": "high_unspecified",
+                        "scale_type": "linear",
+                        "unit": "unspecified",
+                        "series_count_limit": "20",
+                        "resolution": {
+                          "buckets_presented": 96
+                        },
+                        "query": {
+                          "logs": {
+                            "dataprime_query": {
+                              "text": "source logs\n| filter $d.duration_ms.exists() && ($l.applicationname == 'my-service')\n| groupby roundTime($m.timestamp, 1m) as time_bucket\n| aggregate\n    avg($d.duration_ms) as avg_latency,\n    percentile($d.duration_ms, 95) as p95,\n    percentile($d.duration_ms, 99) as p99"
+                            },
+                            "filters": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget_3" },
+                "title": "Top Error Messages",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "data_table": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $m.severity >= 5 && ($l.applicationname == 'my-service')\n| groupby $d.message\n| calculate count() as occurrences\n| sortby -occurrences\n| limit 10"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-2" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget_4" },
+                "title": "Errors by Subsystem",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "bar_chart": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $m.severity >= 5 && ($l.applicationname == 'my-service')\n| groupby $l.subsystemname\n| calculate count() as errors\n| sortby -errors\n| limit 10"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "variables": [],
+  "filters": [],
+  "time_frame": {
+    "relative": "last_1_hour"
+  }
+}

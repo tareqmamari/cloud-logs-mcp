@@ -1,0 +1,284 @@
+{
+  "name": "Service Health - RED Metrics",
+  "description": "Rate, Error, Duration monitoring dashboard for production services. Uses the RED method for service-level observability.",
+  "folder_id": null,
+  "layout": {
+    "sections": [
+      {
+        "id": { "value": "overview" },
+        "rows": [
+          {
+            "id": { "value": "row-header" },
+            "appearance": { "height": 8 },
+            "widgets": [
+              {
+                "id": { "value": "widget-info" },
+                "title": "Dashboard Info",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "markdown": {
+                    "markdown_text": "## Service Health (RED)\nMonitors **Rate** (throughput), **Errors** (failure count), and **Duration** (latency) for the selected service.\n\nUse the `$p.service_name` variable to filter by service."
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-gauges" },
+            "appearance": { "height": 12 },
+            "widgets": [
+              {
+                "id": { "value": "widget-total-requests" },
+                "title": "Total Requests",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "gauge": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $l.applicationname == $p.service_name\n| aggregate count() as total_requests"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget-total-errors" },
+                "title": "Total Errors",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "gauge": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $m.severity >= 5 && $l.applicationname == $p.service_name\n| aggregate count() as total_errors"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget-avg-latency" },
+                "title": "Avg Latency (ms)",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "gauge": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $d.duration_ms.exists() && $l.applicationname == $p.service_name\n| aggregate avg($d.duration_ms) as avg_latency_ms"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": { "value": "charts" },
+        "rows": [
+          {
+            "id": { "value": "row-rate" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget-rate" },
+                "title": "Rate - Request Volume Over Time",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "legend": {
+                      "is_visible": true,
+                      "group_by_query": true
+                    },
+                    "tooltip": {
+                      "show_labels": false,
+                      "type": "all"
+                    },
+                    "stacked_line": "unspecified",
+                    "query_definitions": [
+                      {
+                        "id": "qd-rate",
+                        "is_visible": true,
+                        "name": "RequestRate",
+                        "color_scheme": "classic",
+                        "data_mode_type": "high_unspecified",
+                        "scale_type": "linear",
+                        "unit": "unspecified",
+                        "series_count_limit": "20",
+                        "resolution": {
+                          "buckets_presented": 96
+                        },
+                        "query": {
+                          "logs": {
+                            "dataprime_query": {
+                              "text": "source logs\n| filter $l.applicationname == $p.service_name\n| groupby roundTime($m.timestamp, 1m) as time_bucket\n| aggregate count() as request_rate"
+                            },
+                            "filters": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-errors" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget-errors" },
+                "title": "Errors - Error Count Over Time",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "legend": {
+                      "is_visible": true,
+                      "group_by_query": true
+                    },
+                    "tooltip": {
+                      "show_labels": false,
+                      "type": "all"
+                    },
+                    "stacked_line": "unspecified",
+                    "query_definitions": [
+                      {
+                        "id": "qd-errors",
+                        "is_visible": true,
+                        "name": "ErrorCount",
+                        "color_scheme": "classic",
+                        "data_mode_type": "high_unspecified",
+                        "scale_type": "linear",
+                        "unit": "unspecified",
+                        "series_count_limit": "20",
+                        "resolution": {
+                          "buckets_presented": 96
+                        },
+                        "query": {
+                          "logs": {
+                            "dataprime_query": {
+                              "text": "source logs\n| filter $m.severity >= 5 && $l.applicationname == $p.service_name\n| groupby roundTime($m.timestamp, 1m) as time_bucket\n| aggregate count() as error_count"
+                            },
+                            "filters": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget-error-breakdown" },
+                "title": "Error Breakdown by Subsystem",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "pie_chart": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $m.severity >= 5 && $l.applicationname == $p.service_name\n| groupby $l.subsystemname\n| calculate count() as errors"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-duration" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "widget-duration" },
+                "title": "Duration - Latency Percentiles Over Time",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "legend": {
+                      "is_visible": true,
+                      "group_by_query": true
+                    },
+                    "tooltip": {
+                      "show_labels": false,
+                      "type": "all"
+                    },
+                    "stacked_line": "unspecified",
+                    "query_definitions": [
+                      {
+                        "id": "qd-duration",
+                        "is_visible": true,
+                        "name": "LatencyPercentiles",
+                        "color_scheme": "classic",
+                        "data_mode_type": "high_unspecified",
+                        "scale_type": "linear",
+                        "unit": "unspecified",
+                        "series_count_limit": "20",
+                        "resolution": {
+                          "buckets_presented": 96
+                        },
+                        "query": {
+                          "logs": {
+                            "dataprime_query": {
+                              "text": "source logs\n| filter $d.duration_ms.exists() && $l.applicationname == $p.service_name\n| groupby roundTime($m.timestamp, 1m) as time_bucket\n| aggregate\n    avg($d.duration_ms) as avg_ms,\n    percentile($d.duration_ms, 50) as p50,\n    percentile($d.duration_ms, 95) as p95,\n    percentile($d.duration_ms, 99) as p99"
+                            },
+                            "filters": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": { "value": "widget-slow-requests" },
+                "title": "Slowest Requests",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "data_table": {
+                    "data_mode_type": "high_unspecified",
+                    "query": {
+                      "logs": {
+                        "dataprime_query": {
+                          "text": "source logs\n| filter $d.duration_ms.exists() && $l.applicationname == $p.service_name\n| sortby -$d.duration_ms\n| limit 10"
+                        },
+                        "filters": []
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "variables": [
+    {
+      "name": "service_name",
+      "display_name": "Service",
+      "type": "query",
+      "query": "source logs | groupby $l.applicationname | limit 50"
+    }
+  ],
+  "filters": [],
+  "time_frame": {
+    "relative": "last_1_hour"
+  }
+}

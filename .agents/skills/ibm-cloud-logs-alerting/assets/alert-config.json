@@ -1,0 +1,69 @@
+{
+  "name": "<alert_name>",
+  "description": "<description>",
+  "enabled": true,
+  "type": "logs_threshold",
+  "logs_threshold": {
+    "condition_type": "more_than_or_unspecified",
+    "logs_filter": {
+      "simple_filter": {
+        "lucene_query": "<lucene_filter>"
+      }
+    },
+    "rules": [
+      {
+        "condition": {
+          "threshold": 100,
+          "time_window": {
+            "logs_time_window_specific_value": "minutes_10"
+          }
+        },
+        "override": {
+          "priority": "p2"
+        }
+      }
+    ]
+  },
+  "incidents_settings": {
+    "minutes": 10,
+    "notify_on": "triggered_only_unspecified"
+  },
+  "_comments": {
+    "alert_types": [
+      "logs_immediate_or_unspecified",
+      "logs_threshold",
+      "logs_anomaly",
+      "logs_ratio_threshold",
+      "logs_new_value",
+      "logs_unique_count",
+      "logs_time_relative_threshold"
+    ],
+    "priority_values": ["p1", "p2", "p3", "p4", "p5_or_unspecified"],
+    "priority_mapping": {
+      "p1": "Page on-call immediately",
+      "p2": "Create ticket, investigate soon",
+      "p3": "Informational, review in next cycle",
+      "p4": "Low priority",
+      "p5_or_unspecified": "Unspecified / phantom"
+    },
+    "condition_types": ["more_than_or_unspecified", "less_than"],
+    "time_window_values": [
+      "minutes_1", "minutes_2", "minutes_5", "minutes_10",
+      "minutes_15", "minutes_20", "minutes_30",
+      "hours_1", "hours_2", "hours_4", "hours_6",
+      "hours_12", "hours_24"
+    ],
+    "notify_on_values": [
+      "triggered_only_unspecified",
+      "triggered_and_resolved"
+    ],
+    "notes": [
+      "Replace <alert_name> with your alert name",
+      "Replace <description> with what the alert monitors",
+      "Replace <lucene_filter> with a Lucene query (e.g., subsystemname:api AND severity:error)",
+      "Do NOT set top-level 'priority' when rules have 'override.priority'",
+      "Adjust threshold, time_window, and condition_type as needed",
+      "Remove this _comments block before deploying"
+    ]
+  }
+}

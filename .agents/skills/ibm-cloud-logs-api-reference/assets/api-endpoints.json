@@ -1,0 +1,217 @@
+{
+  "version": "1.0",
+  "description": "IBM Cloud Logs API endpoint catalog",
+  "base_urls": {
+    "management": "https://{instance-id}.api.{region}.logs.cloud.ibm.com",
+    "ingress": "https://{instance-id}.ingress.{region}.logs.cloud.ibm.com"
+  },
+  "categories": {
+    "query": {
+      "description": "Log querying and analysis",
+      "endpoints": [
+        { "method": "POST", "path": "/v1/query", "tool": "query_logs", "notes": "SSE streaming response" },
+        { "method": "POST", "path": "/v1/background_query", "tool": "submit_background_query", "notes": "Returns query ID" },
+        { "method": "GET", "path": "/v1/background_query/{id}/status", "tool": "get_background_query_status" },
+        { "method": "GET", "path": "/v1/background_query/{id}/data", "tool": "get_background_query_data" },
+        { "method": "DELETE", "path": "/v1/background_query/{id}", "tool": "cancel_background_query" }
+      ],
+      "local_tools": ["build_query", "get_dataprime_reference"]
+    },
+    "alerts": {
+      "description": "Alert instance management",
+      "base_path": "/v1/alerts",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/alerts", "tool": "list_alerts" },
+        { "method": "GET", "path": "/v1/alerts/{id}", "tool": "get_alert" },
+        { "method": "POST", "path": "/v1/alerts", "tool": "create_alert" },
+        { "method": "PUT", "path": "/v1/alerts/{id}", "tool": "update_alert" },
+        { "method": "DELETE", "path": "/v1/alerts/{id}", "tool": "delete_alert" }
+      ]
+    },
+    "alert_definitions": {
+      "description": "Alert definition templates",
+      "base_path": "/v1/alert_definitions",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/alert_definitions", "tool": "list_alert_definitions" },
+        { "method": "GET", "path": "/v1/alert_definitions/{id}", "tool": "get_alert_definition" },
+        { "method": "POST", "path": "/v1/alert_definitions", "tool": "create_alert_definition" },
+        { "method": "PUT", "path": "/v1/alert_definitions/{id}", "tool": "update_alert_definition" },
+        { "method": "DELETE", "path": "/v1/alert_definitions/{id}", "tool": "delete_alert_definition" }
+      ]
+    },
+    "dashboards": {
+      "description": "Dashboard management",
+      "base_path": "/v1/dashboards",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/dashboards", "tool": "list_dashboards" },
+        { "method": "GET", "path": "/v1/dashboards/{id}", "tool": "get_dashboard" },
+        { "method": "POST", "path": "/v1/dashboards", "tool": "create_dashboard" },
+        { "method": "PUT", "path": "/v1/dashboards/{id}", "tool": "update_dashboard" },
+        { "method": "DELETE", "path": "/v1/dashboards/{id}", "tool": "delete_dashboard" }
+      ]
+    },
+    "dashboard_folders": {
+      "description": "Dashboard folder and organization management",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/dashboard_folders", "tool": "list_dashboard_folders" },
+        { "method": "GET", "path": "/v1/dashboard_folders/{id}", "tool": "get_dashboard_folder" },
+        { "method": "POST", "path": "/v1/dashboard_folders", "tool": "create_dashboard_folder" },
+        { "method": "PUT", "path": "/v1/dashboard_folders/{id}", "tool": "update_dashboard_folder" },
+        { "method": "DELETE", "path": "/v1/dashboard_folders/{id}", "tool": "delete_dashboard_folder" },
+        { "method": "PUT", "path": "/v1/dashboards/{id}", "tool": "move_dashboard_to_folder", "notes": "Updates folder field" },
+        { "method": "PUT", "path": "/v1/dashboards/{id}/pinned", "tool": "pin_dashboard" },
+        { "method": "DELETE", "path": "/v1/dashboards/{id}/pinned", "tool": "unpin_dashboard" },
+        { "method": "PUT", "path": "/v1/dashboards/{id}/default", "tool": "set_default_dashboard" }
+      ]
+    },
+    "rule_groups": {
+      "description": "Log parsing and transformation rules",
+      "base_path": "/v1/rule_groups",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/rule_groups", "tool": "list_rule_groups" },
+        { "method": "GET", "path": "/v1/rule_groups/{id}", "tool": "get_rule_group" },
+        { "method": "POST", "path": "/v1/rule_groups", "tool": "create_rule_group" },
+        { "method": "PUT", "path": "/v1/rule_groups/{id}", "tool": "update_rule_group" },
+        { "method": "DELETE", "path": "/v1/rule_groups/{id}", "tool": "delete_rule_group" }
+      ]
+    },
+    "rule_helpers": {
+      "description": "Rule development helpers",
+      "endpoints": [
+        { "method": "POST", "path": "--", "tool": "discover_log_fields", "notes": "Discovers available log fields" },
+        { "method": "POST", "path": "--", "tool": "test_rule_group", "notes": "Tests rule group against sample data" }
+      ]
+    },
+    "outgoing_webhooks": {
+      "description": "Alert notification webhooks",
+      "base_path": "/v1/outgoing_webhooks",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/outgoing_webhooks", "tool": "list_outgoing_webhooks" },
+        { "method": "GET", "path": "/v1/outgoing_webhooks/{id}", "tool": "get_outgoing_webhook" },
+        { "method": "POST", "path": "/v1/outgoing_webhooks", "tool": "create_outgoing_webhook" },
+        { "method": "PUT", "path": "/v1/outgoing_webhooks/{id}", "tool": "update_outgoing_webhook" },
+        { "method": "DELETE", "path": "/v1/outgoing_webhooks/{id}", "tool": "delete_outgoing_webhook" }
+      ]
+    },
+    "policies": {
+      "description": "Retention and routing policies",
+      "base_path": "/v1/policies",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/policies", "tool": "list_policies" },
+        { "method": "GET", "path": "/v1/policies/{id}", "tool": "get_policy" },
+        { "method": "POST", "path": "/v1/policies", "tool": "create_policy" },
+        { "method": "PUT", "path": "/v1/policies/{id}", "tool": "update_policy" },
+        { "method": "DELETE", "path": "/v1/policies/{id}", "tool": "delete_policy" }
+      ]
+    },
+    "events2metrics": {
+      "description": "Events to metrics conversion (replace semantics)",
+      "base_path": "/v1/events2metrics",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/events2metrics", "tool": "list_e2m" },
+        { "method": "GET", "path": "/v1/events2metrics/{id}", "tool": "get_e2m" },
+        { "method": "POST", "path": "/v1/events2metrics", "tool": "create_e2m" },
+        { "method": "PUT", "path": "/v1/events2metrics/{id}", "tool": "replace_e2m" },
+        { "method": "DELETE", "path": "/v1/events2metrics/{id}", "tool": "delete_e2m" }
+      ]
+    },
+    "data_access_rules": {
+      "description": "Log data access control",
+      "base_path": "/v1/data_access_rules",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/data_access_rules", "tool": "list_data_access_rules" },
+        { "method": "GET", "path": "/v1/data_access_rules/{id}", "tool": "get_data_access_rule" },
+        { "method": "POST", "path": "/v1/data_access_rules", "tool": "create_data_access_rule" },
+        { "method": "PUT", "path": "/v1/data_access_rules/{id}", "tool": "update_data_access_rule" },
+        { "method": "DELETE", "path": "/v1/data_access_rules/{id}", "tool": "delete_data_access_rule" }
+      ]
+    },
+    "enrichments": {
+      "description": "Log enrichment rules",
+      "base_path": "/v1/enrichments",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/enrichments", "tool": "list_enrichments" },
+        { "method": "GET", "path": "/v1/enrichments/{id}", "tool": "get_enrichments" },
+        { "method": "POST", "path": "/v1/enrichments", "tool": "create_enrichment" },
+        { "method": "PUT", "path": "/v1/enrichments/{id}", "tool": "update_enrichment" },
+        { "method": "DELETE", "path": "/v1/enrichments/{id}", "tool": "delete_enrichment" }
+      ]
+    },
+    "views": {
+      "description": "Saved query views (replace semantics)",
+      "base_path": "/v1/views",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/views", "tool": "list_views" },
+        { "method": "GET", "path": "/v1/views/{id}", "tool": "get_view" },
+        { "method": "POST", "path": "/v1/views", "tool": "create_view" },
+        { "method": "PUT", "path": "/v1/views/{id}", "tool": "replace_view" },
+        { "method": "DELETE", "path": "/v1/views/{id}", "tool": "delete_view" }
+      ]
+    },
+    "view_folders": {
+      "description": "View folder organization (replace semantics)",
+      "base_path": "/v1/view_folders",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/view_folders", "tool": "list_view_folders" },
+        { "method": "GET", "path": "/v1/view_folders/{id}", "tool": "get_view_folder" },
+        { "method": "POST", "path": "/v1/view_folders", "tool": "create_view_folder" },
+        { "method": "PUT", "path": "/v1/view_folders/{id}", "tool": "replace_view_folder" },
+        { "method": "DELETE", "path": "/v1/view_folders/{id}", "tool": "delete_view_folder" }
+      ]
+    },
+    "streams": {
+      "description": "Data streaming configuration",
+      "base_path": "/v1/streams",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/streams", "tool": "list_streams" },
+        { "method": "GET", "path": "/v1/streams/{id}", "tool": "get_stream" },
+        { "method": "POST", "path": "/v1/streams", "tool": "create_stream" },
+        { "method": "PUT", "path": "/v1/streams/{id}", "tool": "update_stream" },
+        { "method": "DELETE", "path": "/v1/streams/{id}", "tool": "delete_stream" }
+      ]
+    },
+    "data_usage": {
+      "description": "Usage metrics and export",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/data_usage", "tool": "export_data_usage" },
+        { "method": "PUT", "path": "/v1/data_usage/metrics_export", "tool": "update_data_usage_metrics_export_status" }
+      ]
+    },
+    "event_stream_targets": {
+      "description": "Event stream target configuration",
+      "base_path": "/v1/event_stream_targets",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/event_stream_targets", "tool": "get_event_stream_targets" },
+        { "method": "POST", "path": "/v1/event_stream_targets", "tool": "create_event_stream_target" },
+        { "method": "PUT", "path": "/v1/event_stream_targets/{id}", "tool": "update_event_stream_target" },
+        { "method": "DELETE", "path": "/v1/event_stream_targets/{id}", "tool": "delete_event_stream_target" }
+      ]
+    },
+    "ingestion": {
+      "description": "Log ingestion (uses ingress host)",
+      "endpoints": [
+        { "method": "POST", "path": "/logs/v1/singles", "tool": "ingest_logs", "host": "ingress" }
+      ]
+    },
+    "ai_helpers": {
+      "description": "AI-powered analysis tools (local computation)",
+      "local_tools": ["explain_query", "suggest_alert", "get_audit_log"]
+    },
+    "query_intelligence": {
+      "description": "Query building assistance (local computation)",
+      "local_tools": ["get_query_templates", "validate_query", "estimate_query_cost"]
+    },
+    "workflow_automation": {
+      "description": "Automated investigation workflows (multi-query)",
+      "local_tools": ["investigate_incident", "health_check"]
+    },
+    "meta": {
+      "description": "Tool discovery and session management (local)",
+      "local_tools": ["discover_tools", "session_context", "search_tools", "describe_tools", "list_tool_categories"]
+    }
+  },
+  "cost_levels": ["free", "low", "medium", "high", "very_high"],
+  "execution_speeds": ["instant", "fast", "medium", "slow", "async"],
+  "rate_limit_impacts": ["none", "minimal", "moderate", "high", "burst"],
+  "impact_levels": ["none", "low", "medium", "high", "critical"]
+}

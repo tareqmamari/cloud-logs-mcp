@@ -1,0 +1,76 @@
+[
+  {
+    "applicationName": "api-gateway",
+    "subsystemName": "auth",
+    "severity": 5,
+    "timestamp": 1699564800.123456789,
+    "text": "Authentication failed for user john@example.com",
+    "json": {
+      "user_id": "12345",
+      "ip_address": "192.168.1.100",
+      "error_code": "AUTH_FAILED"
+    }
+  },
+  {
+    "applicationName": "api-gateway",
+    "subsystemName": "auth",
+    "severity": 3,
+    "text": "User login successful",
+    "json": {
+      "user_id": "67890",
+      "ip_address": "10.0.0.50",
+      "session_id": "sess-abc-123"
+    }
+  },
+  {
+    "applicationName": "payment-processor",
+    "subsystemName": "transactions",
+    "severity": 6,
+    "timestamp": 1699564801.987654321,
+    "text": "Payment processing timeout exceeded 30s threshold",
+    "json": {
+      "transaction_id": "txn-2024-001",
+      "amount": 149.99,
+      "currency": "USD",
+      "error_code": "PAYMENT_TIMEOUT",
+      "gateway": "stripe"
+    }
+  },
+  {
+    "applicationName": "user-service",
+    "subsystemName": "profile",
+    "severity": 4,
+    "text": "Deprecated API endpoint called: /v1/users/profile",
+    "json": {
+      "endpoint": "/v1/users/profile",
+      "replacement": "/v2/users/profile",
+      "caller_ip": "172.16.0.45"
+    }
+  },
+  {
+    "applicationName": "ingestion-test",
+    "subsystemName": "smoke-test",
+    "severity": 1,
+    "text": "Debug: full request payload captured for troubleshooting",
+    "json": {
+      "test_id": "test-debug-001",
+      "environment": "development",
+      "headers": {
+        "content-type": "application/json",
+        "x-request-id": "req-abc-456"
+      }
+    }
+  },
+  {
+    "applicationName": "ingestion-test",
+    "subsystemName": "smoke-test",
+    "severity": 2,
+    "text": "Verbose: connection pool stats - active=12, idle=3, max=20",
+    "json": {
+      "test_id": "test-verbose-001",
+      "pool_active": 12,
+      "pool_idle": 3,
+      "pool_max": 20
+    }
+  }
+]

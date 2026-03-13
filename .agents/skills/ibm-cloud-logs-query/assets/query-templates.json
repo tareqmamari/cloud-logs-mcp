@@ -1,0 +1,310 @@
+{
+  "version": "1.0",
+  "description": "IBM Cloud Logs DataPrime query templates for common log analysis scenarios",
+  "templates": [
+    {
+      "name": "error_hotspots",
+      "category": "discovery",
+      "description": "Find which services have the most errors - start investigations here",
+      "query": "source logs | filter $m.severity >= ERROR | groupby $l.applicationname, $l.subsystemname | aggregate count() as error_count | orderby -error_count | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Start incident investigation without prior knowledge",
+        "Identify the source of problems",
+        "Prioritize which service to investigate first"
+      ]
+    },
+    {
+      "name": "anomaly_detection",
+      "category": "discovery",
+      "description": "Find services with unusually high error rates",
+      "query": "source logs | filter $m.severity >= ERROR | groupby $l.applicationname | aggregate count() as error_count | filter error_count > 10 | orderby -error_count | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Detect services behaving abnormally",
+        "Find issues even in low-traffic services",
+        "Identify degradation before it becomes critical"
+      ]
+    },
+    {
+      "name": "top_error_messages",
+      "category": "discovery",
+      "description": "Group similar errors to find the most common problems",
+      "query": "source logs | filter $m.severity >= ERROR | groupby $d.message:string | aggregate count() as occurrences, min($m.timestamp) as first_seen, max($m.timestamp) as last_seen | filter occurrences >= 3 | orderby -occurrences | limit 30",
+      "parameters": [],
+      "use_cases": [
+        "Find the most impactful errors",
+        "Identify systemic issues vs one-offs",
+        "Prioritize fixes by impact"
+      ]
+    },
+    {
+      "name": "noise_filtered_errors",
+      "category": "discovery",
+      "description": "Error analysis excluding health checks and known noise",
+      "query": "source logs | filter $m.severity >= ERROR && !$d.message:string.toLowerCase().contains('health') && !$d.message:string.toLowerCase().contains('ping') && !$d.message:string.toLowerCase().contains('heartbeat') && !$d.message:string.toLowerCase().contains('metrics') | groupby $l.applicationname | aggregate count() as errors | orderby -errors | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Find real errors without health check noise",
+        "Cleaner investigation starting point",
+        "Focus on application errors only"
+      ]
+    },
+    {
+      "name": "traffic_overview",
+      "category": "discovery",
+      "description": "See overall traffic patterns by service",
+      "query": "source logs | groupby $l.applicationname | aggregate count() as volume, approx_count_distinct($l.subsystemname) as components | orderby -volume | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Understand system topology",
+        "Find unexpected traffic patterns",
+        "Identify services to investigate"
+      ]
+    },
+    {
+      "name": "recent_changes",
+      "category": "discovery",
+      "description": "Detect recent deployments or restarts that might explain issues",
+      "query": "source logs | filter $d.message:string.contains('start') || $d.message:string.contains('deploy') || $d.message:string.contains('version') || $d.message:string.contains('initializ') || $d.message:string.contains('shutdown') | groupby $l.applicationname | aggregate count() as events, min($m.timestamp) as earliest, max($m.timestamp) as latest | filter events >= 2 | orderby -latest | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Correlate issues with recent changes",
+        "Find which services were recently deployed",
+        "Identify crash loops or restarts"
+      ]
+    },
+    {
+      "name": "error_spike",
+      "category": "error",
+      "description": "Find error spikes in the last hour grouped by application",
+      "query": "source logs | filter $m.severity >= ERROR | groupby $l.applicationname | aggregate count() as error_count | orderby -error_count | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Identify which applications are producing the most errors",
+        "Quick triage during incidents",
+        "Prioritize debugging efforts"
+      ]
+    },
+    {
+      "name": "error_details",
+      "category": "error",
+      "description": "Get detailed error logs for a specific application",
+      "query": "source logs | filter $l.applicationname == '{APPLICATION}' && $m.severity >= ERROR | choose $m.timestamp, $m.severity, $l.subsystemname, $d.message, $d.error, $d.stack_trace | orderby $m.timestamp desc | limit 100",
+      "parameters": [
+        {
+          "name": "APPLICATION",
+          "description": "Application name to investigate",
+          "placeholder": "{APPLICATION}",
+          "example": "payment-service",
+          "required": true
+        }
+      ],
+      "use_cases": [
+        "Deep dive into errors for a specific service",
+        "Find error messages and stack traces",
+        "Identify error patterns"
+      ]
+    },
+    {
+      "name": "error_timeline",
+      "category": "error",
+      "description": "Error rate over time for trend analysis",
+      "query": "source logs | filter $m.severity >= ERROR | groupby roundTime($m.timestamp, 1m) as time_bucket | aggregate count() as errors | orderby time_bucket",
+      "parameters": [],
+      "use_cases": [
+        "Visualize error trends over time",
+        "Identify when errors started",
+        "Correlate with deployments or changes"
+      ]
+    },
+    {
+      "name": "slow_requests",
+      "category": "performance",
+      "description": "Find slow requests with response time above threshold",
+      "query": "source logs | filter $d.response_time_ms > 1000 | choose $m.timestamp, $l.applicationname, $d.endpoint, $d.response_time_ms, $d.status_code | orderby -$d.response_time_ms | limit 50",
+      "parameters": [
+        {
+          "name": "threshold_ms",
+          "description": "Response time threshold in milliseconds",
+          "placeholder": "1000",
+          "example": "500",
+          "required": false
+        }
+      ],
+      "use_cases": [
+        "Identify performance bottlenecks",
+        "Find slowest endpoints",
+        "SLA compliance checking"
+      ]
+    },
+    {
+      "name": "latency_percentiles",
+      "category": "performance",
+      "description": "Calculate latency percentiles by endpoint",
+      "query": "source logs | filter $d.response_time_ms > 0 | groupby $d.endpoint | aggregate percentile($d.response_time_ms, 50) as p50, percentile($d.response_time_ms, 95) as p95, percentile($d.response_time_ms, 99) as p99, count() as requests | orderby -requests | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Understand latency distribution",
+        "Set realistic SLO targets",
+        "Identify outlier endpoints"
+      ]
+    },
+    {
+      "name": "throughput_analysis",
+      "category": "performance",
+      "description": "Request throughput over time by application",
+      "query": "source logs | filter $d.request_id != '' | groupby roundTime($m.timestamp, 1m) as time_bucket, $l.applicationname | aggregate count() as requests | orderby time_bucket",
+      "parameters": [],
+      "use_cases": [
+        "Monitor traffic patterns",
+        "Capacity planning",
+        "Detect traffic anomalies"
+      ]
+    },
+    {
+      "name": "auth_failures",
+      "category": "security",
+      "description": "Find authentication failures grouped by source",
+      "query": "source logs | filter $d.event_type == 'auth_failure' || $d.message:string.contains('authentication failed') || $d.message:string.contains('invalid credentials') | groupby $d.source_ip, $d.username | aggregate count() as failures | filter failures > 3 | orderby -failures",
+      "parameters": [],
+      "use_cases": [
+        "Detect brute force attempts",
+        "Identify compromised accounts",
+        "Security incident investigation"
+      ]
+    },
+    {
+      "name": "privilege_escalation",
+      "category": "security",
+      "description": "Detect privilege escalation attempts",
+      "query": "source logs | filter $d.event_type:string.contains('privilege') || $d.message:string.contains('sudo') || $d.message:string.contains('root access') || $d.message:string.contains('admin') | choose $m.timestamp, $l.applicationname, $d.username, $d.action, $d.message | orderby $m.timestamp desc | limit 100",
+      "parameters": [],
+      "use_cases": [
+        "Detect unauthorized privilege changes",
+        "Audit admin actions",
+        "Compliance reporting"
+      ]
+    },
+    {
+      "name": "sensitive_data_access",
+      "category": "security",
+      "description": "Track access to sensitive resources",
+      "query": "source logs | filter $d.resource:string.contains('pii') || $d.resource:string.contains('secrets') || $d.resource:string.contains('credentials') || $d.endpoint:string.contains('/admin') | choose $m.timestamp, $d.username, $d.resource, $d.action, $d.source_ip | orderby $m.timestamp desc | limit 100",
+      "parameters": [],
+      "use_cases": [
+        "PII access auditing",
+        "Secrets management monitoring",
+        "Compliance evidence gathering"
+      ]
+    },
+    {
+      "name": "service_health",
+      "category": "health",
+      "description": "Overall health summary by service",
+      "query": "source logs | filter $m.severity >= ERROR | groupby $l.applicationname | aggregate count() as error_count | orderby -error_count | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Quick health overview",
+        "Identify troubled services",
+        "SRE dashboards"
+      ]
+    },
+    {
+      "name": "heartbeat_check",
+      "category": "health",
+      "description": "Verify services are logging (heartbeat)",
+      "query": "source logs | groupby $l.applicationname | aggregate max($m.timestamp) as last_seen, count() as log_count | orderby last_seen",
+      "parameters": [],
+      "use_cases": [
+        "Detect silent failures",
+        "Verify logging is working",
+        "Find stale services"
+      ]
+    },
+    {
+      "name": "restart_detection",
+      "category": "health",
+      "description": "Detect service restarts and crashes",
+      "query": "source logs | filter $d.message:string.contains('starting') || $d.message:string.contains('started') || $d.message:string.contains('shutdown') || $d.message:string.contains('terminated') || $d.message:string.contains('OOMKilled') | choose $m.timestamp, $l.applicationname, $l.subsystemname, $d.message | orderby $m.timestamp desc | limit 50",
+      "parameters": [],
+      "use_cases": [
+        "Detect crash loops",
+        "Track deployment rollouts",
+        "Investigate instability"
+      ]
+    },
+    {
+      "name": "top_endpoints",
+      "category": "usage",
+      "description": "Most frequently called endpoints",
+      "query": "source logs | filter $d.endpoint != '' | groupby $d.endpoint | aggregate count() as calls, avg($d.response_time_ms) as avg_latency | orderby -calls | limit 20",
+      "parameters": [],
+      "use_cases": [
+        "Identify hot endpoints",
+        "Capacity planning",
+        "Cost allocation"
+      ]
+    },
+    {
+      "name": "user_activity",
+      "category": "usage",
+      "description": "User activity summary",
+      "query": "source logs | filter $d.user_id != '' | groupby $d.user_id | aggregate count() as actions, approx_count_distinct($d.endpoint) as unique_endpoints | orderby -actions | limit 50",
+      "parameters": [],
+      "use_cases": [
+        "Identify power users",
+        "Detect anomalous behavior",
+        "User engagement metrics"
+      ]
+    },
+    {
+      "name": "data_volume",
+      "category": "usage",
+      "description": "Log volume by application over time",
+      "query": "source logs | groupby roundTime($m.timestamp, 1h) as time_bucket, $l.applicationname | aggregate count() as logs | orderby time_bucket",
+      "parameters": [],
+      "use_cases": [
+        "Cost monitoring",
+        "Capacity planning",
+        "Detect logging anomalies"
+      ]
+    },
+    {
+      "name": "config_changes",
+      "category": "audit",
+      "description": "Track configuration changes",
+      "query": "source logs | filter $d.event_type:string.contains('config') || $d.message:string.contains('configuration changed') || $d.message:string.contains('settings updated') | choose $m.timestamp, $d.username, $d.resource, $d.old_value, $d.new_value, $d.message | orderby $m.timestamp desc | limit 100",
+      "parameters": [],
+      "use_cases": [
+        "Change management audit",
+        "Troubleshoot config-related issues",
+        "Compliance evidence"
+      ]
+    },
+    {
+      "name": "data_exports",
+      "category": "audit",
+      "description": "Track data export activities",
+      "query": "source logs | filter $d.action:string.contains('export') || $d.action:string.contains('download') || $d.message:string.contains('exported') | choose $m.timestamp, $d.username, $d.resource, $d.record_count, $d.destination | orderby $m.timestamp desc | limit 100",
+      "parameters": [],
+      "use_cases": [
+        "Data loss prevention",
+        "Compliance auditing",
+        "Detect data exfiltration"
+      ]
+    },
+    {
+      "name": "api_key_usage",
+      "category": "audit",
+      "description": "Track API key usage patterns",
+      "query": "source logs | filter $d.api_key_id != '' || $d.auth_type == 'api_key' | groupby $d.api_key_id, $l.applicationname | aggregate count() as calls, approx_count_distinct($d.source_ip) as unique_ips | orderby -calls | limit 50",
+      "parameters": [],
+      "use_cases": [
+        "API key auditing",
+        "Detect key sharing/abuse",
+        "Key rotation planning"
+      ]
+    }
+  ]
+}

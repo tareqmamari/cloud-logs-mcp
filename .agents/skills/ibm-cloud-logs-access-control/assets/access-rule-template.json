@@ -1,0 +1,135 @@
+{
+  "examples": [
+    {
+      "name": "Team-Scoped Access",
+      "description": "Restrict a team to see only their own application logs",
+      "rule": {
+        "display_name": "Production Team Access",
+        "description": "Restrict access to production logs only",
+        "filters": [
+          {
+            "entity_type": "logs",
+            "expression": "applicationName.startsWith('production')"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PII Exclusion",
+      "description": "Filter out logs from services that handle personal data",
+      "rule": {
+        "display_name": "Non-PII Access",
+        "description": "Filter out logs containing PII data",
+        "default_expression": "NOT subsystemName:'pii-service'"
+      }
+    },
+    {
+      "name": "Multi-Tenant Isolation",
+      "description": "Isolate logs for a specific tenant in a multi-tenant environment",
+      "rule": {
+        "display_name": "Tenant-A Logs Only",
+        "description": "Restrict visibility to Tenant A application logs",
+        "filters": [
+          {
+            "entity_type": "logs",
+            "expression": "applicationName.startsWith('tenant-a-')"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Environment Scoping",
+      "description": "Limit access to a specific environment (dev, staging, prod)",
+      "rule": {
+        "display_name": "Staging Environment Only",
+        "description": "Restrict access to staging environment logs",
+        "filters": [
+          {
+            "entity_type": "logs",
+            "expression": "applicationName.contains('staging') OR subsystemName.contains('staging')"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Service Subset Access",
+      "description": "Grant access to a specific set of services",
+      "rule": {
+        "display_name": "Frontend Team Access",
+        "description": "Access limited to frontend-related services",
+        "filters": [
+          {
+            "entity_type": "logs",
+            "expression": "applicationName:'frontend' OR applicationName:'api-gateway' OR applicationName:'cdn'"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Sensitive System Exclusion",
+      "description": "Exclude internal audit and security system logs from general access",
+      "rule": {
+        "display_name": "General Access (No Internal Audit)",
+        "description": "Exclude internal audit trail and security system logs",
+        "default_expression": "NOT subsystemName:'internal-audit' AND NOT applicationName:'security-scanner'"
+      }
+    }
+  ],
+  "schema": {
+    "rule": {
+      "display_name": {
+        "type": "string",
+        "required": true,
+        "description": "Human-readable name for the access rule"
+      },
+      "description": {
+        "type": "string",
+        "required": false,
+        "description": "Explanation of the rule's purpose"
+      },
+      "default_expression": {
+        "type": "string",
+        "required": false,
+        "description": "Default filter expression applied to all users"
+      },
+      "filters": {
+        "type": "array",
+        "required": false,
+        "description": "Array of filter configurations",
+        "items": {
+          "entity_type": {
+            "type": "string",
+            "description": "Entity type to filter (typically 'logs')"
+          },
+          "expression": {
+            "type": "string",
+            "description": "Filter expression using log field syntax"
+          }
+        }
+      }
+    }
+  },
+  "api": {
+    "create": {
+      "method": "POST",
+      "path": "/v1/data_access_rules",
+      "supports_dry_run": true
+    },
+    "list": {
+      "method": "GET",
+      "path": "/v1/data_access_rules"
+    },
+    "get": {
+      "method": "GET",
+      "path": "/v1/data_access_rules/{id}"
+    },
+    "update": {
+      "method": "PUT",
+      "path": "/v1/data_access_rules/{id}"
+    },
+    "delete": {
+      "method": "DELETE",
+      "path": "/v1/data_access_rules/{id}"
+    }
+  }
+}
