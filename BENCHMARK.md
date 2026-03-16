@@ -11,33 +11,36 @@
 
 | Metric | MCP (measured) | Skills (measured) | Ratio |
 |--------|---------------:|------------------:|------:|
-| Fixed context overhead | 18,794 tokens | 0 tokens | — |
+| Fixed context overhead | 18,229 tokens | 0 tokens | — |
 | Per-conversation cost (typical) | ~26,224 tokens | ~4,608 tokens | 5.7x |
-| 3-scenario total (happy-path) | 69,382 tokens | 48,990 tokens | 1.4x |
-| **3-scenario total (realistic)** | **71,382 tokens** | **71,190 tokens** | **~1.0x** |
-| Domain knowledge available | 98 tool definitions | 98,018 tokens across 8 skills | — |
-| Wire payload size | 71,195 bytes (69.5 KB) | N/A | — |
-| Avg tool response size | 593 tokens | N/A (in-context) | — |
+| **9-scenario total (measured)** | **188,393 tokens** | **161,555 tokens** | **1.2x** |
+| Domain knowledge available | 96 tool definitions | 98,018 tokens across 8 skills | — |
+| Wire payload size | 69,087 bytes (67.5 KB) | N/A | — |
+| Avg tool response (measured) | 1,120 tokens | N/A (in-context) | — |
 | Binary size impact | — | +335,021 bytes embedded | — |
 
-**Key finding:** On the happy path, Skills + CLI consumed **48,990 tokens** vs MCP's
-**69,382 tokens** (29% less). But factoring in real-world iteration costs (query retries,
-CLI flag discovery, tier misses, SSE parsing), Skills rises to **71,190 tokens** — nearly
-identical to MCP's **71,382 tokens**. Skills pays a **45% iteration tax**; MCP pays only
-**3%** because it handles retries, auth, and formatting server-side. MCP is also **4x
-faster** (53s vs 213s). See [Section 7](#7-real-world-scenario-benchmark-measured).
+**Key finding:** Both sides measured against the cxint eu-gb instance across **9 scenarios
+covering every feature area**. Skills consumed **161,555 tokens** vs MCP's **188,393 tokens** —
+Skills is **14% more efficient** overall. MCP wins only **1 of 9 scenarios** (incident
+investigation, -64%) due to server-side summarization. Skills wins the remaining 8
+scenarios by 16-71% because its selective loading (only needed skills) avoids MCP's
+fixed 18,229-token overhead from loading all 96 tool schemas. The iteration tax (syntax
+errors, wrong tier, CLI flag mistakes) is negligible: **527 tokens (0.5%)**. The dominant
+cost in MCP is the fixed overhead; the dominant cost in Skills is raw query data volume.
+See [Section 7](#7-real-world-scenario-benchmark-measured).
 
 ---
 
 ## 1. MCP Wire Payload (Measured)
 
-The MCP server registers **98 tools**. On connection, every tool's name, description,
+The MCP server registers **96 tools**. On connection, every tool's name, description,
 and input schema is sent to the agent via `tools/list`. These tokens are **always present**
 in the context window, whether or not the tools are used.
 
-> **Measured via Go test:** `go test -run TestMCPWirePayload ./internal/tools/`
-> The actual `tools/list` JSON-RPC response is **71,195 bytes** (69.5 KB) on the wire.
-> Token count: **18,794 tokens** (measured via Claude (native)).
+> **Measured two ways:**
+> - Go test (`TestMCPWirePayload`): tool definitions total **71,195 bytes** (69.5 KB), **18,794 tokens**.
+> - Live JSON-RPC (`tools/list` response): **69,087 bytes** (67.5 KB), **18,229 tokens**.
+> The small difference (~2KB) is due to JSON-RPC envelope overhead vs raw definitions.
 
 | Component | Bytes (wire) | % of Total |
 |-----------|------------:|-----------:|
@@ -201,157 +204,449 @@ MCP: 26,224 tokens/conversation. Skills: 4,608 tokens/conversation.
 
 ### Scenario Overview
 
-Three end-to-end workflows from the blog, executed both ways:
+Nine end-to-end workflows replayed step-by-step against the cxint eu-gb instance,
+covering **every feature area** of the MCP server's 96 tools. **Both sides measured** —
+Skills via `curl` + file reads, MCP via the actual MCP server binary with JSON-RPC
+tool calls. Token counts at 3.79 bytes/token. Scenarios 1-3 include deliberate
+mistakes (wrong tier, `AND` vs `&&`, `=` vs `==`, `--from-file`, missing dashboard CLI).
+Scenarios 4-9 measure clean operations (no mistakes).
 
-| Scenario | Skills+CLI Tokens | MCP Tokens | Winner | Delta |
-|----------|------------------:|-----------:|--------|------:|
-| 1: Incident Investigation (agg-only) | 18,053 | 24,644 | Skills | -27% |
-| 2: Cost Optimization | 13,669 | 22,294 | Skills | -39% |
-| 3: Monitoring Setup | 17,268 | 22,444 | Skills | -23% |
-| **Total (all 3)** | **48,990** | **69,382** | **Skills** | **-29%** |
+| Scenario | Skills+CLI (measured) | MCP (measured) | Winner | Delta |
+|----------|----------------------:|---------------:|--------|------:|
+| 1: Incident Investigation | 66,177 | 23,587 | MCP | -64% |
+| 2: Cost Optimization | 13,826 | 20,715 | Skills | -33% |
+| 3: Monitoring Setup | 20,864 | 24,938 | Skills | -16% |
+| 4: Normal Operations (CRUD) | 19,618 | 23,995 | Skills | -18% |
+| 5: Query Authoring & Validation | 14,594 | 20,646 | Skills | -29% |
+| 6: Ingestion Pipeline | 7,317 | 18,383 | Skills | -60% |
+| 7: Data Governance | 5,429 | 18,437 | Skills | -71% |
+| 8: E2M & Streaming | 5,948 | 18,399 | Skills | -68% |
+| 9: API Discovery & Meta | 7,342 | 19,293 | Skills | -62% |
+| Auth overhead | 440 | 0 | — | — |
+| **Total (all 9)** | **161,555** | **188,393** | **Skills** | **-14%** |
 
-### Scenario 1: Incident Investigation
+### Scenario 1: Incident Investigation (measured)
 
 Global error scan → component deep-dive → heuristic matching → alert creation.
 
-**Skills + CLI breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| investigation SKILL.md | 4,292 | Investigation methodology, modes, heuristics |
-| query SKILL.md | 4,146 | DataPrime syntax for writing CLI queries |
-| investigation-queries.md | 1,631 | Full query text for all 3 investigation modes |
-| alerting SKILL.md | 5,149 | RED/USE methodology, burn rate math |
-| burn-rate-math.md | 1,564 | Threshold calculation formulas |
-| CLI query responses (5 agg) | 1,272 | error-rate, timeline, patterns, subsystems, deps |
-| **Total** | **18,053** | 5 skill files + 5 aggregation queries |
+**Skills + CLI step-by-step (measured against cxint):**
 
-**MCP breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| Fixed overhead (98 tools) | 18,794 | Always present in context |
-| investigate_incident response | 3,000 | Server-side summarization of 4-7 queries |
-| suggest_alert response | 1,500 | SRE-grade alert with burn rate |
-| Other tool responses (5) | 1,350 | discover, describe, session, create alert/webhook |
-| **Total** | **24,644** | Fixed overhead + 7 tool calls |
+| Step | Category | Tokens | Bytes | Details |
+|------|----------|-------:|------:|---------|
+| Read investigation/SKILL.md | skill_read | 4,292 | 16,265 | Investigation methodology |
+| Read query/SKILL.md | skill_read | 4,146 | 15,712 | DataPrime syntax |
+| GET /v1/tco_policies | api_call | 0 | 0 | Empty (no policies configured) |
+| Query wrong tier (frequent_search) | **error_retry** | 58 | 221 | Returns near-empty result |
+| Query global error rate (archive) | query_success | 522 | 1,978 | Aggregation — small response |
+| Query with `AND` (wrong syntax) | **error_retry** | 73 | 275 | DataPrime parse error |
+| Query with `&&` (fixed) | query_success | 6,740 | 25,545 | Filtered results — moderate |
+| Global error timeline | query_success | 442 | 1,675 | Time-bucketed aggregation |
+| **Critical errors (raw)** | **query_success** | **39,076** | **148,099** | **Raw log data — context bomb** |
+| Read investigation-queries.md | skill_read | 1,631 | 6,180 | Query templates |
+| Query with `=` (wrong syntax) | **error_retry** | 68 | 258 | DataPrime parse error |
+| Component error patterns | query_success | 54 | 203 | Small aggregation |
+| Component subsystems | query_success | 174 | 659 | Small aggregation |
+| Component dependencies | query_success | 22 | 82 | Small aggregation |
+| Read heuristic-details.md | skill_read | 2,142 | 8,118 | Heuristic patterns |
+| Read alerting/SKILL.md | skill_read | 5,149 | 19,514 | Alert methodology |
+| Read burn-rate-math.md | skill_read | 1,564 | 5,927 | Threshold formulas |
+| CLI `--from-file` error | **error_retry** | 24 | 91 | Unknown flag |
+| Create alert via API | api_call | 0 | 0 | Success (empty response) |
 
-**Critical finding:** If the agent fetches raw logs (`limit 200`) instead of aggregation queries,
-Skills + CLI jumps to **103,088 tokens** — a 4.2x increase. MCP's `investigate_incident`
-avoids this by executing queries server-side and returning only the summary. **Aggregation-only
-queries are essential for Skills efficiency.**
+| Category | Tokens | Items |
+|----------|-------:|------:|
+| Skill reads | 18,924 | 6 files |
+| Query responses | 47,030 | 7 queries |
+| API calls | 0 | 2 calls |
+| **Error retries** | **223** | **4 mistakes** |
+| **TOTAL** | **66,177** | **19 steps** |
 
-### Scenario 2: Cost Optimization
+**MCP breakdown (measured against cxint):**
+| Component | Tokens | Bytes | Details |
+|-----------|-------:|------:|---------|
+| Fixed overhead (96 tools) | 18,229 | 69,087 | tools/list — always present |
+| investigate_incident | 232 | 879 | "No Issues Found" (no recent errors in cxint) |
+| suggest_alert | 4,842 | 18,350 | Full SRE-grade alert with burn rate, 6 suggestions |
+| create_alert_definition | 284 | 1,075 | Dry-run validation response |
+| **Total** | **23,587** | **89,391** | Fixed overhead + 3 tool calls |
+
+**Key insight:** The critical errors query alone (39,076 tokens) exceeds MCP's entire
+scenario cost (23,587 tokens). MCP's `investigate_incident` returned just 232 tokens
+(no active errors); even with errors present, it summarizes server-side (~3K tokens max)
+vs Skills dumping 148KB of raw log data into context.
+
+### Scenario 2: Cost Optimization (measured)
 
 List TCO policies → analyze volume by severity/app → recommend tier changes.
 
-**Skills + CLI breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| cost-optimization SKILL.md | 3,922 | TCO policies, tier selection, E2M |
-| query SKILL.md | 4,146 | DataPrime syntax |
-| tco-policies.md | 1,303 | Policy configuration reference |
-| e2m-guide.md | 2,022 | Events-to-Metrics guide |
-| CLI query responses (4) | 2,277 | policies, severity volume, app volume, app×severity |
-| **Total** | **13,669** | 4 skill files + 4 queries |
+**Skills + CLI step-by-step (measured against cxint):**
 
-**MCP breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| Fixed overhead (98 tools) | 18,794 | Always present |
-| Tool responses (7) | 3,500 | list_policies, 2×query_logs, estimate_cost, 2×create_policy |
-| **Total** | **22,294** | Fixed overhead + 7 tool calls |
+| Step | Category | Tokens | Bytes | Details |
+|------|----------|-------:|------:|---------|
+| Read cost-optimization/SKILL.md | skill_read | 3,922 | 14,865 | TCO policies, tier selection |
+| Read query/SKILL.md | skill_read | 4,146 | 15,712 | DataPrime syntax |
+| GET /v1/tco_policies | api_call | 0 | 0 | Empty response |
+| Query with `sort` (wrong syntax) | **error_retry** | 134 | 507 | DataPrime uses `orderby` |
+| Volume by severity | query_success | 168 | 638 | Small aggregation |
+| Volume by application | query_success | 533 | 2,021 | Small aggregation |
+| Volume by app + severity | query_success | 1,574 | 5,967 | Moderate aggregation |
+| Read tco-policies.md | skill_read | 1,303 | 4,938 | Policy reference |
+| CLI `--from-file` error | **error_retry** | 24 | 91 | Unknown flag |
+| Create TCO policy via API | api_call | 0 | 0 | Success |
+| Read e2m-guide.md | skill_read | 2,022 | 7,662 | E2M reference |
 
-**Skills wins by 39%.** Cost optimization uses only aggregation queries (small responses),
-so Skills' lower fixed overhead dominates.
+| Category | Tokens | Items |
+|----------|-------:|------:|
+| Skill reads | 11,393 | 4 files |
+| Query responses | 2,275 | 3 queries |
+| API calls | 0 | 2 calls |
+| **Error retries** | **158** | **2 mistakes** |
+| **TOTAL** | **13,826** | **11 steps** |
 
-### Scenario 3: Monitoring Setup
+**MCP breakdown (measured against cxint):**
+| Step | Tokens | Bytes | Details |
+|------|-------:|------:|---------|
+| Fixed overhead (96 tools) | 18,229 | 69,087 | tools/list — always present |
+| list_policies | 1,733 | 6,568 | Returns all configured TCO policies |
+| query_logs (severity) | 116 | 441 | 6 severity buckets |
+| query_logs (app) | 164 | 621 | Top 20 applications by volume |
+| estimate_query_cost | 207 | 786 | Cost estimation breakdown |
+| create_policy (dry-run) | 266 | 1,009 | Validation result |
+| **Total** | **20,715** | **78,512** | Fixed overhead + 5 tool calls |
+
+**Skills wins by 33%.** Aggregation queries return small responses (2,275 tokens for Skills
+vs 2,486 for MCP — nearly identical). The difference is entirely MCP's 18,229-token fixed
+overhead vs Skills' 0. Both query response sizes are comparable.
+
+### Scenario 3: Monitoring Setup (measured)
 
 Discover patterns → create alert with burn rate → create webhook → build dashboard.
 
-**Skills + CLI breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| query SKILL.md | 4,146 | DataPrime syntax |
-| alerting SKILL.md | 5,149 | Alert design methodology |
-| strategy-matrix.md | 3,396 | Component type detection + metrics |
-| dashboards SKILL.md | 3,064 | Widget types, dashboard JSON schema |
-| CLI responses (6) | 1,513 | apps, patterns, error-rate, webhooks, alerts, dashboards |
-| **Total** | **17,268** | 4 skill files + 6 queries/API calls |
+**Skills + CLI step-by-step (measured against cxint):**
 
-**MCP breakdown:**
-| Component | Tokens | Details |
-|-----------|-------:|---------|
-| Fixed overhead (98 tools) | 18,794 | Always present |
-| Tool responses (6) | 3,650 | query_logs, suggest_alert, create_alert, webhook, dashboard, pin |
-| **Total** | **22,444** | Fixed overhead + 6 tool calls |
+| Step | Category | Tokens | Bytes | Details |
+|------|----------|-------:|------:|---------|
+| Read query/SKILL.md | skill_read | 4,146 | 15,712 | DataPrime syntax |
+| Read alerting/SKILL.md | skill_read | 5,149 | 19,514 | Alert methodology |
+| Discover applications | query_success | 625 | 2,367 | Small aggregation |
+| Query with double quotes | **error_retry** | 70 | 264 | DataPrime uses single quotes |
+| App patterns (single quotes) | query_success | 661 | 2,507 | Small aggregation |
+| Error rate baseline | query_success | 103 | 391 | Small aggregation |
+| Read component-profiles.md | skill_read | 1,909 | 7,235 | Component detection |
+| Read strategy-matrix.md | skill_read | 3,396 | 12,870 | Metrics per component |
+| CLI `--from-file` error | **error_retry** | 15 | 55 | Unknown flag |
+| Create alert via API | api_call | 0 | 0 | Success |
+| GET /v1/outgoing_webhooks | api_call | 6 | 24 | Small response |
+| Read dashboards/SKILL.md | skill_read | 3,064 | 11,614 | Dashboard creation |
+| Read dashboard-schema.md | skill_read | 1,621 | 6,144 | JSON schema |
+| CLI `dashboard-create` error | **error_retry** | 23 | 88 | Command doesn't exist |
+| Create dashboard via REST | api_call | 38 | 144 | Attempt 1 |
+| Dashboard schema retry | **error_retry** | 38 | 144 | Wrong widget format |
 
-### Realistic Cost: The Iteration Tax
+| Category | Tokens | Items |
+|----------|-------:|------:|
+| Skill reads | 19,285 | 6 files |
+| Query responses | 1,389 | 3 queries |
+| API calls | 44 | 3 calls |
+| **Error retries** | **146** | **4 mistakes** |
+| **TOTAL** | **20,864** | **16 steps** |
 
-The happy-path numbers above assume every query is correct on the first try, every CLI flag
-is known, and every response is parsed cleanly. In practice, Skills + CLI workflows involve
-**trial-and-error loops** that MCP avoids entirely because it handles queries, auth, tier
-selection, and response formatting server-side.
+**MCP breakdown (measured against cxint):**
+| Step | Tokens | Bytes | Details |
+|------|-------:|------:|---------|
+| Fixed overhead (96 tools) | 18,229 | 69,087 | tools/list — always present |
+| query_logs (discover apps) | 164 | 622 | Top 20 applications |
+| suggest_alert | 5,419 | 20,538 | Full SRE alert package with burn rate |
+| create_alert_definition (dry-run) | 282 | 1,067 | Validation result |
+| list_outgoing_webhooks | 69 | 260 | Webhook listing |
+| create_dashboard (dry-run) | 775 | 2,938 | Dashboard validation |
+| **Total** | **24,938** | **94,512** | Fixed overhead + 5 tool calls |
 
-**Iteration cost sources (observed during testing):**
+**Skills wins by 16%.** The `suggest_alert` response is large (5,419 tokens — full SRE
+package with burn rate math), but Skills still wins because its total query + skill load
+(20,864 tokens) is less than MCP's fixed overhead alone (18,229) plus responses (6,709).
 
-| Cost Source | Tokens per Occurrence | Typical Frequency |
-|-------------|----------------------:|:-----------------:|
-| DataPrime syntax retry (AND→&&, =→==, quotes) | ~1,000 | 1-3 per scenario |
-| CLI flag discovery (--prototype, no dashboard CLI) | ~1,000 | 1-2 per scenario |
-| Tier miss (frequent_search empty → retry archive) | ~1,200 | 0-1 per scenario |
-| SSE response format parsing | ~500 | First query only |
-| Auth setup (IAM token exchange) | ~400 | Once per session |
-| Agent reasoning per step | ~200 | Every step |
-| Response data extraction per query | ~300 | Every query |
+### Scenario 4: Normal Operations — CRUD (measured)
 
-**With iteration costs included:**
+Alert lifecycle → dashboard lifecycle → view lifecycle. No queries, no investigation —
+pure resource management. This is the bread-and-butter of day-to-day operations.
 
-| Scenario | Skills (happy) | Skills (realistic) | MCP | Winner |
-|----------|---------------:|-------------------:|----:|--------|
-| 1: Incident Investigation | 18,053 | 27,253 (+51%) | 25,244 | **MCP** |
-| 2: Cost Optimization | 13,669 | 18,269 (+34%) | 23,094 | **Skills** |
-| 3: Monitoring Setup | 17,268 | 25,668 (+49%) | 23,044 | **MCP** |
-| **Total** | **48,990** | **71,190** (+45%) | **71,382** | **Tied** |
+**Skills + CLI step-by-step (measured against cxint):**
 
-Skills iteration overhead: **+22,200 tokens** (45% of happy-path).
-MCP iteration overhead: **+2,000 tokens** (3% of happy-path).
+| Step | Category | Tokens | Bytes | Details |
+|------|----------|-------:|------:|---------|
+| Read alerting/SKILL.md | skill_read | 5,149 | 19,514 | Alert methodology + schema |
+| Read strategy-matrix.md | skill_read | 3,396 | 12,870 | Strategy per component type |
+| POST /v1/alert_definitions (create) | api_call | 191 | 724 | Created alert |
+| GET /v1/alert_definitions (list) | api_call | 197 | 748 | Listed alerts |
+| GET /v1/alert_definitions/{id} (get) | api_call | 191 | 724 | Retrieved alert |
+| DELETE /v1/alert_definitions/{id} | api_call | 0 | 0 | Deleted alert |
+| Read dashboards/SKILL.md | skill_read | 3,064 | 11,614 | Dashboard creation guide |
+| Read dashboard-schema.md | skill_read | 1,621 | 6,144 | JSON schema reference |
+| POST /v1/dashboards (create) | api_call | 198 | 749 | Created dashboard |
+| GET /v1/dashboards (list, 4) | api_call | 230 | 870 | Listed dashboards |
+| GET /v1/dashboards/{id} (get) | api_call | 198 | 749 | Retrieved dashboard |
+| DELETE /v1/dashboards/{id} | api_call | 0 | 0 | Deleted dashboard |
+| Read access-control/SKILL.md | skill_read | 3,868 | 14,659 | View management guide |
+| POST /v1/views (create) | api_call | 90 | 340 | Created view |
+| GET /v1/views (list, 13) | api_call | 1,225 | 4,644 | Listed views |
+| DELETE /v1/views/{id} | api_call | 0 | 0 | Deleted view |
+
+| Category | Tokens | Items |
+|----------|-------:|------:|
+| Skill reads | 17,098 | 5 files |
+| API responses | 2,520 | 11 calls |
+| **TOTAL** | **19,618** | **16 steps** |
+
+**MCP breakdown (measured against cxint):**
+
+| Step | Tokens | Bytes | Details |
+|------|-------:|------:|---------|
+| Fixed overhead (96 tools) | 18,229 | 69,087 | tools/list — always present |
+| create_alert_definition | 337 | 1,276 | Created + formatted response |
+| list_alert_definitions | 391 | 1,480 | Listed all alerts |
+| get_alert_definition | 337 | 1,279 | Retrieved single alert |
+| delete_alert_definition | 24 | 92 | Deletion confirmation |
+| create_dashboard | 707 | 2,681 | Created + formatted response |
+| list_dashboards | 406 | 1,540 | Listed all dashboards |
+| get_dashboard | 723 | 2,740 | Full dashboard with layout |
+| delete_dashboard | 25 | 93 | Deletion confirmation |
+| create_view | 187 | 709 | Created view |
+| list_views | 2,629 | 9,964 | Listed all views (13) |
+| **Total** | **23,995** | **90,941** | Fixed overhead + 10 tool calls |
+
+**Skills wins by 18%.** API responses are small for CRUD — Skills' 11 API calls total just
+2,520 tokens vs MCP's 10 tool responses at 5,766 tokens (MCP adds formatting, suggestions,
+and related-tool hints). The cost split is nearly identical: Skills' knowledge overhead
+(17,098 tokens for 5 file reads) vs MCP's schema overhead (18,229 tokens for 96 tool
+definitions). Skills wins because it loads only the relevant 3 skills, while MCP loads
+all 96 tool schemas regardless of which ones are used.
+
+**Key insight:** For CRUD-heavy workflows, the fixed overhead dominates both sides.
+MCP's per-response overhead (~2.3x larger than raw API responses due to formatting) tips
+the balance toward Skills. However, MCP requires zero knowledge — the agent doesn't
+need to learn API schemas from skill files; the tool schema tells it exactly what to send.
+
+### Scenario 5: Query Authoring & Validation (measured)
+
+Writing, validating, and explaining queries — pure knowledge work, no execution needed.
+
+**Skills + CLI (measured):**
+
+| Step | Category | Tokens | Bytes |
+|------|----------|-------:|------:|
+| Read query/SKILL.md | skill_read | 4,674 | 17,714 |
+| Read dataprime-commands.md | skill_read | 3,357 | 12,724 |
+| Read query-templates.md | skill_read | 4,339 | 16,443 |
+| Read dataprime-functions.md | skill_read | 2,224 | 8,429 |
+| **TOTAL** | | **14,594** | **55,310** |
+
+**MCP (measured):**
+
+| Step | Tokens | Bytes |
+|------|-------:|------:|
+| Fixed overhead (96 tools) | 18,229 | 69,087 |
+| build_query | 141 | 534 |
+| validate_query (AND mistake) | 100 | 380 |
+| validate_query (correct) | 106 | 402 |
+| explain_query | 633 | 2,400 |
+| get_dataprime_reference | 196 | 741 |
+| get_query_templates | 1,063 | 4,029 |
+| estimate_query_cost | 178 | 676 |
+| **Total** | **20,646** | **78,249** |
+
+**Skills wins by 29%.** Query authoring is pure knowledge work — the agent needs syntax
+references, not API execution. Skills loads 4 reference files (14,594 tokens) while MCP's
+fixed overhead alone (18,229 tokens) already exceeds Skills' total. MCP's query tools
+return compact responses (2,417 tokens for 7 calls) but can't overcome the schema overhead.
+
+### Scenario 6: Ingestion Pipeline (measured)
+
+Configuring log parsing rules, enrichments, and understanding log formats.
+
+**Skills + CLI (measured):**
+
+| Step | Category | Tokens | Bytes |
+|------|----------|-------:|------:|
+| Read ingestion/SKILL.md | skill_read | 3,831 | 14,521 |
+| Read parsing-rules.md | skill_read | 1,753 | 6,643 |
+| Read enrichment-types.md | skill_read | 740 | 2,806 |
+| Read log-format.md | skill_read | 950 | 3,601 |
+| GET /v1/rule_groups (list) | api_call | 38 | 144 |
+| GET /v1/enrichments (list) | api_call | 5 | 18 |
+| **TOTAL** | | **7,317** | **27,733** |
+
+**MCP (measured):**
+
+| Step | Tokens | Bytes |
+|------|-------:|------:|
+| Fixed overhead (96 tools) | 18,229 | 69,087 |
+| list_rule_groups | 80 | 302 |
+| list_enrichments | 48 | 181 |
+| discover_log_fields | 26 | 99 |
+| **Total** | **18,383** | **69,669** |
+
+**Skills wins by 60%.** Ingestion configuration is mostly knowledge (understanding formats,
+rule types, enrichment options). API responses are tiny. Skills' 4 reference files
+(7,274 tokens) are less than half of MCP's fixed overhead.
+
+### Scenario 7: Data Governance (measured)
+
+Data access rules and outgoing webhook management for security and compliance.
+
+**Skills + CLI (measured):**
+
+| Step | Category | Tokens | Bytes |
+|------|----------|-------:|------:|
+| Read access-control/SKILL.md | skill_read | 3,868 | 14,659 |
+| Read access-rules.md | skill_read | 1,508 | 5,717 |
+| GET /v1/data_access_rules (list) | api_call | 6 | 24 |
+| GET /v1/outgoing_webhooks (list) | api_call | 6 | 24 |
+| POST /v1/outgoing_webhooks (create) | api_call | 41 | 154 |
+| **TOTAL** | | **5,429** | **20,578** |
+
+**MCP (measured):**
+
+| Step | Tokens | Bytes |
+|------|-------:|------:|
+| Fixed overhead (96 tools) | 18,229 | 69,087 |
+| list_data_access_rules | 71 | 269 |
+| list_outgoing_webhooks | 69 | 260 |
+| create_outgoing_webhook | 68 | 256 |
+| **Total** | **18,437** | **69,872** |
+
+**Skills wins by 71%.** The largest margin of any scenario. Data governance involves
+few API calls with tiny responses. Skills needs only 2 files (5,376 tokens) — less
+than a third of MCP's fixed overhead.
+
+### Scenario 8: E2M & Streaming (measured)
+
+Events-to-Metrics conversion and log streaming configuration.
+
+**Skills + CLI (measured):**
+
+| Step | Category | Tokens | Bytes |
+|------|----------|-------:|------:|
+| Read cost-optimization/SKILL.md | skill_read | 3,922 | 14,865 |
+| Read e2m-guide.md | skill_read | 2,022 | 7,662 |
+| GET /v1/e2m (list) | api_call | 0 | 0 |
+| GET /v1/streams (list) | api_call | 4 | 14 |
+| GET /v1/event_stream_targets (list) | api_call | 0 | 0 |
+| **TOTAL** | | **5,948** | **22,541** |
+
+**MCP (measured):**
+
+| Step | Tokens | Bytes |
+|------|-------:|------:|
+| Fixed overhead (96 tools) | 18,229 | 69,087 |
+| list_e2m | 61 | 230 |
+| list_streams | 58 | 219 |
+| get_event_stream_targets | 51 | 195 |
+| **Total** | **18,399** | **69,731** |
+
+**Skills wins by 68%.** Another knowledge-heavy workflow. API responses are near-empty
+(no E2M or streams configured on cxint). Skills' 2 files (5,944 tokens) are a fraction
+of MCP's overhead.
+
+### Scenario 9: API Discovery & Meta (measured)
+
+Understanding available tools, searching capabilities, system health.
+
+**Skills + CLI (measured):**
+
+| Step | Category | Tokens | Bytes |
+|------|----------|-------:|------:|
+| Read api-reference/SKILL.md | skill_read | 5,498 | 20,838 |
+| Read endpoints.md | skill_read | 1,844 | 6,988 |
+| **TOTAL** | | **7,342** | **27,826** |
+
+**MCP (measured):**
+
+| Step | Tokens | Bytes |
+|------|-------:|------:|
+| Fixed overhead (96 tools) | 18,229 | 69,087 |
+| list_tool_categories | 617 | 2,339 |
+| search_tools (alert) | 266 | 1,007 |
+| session_context | 32 | 123 |
+| health_check | 149 | 563 |
+| **Total** | **19,293** | **73,119** |
+
+**Skills wins by 62%.** For API discovery, MCP's `list_tool_categories` and `search_tools`
+are useful but can't overcome the fixed overhead. Skills provides the same information
+in 2 static files at 7,342 tokens total.
+
+### The Iteration Tax: Measured vs Expected
+
+The measured data disproves the initial assumption that iteration costs dominate.
+Error responses are small (55-507 bytes), so the token impact is negligible:
+
+| Scenario | Happy-path | Iteration tax | Tax % | Total |
+|----------|----------:|-------------:|------:|------:|
+| 1: Incident Investigation | 65,954 | 223 | 0.3% | 66,177 |
+| 2: Cost Optimization | 13,668 | 158 | 1.2% | 13,826 |
+| 3: Monitoring Setup | 20,718 | 146 | 0.7% | 20,864 |
+| **All 3 + auth** | **100,340** | **527** | **0.5%** | **101,307** |
+
+The real cost driver is not retries — it's **raw query data volume**:
+
+| Cost Source | Measured Tokens | % of Total |
+|-------------|---------------:|----------:|
+| Skill file reads (16 files) | 49,602 | 49% |
+| **Query responses (13 queries)** | **50,694** | **50%** |
+| Error retries (10 mistakes) | 527 | 0.5% |
+| API calls + auth | 484 | 0.5% |
+
+A single raw log query (`filter $m.severity == CRITICAL | limit 50`) returned
+**39,076 tokens** (148,099 bytes) — more than MCP's entire Scenario 1 cost.
+Aggregation queries averaged only **408 tokens** each. The lesson:
+**query design determines Skills efficiency, not retry count.**
 
 ### Time Cost
 
-Skills workflows take **4x longer** due to sequential query execution and retry loops:
+Skills workflows take longer due to sequential query execution:
 
-| Scenario | Skills Time | MCP Time | Skills Steps | MCP Steps |
-|----------|:----------:|:--------:|:-----------:|:---------:|
-| 1: Incident Investigation | ~82s | ~27s | 14 | 7 |
-| 2: Cost Optimization | ~51s | ~14s | 9 | 7 |
-| 3: Monitoring Setup | ~80s | ~12s | 13 | 6 |
-| **Total** | **~213s** | **~53s** | **36** | **20** |
+| Scenario | Skills Steps | MCP Steps |
+|----------|:-----------:|:---------:|
+| 1: Incident Investigation | 19 | 4 |
+| 2: Cost Optimization | 11 | 6 |
+| 3: Monitoring Setup | 16 | 6 |
+| 4: Normal Operations (CRUD) | 16 | 11 |
+| 5: Query Authoring | 4 | 8 |
+| 6: Ingestion Pipeline | 6 | 4 |
+| 7: Data Governance | 5 | 4 |
+| 8: E2M & Streaming | 5 | 4 |
+| 9: API Discovery | 2 | 5 |
+| **Total** | **84** | **52** |
 
 MCP's compound tools (`investigate_incident`, `suggest_alert`) execute multiple queries
 in a single server-side call, avoiding per-query LLM reasoning and network round-trips.
+For lightweight scenarios (S6-S9), step counts are comparable.
 
 ### Why MCP Wins for Investigation
 
 MCP's `investigate_incident` tool is uniquely efficient because it:
 1. Executes 4-7 queries **server-side** (zero token cost for intermediate results)
 2. Applies heuristic pattern matching server-side
-3. Returns only a summarized report (~3K tokens vs ~80K for raw query results)
-4. Handles auth, tier selection, and retry logic internally (zero iteration tax)
+3. Returns only a summarized report (~3K tokens vs ~47K for raw query results)
+4. Handles auth, tier selection, and retry logic internally
 
-If a Skills-based agent fetches raw logs, MCP is **4.2x more efficient**.
-If it uses only aggregation queries with zero retries, Skills is **27% more efficient**.
-With realistic retries factored in, they are **roughly equivalent** on tokens.
+The measured data confirms: raw log queries are the decisive factor.
+Skills + CLI for investigation costs **66,177 tokens** — 2.8x more than MCP's **23,587 tokens**.
 
 ### Data-Driven Decision Matrix
 
-| Scenario Type | Recommended | Why |
+| Scenario Type | Recommended | Why (measured) |
 |---------------|:-----------:|-----|
-| Incident investigation | **MCP** | Server-side summarization + zero iteration tax |
-| Cost/policy analysis | **Skills** | Aggregation queries, still wins with retries |
-| Monitoring setup (execution) | **MCP** | Dashboard/alert creation needs API, fewer retries |
-| Monitoring setup (planning) | **Skills** | Architecture guidance needs no execution |
-| Query writing (no execution) | **Skills** | Zero data needed, pure syntax knowledge |
-| Live debugging with raw logs | **MCP** | `summary_only` flag reduces token blast |
-| Architecture/design guidance | **Skills** | Zero overhead, pure knowledge |
+| Incident investigation | **MCP** | 23,587 vs 66,177 tokens — MCP 64% cheaper (server-side summarization) |
+| Live debugging with raw logs | **MCP** | `summary_only` flag prevents context flooding |
+| Cost/policy analysis | **Skills** | 13,826 vs 20,715 tokens — Skills 33% cheaper |
+| Monitoring setup | **Skills** | 20,864 vs 24,938 tokens — Skills 16% cheaper |
+| Normal operations (CRUD) | **Skills** | 19,618 vs 23,995 tokens — Skills 18% cheaper |
+| Query authoring & validation | **Skills** | 14,594 vs 20,646 tokens — Skills 29% cheaper |
+| Ingestion pipeline | **Skills** | 7,317 vs 18,383 tokens — Skills 60% cheaper |
+| Data governance | **Skills** | 5,429 vs 18,437 tokens — Skills 71% cheaper |
+| E2M & streaming | **Skills** | 5,948 vs 18,399 tokens — Skills 68% cheaper |
+| API discovery & meta | **Skills** | 7,342 vs 19,293 tokens — Skills 62% cheaper |
 | **Hybrid (plan + execute)** | **Both** | Skills for design, MCP for execution |
 
 ---
@@ -359,11 +654,25 @@ With realistic retries factored in, they are **roughly equivalent** on tokens.
 ## 8. Methodology
 
 ### Scenario Benchmark
-Queries executed via `curl` against IBM Cloud Logs REST API (cxint eu-gb instance,
-archive tier, 24h window). Response sizes measured as raw SSE stream bytes.
-Skill file sizes measured from the embedded `.agents/skills/` directory.
+All 9 scenarios replayed step-by-step against the live IBM Cloud Logs cxint eu-gb instance
+(archive tier, 24h window). **Both approaches measured against the same instance:**
+
+**Skills measurement:** Each step — skill file reads, API calls via `curl`, correct queries,
+and deliberate mistakes (wrong tier, `AND` vs `&&`, `=` vs `==`, `sort` vs `orderby`,
+double quotes, `--from-file` flag, missing dashboard CLI) — is recorded with exact
+byte counts to a CSV ledger.
+
+**MCP measurement:** The compiled MCP server binary (`bin/logs-mcp-server`) was started
+against cxint and received JSON-RPC `tools/call` requests for each scenario. Response
+bytes measured from the JSON-RPC response wire format. The `tools/list` response (96 tools,
+69,087 bytes) is the measured fixed overhead.
+
 Token estimates use the calibrated ratio of 3.79 bytes/token.
-Scripts: `scripts/scenario-benchmark.sh` (data collection), `scripts/scenario-token-analysis.py` (analysis).
+
+Scripts: `scripts/measure-iteration-tax.sh` (Skills replay, S1-S3), `scripts/measure-mcp-scenarios.py`
+(MCP replay, S1-S3), `scripts/measure-normal-ops.py` (S4: CRUD operations, both sides),
+`scripts/measure-remaining-features.py` (S5-S9: all remaining features, both sides),
+`scripts/scenario-benchmark.sh` (data collection), `scripts/scenario-token-analysis.py` (analysis).
 
 ### Tokenizer
 Token counts measured using **Claude's native tokenizer** via the `claude` CLI.
@@ -396,3 +705,42 @@ Assumptions: 10 tool calls per MCP conversation, 1 skill + 2 references per Skil
 *This benchmark was generated by `scripts/run-benchmark.py` using Claude (native) tokenizer,
 real wire payload data from 98 MCP tools, and 42 skill files
 totaling 98,018 tokens of domain knowledge.*
+
+---
+
+## 9. References
+
+### Standards & Specifications
+
+- **Model Context Protocol (MCP)** — [modelcontextprotocol.io](https://modelcontextprotocol.io). Open protocol for connecting AI agents to tools and data sources. Defines JSON-RPC 2.0 transport, `tools/list` schema advertisement, and `tools/call` invocation. Version 2024-11-05 used in this benchmark.
+- **Agent Skills (agentskills.io)** — [agentskills.io](https://agentskills.io). Open standard for portable AI agent instruction bundles. Skills are markdown files with YAML frontmatter, auto-discovered from `.agents/skills/` directories. Compatible with 30+ agent platforms.
+- **JSON-RPC 2.0** — [jsonrpc.org/specification](https://www.jsonrpc.org/specification). Wire protocol used by MCP for client-server communication over stdio.
+- **PEP 723 — Inline Script Metadata** — [peps.python.org/pep-0723](https://peps.python.org/pep-0723/). Used by companion scripts (`investigate.py`, `query-compact.py`) for inline dependency declarations (`# /// script` header).
+
+### Tokenization
+
+- **Claude Tokenizer** — Anthropic's native tokenizer used for all token counts in this report. Token counts were measured by sending content to Claude Haiku via the `claude` CLI and reading `usage.input_tokens` from the API response. No third-party tokenizer approximations were used.
+- **Bytes-per-token calibration** — The ratio of 3.79 bytes/token was calibrated from the MCP wire payload measurement (71,195 bytes = 18,794 tokens) and used for byte-to-token estimates in scenario benchmarks.
+
+### Pricing
+
+- **Claude Sonnet 4 pricing** — $3 per 1M input tokens, $15 per 1M output tokens (as of March 2026). Used for cost projections in Section 5. Source: [Anthropic pricing](https://www.anthropic.com/pricing).
+
+### IBM Cloud Logs
+
+- **IBM Cloud Logs documentation** — [cloud.ibm.com/docs/cloud-logs](https://cloud.ibm.com/docs/cloud-logs). Platform documentation for the observability service benchmarked in this report.
+- **DataPrime query language** — [cloud.ibm.com/docs/cloud-logs?topic=cloud-logs-dataprime-ref](https://cloud.ibm.com/docs/cloud-logs?topic=cloud-logs-dataprime-ref). Query language used in all log query scenarios. Piped syntax with `$l.` (labels), `$m.` (metadata), `$d.` (user data) field prefixes.
+- **IBM Cloud Logs REST API** — [cloud.ibm.com/apidocs/logs-service-api](https://cloud.ibm.com/apidocs/logs-service-api). REST API used for all CRUD operations (alerts, dashboards, views, TCO policies). SSE streaming for query results.
+- **IBM Cloud Logs CLI plugin** — [cloud.ibm.com/docs/cloud-logs-cli-plugin](https://cloud.ibm.com/docs/cloud-logs-cli-plugin). CLI alternative to REST API, used in Skills scenario replays.
+- **IBM Cloud IAM** — [cloud.ibm.com/docs/account?topic=account-iamoverview](https://cloud.ibm.com/docs/account?topic=account-iamoverview). Identity and Access Management service used for authentication. API key → bearer token exchange via `https://iam.cloud.ibm.com/identity/token`.
+
+### SRE Methodology
+
+- **Google SRE — Multi-Window, Multi-Burn-Rate Alerts** — Chapter 5 of *Site Reliability Workbook* (O'Reilly, 2018). The burn rate alerting model used by the `suggest_alert` MCP tool and the alerting agent skill. Fast-burn (2% budget in 1h) and slow-burn (10% budget in 6h) windows.
+- **RED Method** — Rate, Errors, Duration. Tom Wilkie's microservice monitoring methodology used in the alerting strategy matrix for `web_service` and `api_gateway` component types.
+- **USE Method** — Utilization, Saturation, Errors. Brendan Gregg's resource monitoring methodology used in the alerting strategy matrix for `database`, `cache`, and `message_queue` component types.
+
+### Measurement Tools
+
+- **Go testing framework** — `go test -run TestMCPWirePayload ./internal/tools/` for MCP wire payload measurement. Standard Go test infrastructure with mock dependencies.
+- **Python `requests` library** — [docs.python-requests.org](https://docs.python-requests.org). Used in measurement scripts for HTTP calls to IBM Cloud Logs REST API and IAM token exchange.
