@@ -98,8 +98,8 @@ jobs:
             skill_md="$skill_dir/SKILL.md"
             [ -f "$skill_md" ] || continue
 
-            # Find all relative markdown links and file references
-            grep -oP '\[.*?\]\(\K[^)]+' "$skill_md" | while read -r ref; do
+            # Find all relative markdown links: [text](path)
+            grep -oE '\[.[^]]*\]\([^)]+\)' "$skill_md" | sed 's/.*](//' | sed 's/)$//' | while read -r ref; do
               # Skip external URLs and anchors
               case "$ref" in
                 http://*|https://*|#*) continue ;;
