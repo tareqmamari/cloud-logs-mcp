@@ -1,0 +1,274 @@
+name: Skills CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - 'scripts/install-skills.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - 'scripts/install-skills.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-skills:
+    name: Validate Skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          errors=0
+          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+            skill_name=$(basename "$skill_dir")
+            skill_md="$skill_dir/SKILL.md"
+
+            if [ ! -f "$skill_md" ]; then
+              echo "::error::Missing SKILL.md in $skill_dir"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            # Check frontmatter exists (starts with ---)
+            if ! head -1 "$skill_md" | grep -q '^---$'; then
+              echo "::error::$skill_md missing YAML frontmatter"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            # Extract frontmatter name field
+            fm_name=$(sed -n '/^---$/,/^---$/p' "$skill_md" | grep '^name:' | head -1 | sed 's/name: *//')
+            if [ -z "$fm_name" ]; then
+              echo "::error::$skill_md missing 'name' in frontmatter"
+              errors=$((errors + 1))
+            elif [ "$fm_name" != "$skill_name" ]; then
+              echo "::error::$skill_md name '$fm_name' does not match directory '$skill_name'"
+              errors=$((errors + 1))
+            fi
+
+            # Check description exists
+            if ! sed -n '/^---$/,/^---$/p' "$skill_md" | grep -q '^description:'; then
+              echo "::error::$skill_md missing 'description' in frontmatter"
+              errors=$((errors + 1))
+            fi
+
+            echo "✓ $skill_name frontmatter OK"
+          done
+
+          if [ $errors -gt 0 ]; then
+            echo "::error::$errors frontmatter validation errors"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Check SKILL.md line limits
+        run: |
+          errors=0
+          max_lines=500
+
+          for skill_md in .agents/skills/ibm-cloud-logs-*/SKILL.md; do
+            lines=$(wc -l < "$skill_md")
+            skill_name=$(basename "$(dirname "$skill_md")")
+
+            if [ "$lines" -gt "$max_lines" ]; then
+              echo "::error::$skill_md has $lines lines (max $max_lines)"
+              errors=$((errors + 1))
+            else
+              echo "✓ $skill_name: $lines lines"
+            fi
+          done
+
+          if [ $errors -gt 0 ]; then
+            exit 1
+          fi
+        shell: bash
+
+      - name: Validate internal references
+        run: |
+          errors=0
+
+          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+            skill_md="$skill_dir/SKILL.md"
+            [ -f "$skill_md" ] || continue
+
+            # Find all relative markdown links and file references
+            grep -oP '\[.*?\]\(\K[^)]+' "$skill_md" | while read -r ref; do
+              # Skip external URLs and anchors
+              case "$ref" in
+                http://*|https://*|#*) continue ;;
+              esac
+
+              target="$skill_dir/$ref"
+              if [ ! -e "$target" ]; then
+                echo "::error::Broken reference in $skill_md: $ref -> $target"
+                errors=$((errors + 1))
+              fi
+            done
+
+            # Verify expected subdirectories have content
+            for subdir in references assets; do
+              if [ -d "$skill_dir/$subdir" ]; then
+                count=$(find "$skill_dir/$subdir" -type f | wc -l)
+                if [ "$count" -eq 0 ]; then
+                  echo "::warning::Empty $subdir/ directory in $skill_dir"
+                fi
+              fi
+            done
+
+            echo "✓ $(basename "$skill_dir") references OK"
+          done
+        shell: bash
+
+      - name: Validate shell scripts
+        run: |
+          errors=0
+
+          for script in .agents/skills/ibm-cloud-logs-*/scripts/*.sh; do
+            [ -f "$script" ] || continue
+
+            if ! bash -n "$script" 2>/tmp/syntax_err; then
+              echo "::error::Syntax error in $script:"
+              cat /tmp/syntax_err
+              errors=$((errors + 1))
+            else
+              echo "✓ $script syntax OK"
+            fi
+
+            # Check executable bit or shebang
+            if ! head -1 "$script" | grep -q '^#!'; then
+              echo "::warning::$script missing shebang line"
+            fi
+          done
+
+          if [ $errors -gt 0 ]; then
+            exit 1
+          fi
+        shell: bash
+
+      - name: Validate JSON assets
+        run: |
+          errors=0
+
+          for json_file in .agents/skills/ibm-cloud-logs-*/assets/*.json; do
+            [ -f "$json_file" ] || continue
+
+            if ! python3 -m json.tool "$json_file" > /dev/null 2>/tmp/json_err; then
+              echo "::error::Invalid JSON in $json_file:"
+              cat /tmp/json_err
+              errors=$((errors + 1))
+            else
+              echo "✓ $json_file valid"
+            fi
+          done
+
+          if [ $errors -gt 0 ]; then
+            exit 1
+          fi
+        shell: bash
+
+      - name: Count and summarize skills
+        run: |
+          echo "## Skills Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Skill | Lines | Refs | Assets | Scripts |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|------|--------|---------|" >> "$GITHUB_STEP_SUMMARY"
+
+          total_skills=0
+          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+            name=$(basename "$skill_dir")
+            lines=$(wc -l < "$skill_dir/SKILL.md" 2>/dev/null || echo 0)
+            refs=$(find "$skill_dir/references" -type f 2>/dev/null | wc -l)
+            assets=$(find "$skill_dir/assets" -type f 2>/dev/null | wc -l)
+            scripts=$(find "$skill_dir/scripts" -type f 2>/dev/null | wc -l)
+            echo "| $name | $lines | $refs | $assets | $scripts |" >> "$GITHUB_STEP_SUMMARY"
+            total_skills=$((total_skills + 1))
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Total: $total_skills skills**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Found $total_skills skills"
+        shell: bash
+
+  test-install:
+    name: Test Install Script
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install script (skills only)
+        run: |
+          chmod +x scripts/install-skills.sh
+          ./scripts/install-skills.sh
+
+          # Verify skills were installed
+          count=$(ls -d "$HOME/.agents/skills/ibm-cloud-logs-"* 2>/dev/null | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No skills installed to ~/.agents/skills/"
+            exit 1
+          fi
+          echo "✓ Installed $count skills to ~/.agents/skills/"
+        shell: bash
+
+      - name: Run install script with --ai bob
+        run: |
+          cd "$(mktemp -d)"
+
+          # Run from the repo directory
+          "$GITHUB_WORKSPACE/scripts/install-skills.sh" --ai bob
+
+          # Verify BOB.md was created
+          if [ ! -f BOB.md ]; then
+            echo "::error::BOB.md was not created"
+            exit 1
+          fi
+
+          # Verify markers are present
+          if ! grep -q 'IBM_CLOUD_LOGS_SKILLS_START' BOB.md; then
+            echo "::error::BOB.md missing start marker"
+            exit 1
+          fi
+          echo "✓ BOB.md created with routing content"
+        shell: bash
+
+      - name: Test idempotent re-install
+        run: |
+          cd "$(mktemp -d)"
+
+          "$GITHUB_WORKSPACE/scripts/install-skills.sh" --ai bob
+          first_md5=$(md5sum BOB.md 2>/dev/null || md5 -q BOB.md)
+
+          "$GITHUB_WORKSPACE/scripts/install-skills.sh" --ai bob
+          second_md5=$(md5sum BOB.md 2>/dev/null || md5 -q BOB.md)
+
+          if [ "$first_md5" != "$second_md5" ]; then
+            echo "::error::Re-running install changed BOB.md (not idempotent)"
+            exit 1
+          fi
+          echo "✓ Install is idempotent"
+        shell: bash
+
+      - name: Test multi-tool install
+        run: |
+          cd "$(mktemp -d)"
+
+          "$GITHUB_WORKSPACE/scripts/install-skills.sh" --ai claude,cursor,copilot
+
+          for f in CLAUDE.md .cursor/rules/ibm-cloud-logs.md .github/copilot-instructions.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing $f after --ai claude,cursor,copilot"
+              exit 1
+            fi
+          done
+          echo "✓ Multi-tool install created all expected files"
+        shell: bash

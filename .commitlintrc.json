@@ -37,7 +37,10 @@
         "server",
         "session",
         "tools",
-        "validator"
+        "validator",
+        "skills",
+        "benchmark",
+        "scripts"
       ]
     ],
     "subject-case": [0],
