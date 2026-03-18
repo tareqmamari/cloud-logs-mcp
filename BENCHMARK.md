@@ -12,22 +12,22 @@
 | Metric | MCP | 8 Skills (previous) | 1 Skill (current) |
 |--------|----:|--------------------:|------------------:|
 | Fixed context overhead | 18,229 tokens | 0 tokens | 0 tokens |
-| Per-conversation cost (typical) | ~26,224 tokens | ~7,068 tokens | ~7,506 tokens |
+| Per-conversation cost (typical) | ~25,169 tokens | ~6,732 tokens | ~7,896 tokens |
 | **9-scenario total (measured)** | **187,456 tokens** | **161,555 tokens** | **107,937 tokens** |
 | vs MCP | — | -14% | **-42%** |
 | Domain knowledge available | 96 tool definitions | 8 skills + 21 references | 1 skill + 29 references |
 | Wire payload size | 69,087 bytes (67.5 KB) | N/A | N/A |
-| Avg tool response (measured) | 1,120 tokens | N/A (in-context) | N/A (in-context) |
+| Avg tool response (measured) | 544 tokens | N/A (in-context) | N/A (in-context) |
 | Binary size impact | — | +371,832 bytes embedded | +313,063 bytes embedded |
 
 **Derivation of key numbers:**
-- **MCP per-conversation (~26,224):** 18,229 fixed overhead + 10 × (150 call overhead + 593 avg response) = 26,224. The 593-token avg response is the weighted average from Section 1.1.
-- **8 Skills per-conversation (~7,068):** avg SKILL.md (28,866 ÷ 8 = 3,608) + 2 reference loads × ~1,730 avg = 7,068. Based on the previous 8-skill architecture where each domain SKILL.md ranged 3,024–5,123 tokens.
-- **1 Skill per-conversation (~7,506):** 4,506 (consolidated SKILL.md) + 2 × 1,500 (avg domain guide) = 7,506.
+- **MCP per-conversation (~25,169):** 18,229 fixed overhead + 10 × (150 call overhead + 544 measured avg response) = 25,169. The 544-token avg is from 23,395 total response tokens ÷ 43 tool calls across all 9 measured scenarios.
+- **8 Skills per-conversation (~6,732):** avg SKILL.md (28,866 ÷ 8 = 3,608) + 2 reference loads × 1,562 avg = 6,732. Ref avg = 44,596 total ref tokens ÷ 21 files ÷ 1.36 ratio correction = 1,562.
+- **1 Skill per-conversation (~7,896):** 4,506 (consolidated SKILL.md) + 2 × 1,695 (measured avg domain guide) = 7,896. Domain guide avg = Σ(8 guide sizes) ÷ 8 = 13,560 ÷ 8 = 1,695.
 - **9-scenario totals:** Sum of all 9 scenario measurements from Section 7. MCP: Σ(S1–S9) = 187,456. 1 Skill: Σ(S1–S9) + 437 auth = 107,937. 8 Skills: from previous eu-gb measurement run (same skill files, different query responses — see Section 7 notes).
 - **vs MCP percentages:** (MCP − Architecture) ÷ MCP × 100. e.g., 1 Skill: (187,456 − 107,937) ÷ 187,456 = 42%.
 - **Binary size:** sum of all embedded file bytes in each architecture. 1 Skill: 43 files = 313,063 bytes. 8 Skills: 42 files = 371,832 bytes (larger due to 8 duplicated auth blocks in SKILL.md files, ~160 lines × 8).
-- **Avg tool response (1,120):** See Section 1.1 for derivation. Used in Section 3 for conversation modeling; the 593-token weighted average from the table is for schema-only overhead, while 1,120 includes measured live responses.
+- **Avg tool response (544):** Measured from all 43 MCP tool calls across 9 scenarios: total response tokens 23,395 ÷ 43 calls = 544. This is lower than the estimated 593 from Section 1.1 because the au-syd instance had minimal data, producing small API responses. The Section 1.1 estimate (593) uses higher per-category estimates for mixed workloads.
 
 **Key finding:** All three architectures measured against the au-syd instance across
 **9 scenarios covering every feature area**:
@@ -166,27 +166,31 @@ MCP cost = fixed overhead + tool call/response tokens.
 
 | Scenario | MCP | 8 Skills | 1 Skill | MCP vs 1 Skill |
 |----------|----:|--------:|-------:|---------:|
-| Before any tool call | 18,794 | 0 | 0 | — |
-| After 1 tool call / skill activation | 19,537 | 3,024–5,123 | 4,506 | 4.3x |
-| Typical session (10 calls / 1 domain) | 26,224 | 7,068 | 7,506 | 3.5x |
-| Cross-domain session (2-3 domains) | 26,224 | 12,091–15,369 | 9,506 | 2.8x |
-| Heavy session (25 calls / 5 refs) | 37,369 | 19,506 | 14,506 | 2.6x |
+| Before any tool call | 18,229 | 0 | 0 | — |
+| After 1 tool call / skill activation | 18,923 | 3,024–5,123 | 4,506 | 4.2x |
+| Typical session (10 calls / 1 domain) | 25,169 | 6,732 | 7,896 | 3.2x |
+| Cross-domain session (2-3 domains) | 25,169 | 10,340–13,618 | 9,897 | 2.5x |
+| Heavy session (25 calls / 5 refs) | 35,579 | 15,696 | 13,376 | 2.7x |
 
 **Derivation of each cell:**
-- **MCP "Before any tool call" (18,794):** `tools/list` JSON-RPC response = 69,087 bytes ÷ 3.79 bytes/token = 18,229 tokens. The 18,794 includes JSON-RPC envelope overhead (565 extra tokens).
-- **MCP "After 1 call" (19,537):** 18,794 + 150 (call overhead) + 593 (avg response) = 19,537.
-- **MCP "Typical" (26,224):** 18,794 + 10 × (150 + 593) = 18,794 + 7,430 = 26,224.
-- **MCP "Cross-domain" (26,224):** Same as typical — MCP loads all tools once regardless of domain.
-- **MCP "Heavy" (37,369):** 18,794 + 25 × (150 + 593) = 18,794 + 18,575 = 37,369.
-- **8 Skills "After 1 call" (3,024–5,123):** Range of individual SKILL.md sizes (incident = 3,024, api-reference = 5,123).
-- **8 Skills "Typical" (7,068):** avg SKILL.md (3,608) + 2 reference files × avg 1,730 tokens = 7,068.
-- **8 Skills "Cross-domain" (12,091–15,369):** 2 SKILL.md files (7,216–10,246) + 2 refs (3,460) + 1 shared ref (1,415) = 12,091–15,121. 3 SKILL.md files: similar calculation. Range reflects domain combinations.
-- **8 Skills "Heavy" (19,506):** 2 × 3,608 (avg SKILL.md) + 5 × 2,458 (avg ref) = 19,506.
-- **1 Skill "After 1 call" (4,506):** consolidated SKILL.md = 4,506 tokens (measured).
-- **1 Skill "Typical" (7,506):** 4,506 + 2 × 1,500 (avg domain guide) = 7,506.
-- **1 Skill "Cross-domain" (9,506):** 4,506 + 3 × 1,500 (domain guides) + 500 (extra ref) = 9,506.
-- **1 Skill "Heavy" (14,506):** 4,506 + 5 × 2,000 (refs + guides) = 14,506.
-- **Ratios:** MCP ÷ 1 Skill. e.g., 26,224 ÷ 7,506 = 3.49 ≈ 3.5x.
+- **MCP base (18,229):** Live `tools/list` JSON-RPC response = 69,087 bytes = 18,229 tokens (consistent with Section 7 scenario measurements).
+- **MCP "After 1 call" (18,923):** 18,229 + 150 (call overhead) + 544 (measured avg response) = 18,923.
+- **MCP "Typical" (25,169):** 18,229 + 10 × (150 + 544) = 18,229 + 6,940 = 25,169.
+- **MCP "Cross-domain" (25,169):** Same as typical — MCP loads all tools once regardless of domain.
+- **MCP "Heavy" (35,579):** 18,229 + 25 × (150 + 544) = 18,229 + 17,350 = 35,579.
+- **8 Skills "After 1 call" (3,024–5,123):** Range of individual SKILL.md sizes from Section 2 table (incident = 3,024, api-reference = 5,123). Claude-tokenized values.
+- **8 Skills "Typical" (6,732):** avg SKILL.md (3,608) + avg refs per scenario. From measured S5-S9 8-skills data: avg = (14,594 + 7,317 + 5,429 + 5,948 + 7,342) ÷ 5 = 8,126 per scenario. Subtracting avg SKILL.md: 8,126 − 3,608 = 4,518 for refs, but these are full scenarios. Simplified model: SKILL.md (3,608) + avg 2 refs × 1,562 (see below) = 6,732. Ref avg = 44,596 refs ÷ 21 files ÷ 1.36 bytes/token ratio correction = 1,562.
+- **8 Skills "Cross-domain" (10,340–13,618):** 2 SKILL.md files (min 2×3,024 = 6,048, max 2×5,123 = 10,246) + 2 refs (3,124). Low: 6,048+1,168+3,124 = 10,340. High: 10,246+248+3,124 = 13,618. Range reflects domain combinations.
+- **8 Skills "Heavy" (15,696):** 2 × 3,608 (avg SKILL.md) + 4 × 2,120 (avg loaded refs from S1-S3 data) = 15,696.
+- **1 Skill "After 1 call" (4,506):** consolidated SKILL.md = 4,506 tokens (Claude-tokenized).
+- **1 Skill "Typical" (7,896):** 4,506 + 2 × 1,695 (avg domain guide) = 7,896. Avg domain guide = (1,852 + 1,514 + 2,576 + 1,291 + 1,415 + 1,390 + 1,406 + 2,116) ÷ 8 = 1,695.
+- **1 Skill "Cross-domain" (9,897):** 4,506 + 3 × 1,695 (domain guides) + 306 (avg extra ref) = 9,897.
+- **1 Skill "Heavy" (13,376):** 4,506 + 3 × 1,695 (domain guides) + 2 × 1,895 (avg non-guide ref) = 13,376.
+- **Ratios:** MCP ÷ 1 Skill. e.g., 25,169 ÷ 7,896 = 3.19 ≈ 3.2x.
+
+> **Note:** These are modeled estimates for typical conversation patterns. The actual measured
+> scenario results in Section 7 are the authoritative numbers. This table shows how costs
+> scale with conversation complexity.
 
 **Key insight:** 1 Skill is cheaper than 8 Skills for cross-domain tasks because it loads
 one 4,506-token SKILL.md instead of 2-3 separate SKILL.md files (6K-15K tokens combined).
@@ -215,24 +219,26 @@ SKILL.md files are smaller than the consolidated one.
 ## 5. Token Cost Projection
 
 Based on Claude Sonnet 4 pricing ($3 / 1M input tokens) and measured token counts.
-MCP: 26,224 tokens/conversation. 8 Skills: 7,068 tokens/conversation. 1 Skill: 7,506 tokens/conversation.
+MCP: 25,169 tokens/conversation. 8 Skills: 6,732 tokens/conversation. 1 Skill: 7,896 tokens/conversation.
 
 **Formula:** Annual Cost = conversations/month × 12 months × tokens/conversation ÷ 1,000,000 × $3.
-**Example (MCP, 100 convos/month):** 100 × 12 × 26,224 ÷ 1,000,000 × $3 = **$94.41**.
-**Savings formula:** (MCP cost − 1 Skill cost) ÷ MCP cost = (26,224 − 7,506) ÷ 26,224 = **71.4%** (constant because per-conversation ratio is fixed).
+**Example (MCP, 100 convos/month):** 100 × 12 × 25,169 ÷ 1,000,000 × $3 = **$90.61**.
+**Savings formula:** (MCP cost − 1 Skill cost) ÷ MCP cost = (25,169 − 7,896) ÷ 25,169 = **68.6%** (constant because per-conversation ratio is fixed).
 
 | Conversations/Month | MCP Annual Cost | 8 Skills Annual Cost | 1 Skill Annual Cost | 1 Skill Savings vs MCP |
 |--------------------:|----------------:|--------------------:|--------------------:|-----------------------:|
-| 10 | $9.44 | $2.54 | $2.70 | 71% |
-| 50 | $47.20 | $12.72 | $13.51 | 71% |
-| 100 | $94.41 | $25.44 | $27.02 | 71% |
-| 500 | $472.03 | $127.22 | $135.11 | 71% |
-| 1,000 | $944.06 | $254.45 | $270.22 | 71% |
+| 10 | $9.06 | $2.42 | $2.84 | 69% |
+| 50 | $45.30 | $12.12 | $14.21 | 69% |
+| 100 | $90.61 | $24.24 | $28.43 | 69% |
+| 500 | $453.05 | $121.18 | $142.13 | 69% |
+| 1,000 | $906.08 | $242.35 | $284.26 | 69% |
 
-**Note:** 8 Skills appears ~6% cheaper per conversation than 1 Skill in typical single-domain
-sessions. However, cross-domain tasks (incident investigation, monitoring setup) load 2-3
-SKILL.md files, making 8 Skills 50% more expensive overall across all 9 scenarios
-(161,555 vs 107,937 tokens).
+**Note:** 8 Skills appears ~15% cheaper per conversation than 1 Skill in typical single-domain
+sessions (6,732 vs 7,896 tokens) because individual SKILL.md files are smaller than the
+consolidated SKILL.md. However, cross-domain tasks (incident investigation, monitoring setup)
+load 2-3 SKILL.md files, making 8 Skills 50% more expensive overall across all 9 scenarios
+(161,555 vs 107,937 tokens). The 9-scenario measured data in Section 7 is more representative
+than this per-conversation model.
 
 ![Cost Projection](benchmarks/cost-projection.png)
 
@@ -733,7 +739,7 @@ The real cost driver is not retries — it's **skill file reads**:
 
 | Cost Source | Measured Tokens | % of Total | Derivation |
 |-------------|---------------:|----------:|------------|
-| **Skill file reads (16 files)** | **39,096** | **96%** | S1: 6 files (14,262) + S2: 4 files (9,345) + S3: 6 files (15,389) + auth script reads (100) = 39,096 |
+| **Skill file reads (16 files)** | **38,996** | **95%** | S1: 6 files (14,262) + S2: 4 files (9,345) + S3: 6 files (15,389) = 38,996 |
 | Query responses (13 queries) | 894 | 2% | S1: 7 queries (510) + S2: 3 queries (138) + S3: 3 queries (246) = 894 |
 | Error retries (10 mistakes) | 527 | 1% | S1: 4 mistakes (223) + S2: 2 mistakes (158) + S3: 4 mistakes (146) = 527 |
 | API calls + auth | 475 | 1% | S1: 2 API calls (0) + S2: 2 API (0) + S3: 3 API (38) + auth (437) = 475 |
@@ -752,13 +758,13 @@ Skills workflows take longer due to sequential query execution:
 | 1: Incident Investigation | 19 | 4 |
 | 2: Cost Optimization | 11 | 6 |
 | 3: Monitoring Setup | 16 | 6 |
-| 4: Normal Operations (CRUD) | 16 | 11 |
+| 4: Normal Operations (CRUD) | 17 | 11 |
 | 5: Query Authoring | 4 | 8 |
 | 6: Ingestion Pipeline | 6 | 4 |
 | 7: Data Governance | 5 | 4 |
 | 8: E2M & Streaming | 5 | 4 |
 | 9: API Discovery | 2 | 5 |
-| **Total** | **84** | **52** |
+| **Total** | **85** | **52** |
 
 **Step count derivation:** Skills steps = individual operations (file reads, API calls, queries,
 error retries). MCP steps = JSON-RPC `tools/call` invocations. S1–S4 step counts are from the

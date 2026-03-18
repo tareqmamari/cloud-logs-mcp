@@ -557,8 +557,8 @@ def chart_cost_projection(mcp_per_convo: int, skills_per_convo: int, output: Pat
     months = 12
     cost_per_m = 3.0  # Claude Sonnet 4 pricing
 
-    # 8 Skills uses avg individual SKILL.md (~3608) + 2 refs (~3000) = ~6608
-    eight_skills_per_convo = 7068
+    # 8 Skills uses avg individual SKILL.md (~3608) + 2 refs (~3124) = ~6732
+    eight_skills_per_convo = 6732
 
     mcp_annual = convos * months * mcp_per_convo / 1_000_000 * cost_per_m
     skills_annual = convos * months * skills_per_convo / 1_000_000 * cost_per_m
@@ -609,11 +609,13 @@ def chart_head_to_head(mcp_fixed: int, mcp_response_avg: int, avg_skill_md: int,
         mcp_fixed + 10 * call_cost,
         mcp_fixed + 25 * call_cost,
     ]
-    # 1 Skill: consolidated SKILL.md (4506) + domain guides on demand
-    one_skill_tokens = [0, avg_skill_md, avg_skill_md + 2 * 1500, avg_skill_md + 3 * 1500 + 500, avg_skill_md + 5 * 2000]
+    # 1 Skill: consolidated SKILL.md (4506) + domain guides (avg 1695) on demand
+    domain_guide_avg = 1695
+    one_skill_tokens = [0, avg_skill_md, avg_skill_md + 2 * domain_guide_avg, avg_skill_md + 3 * domain_guide_avg + 306, avg_skill_md + 3 * domain_guide_avg + 2 * 1895]
     # 8 Skills: avg individual SKILL.md (~3608) + refs; cross-domain loads 2-3 SKILL.md
     avg_8skill_md = 3608
-    eight_skills_tokens = [0, avg_8skill_md, avg_8skill_md + 2 * 1500, avg_8skill_md * 3 + 2 * 1500, avg_8skill_md * 2 + 5 * 2000]
+    ref_avg = 1562
+    eight_skills_tokens = [0, avg_8skill_md, avg_8skill_md + 2 * ref_avg, 2 * avg_8skill_md + 2 * ref_avg, 2 * avg_8skill_md + 4 * 2120]
 
     x = np.arange(len(scenarios))
     width = 0.25
