@@ -15,7 +15,7 @@ const (
 	// skillsRoot is the path prefix inside the embedded filesystem.
 	skillsRoot = ".agents/skills"
 	// skillPrefix is the naming prefix for all IBM Cloud Logs skills.
-	skillPrefix = "ibm-cloud-logs-"
+	skillPrefix = "ibm-cloud-logs"
 )
 
 // Installer manages agent skill installation from an embedded filesystem.

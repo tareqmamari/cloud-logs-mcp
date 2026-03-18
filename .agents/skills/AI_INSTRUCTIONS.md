@@ -6,28 +6,29 @@
 
 ## When to Use Skills vs MCP
 
-This project ships both an MCP server (96 tools) and Agent Skills (8 skills).
+This project ships both an MCP server (96 tools) and 1 Agent Skill with domain-specific references.
 When both are available, use this decision rule based on measured per-turn
 conversation costs (9 scenarios, live-measured):
 
 | Task | Use | Why |
 |------|-----|-----|
-| Incident investigation, debugging, raw log analysis | **MCP** | 54% cheaper — 3 turns vs 9, server-side summarization |
-| Monitoring setup (alerts + dashboards) | **MCP** | 29% cheaper — `suggest_alert` saves multiple turns |
-| Cost/policy analysis | **Skills** | ~even, but no MCP overhead on simple tasks |
-| Query authoring & validation | **Skills** | 40% cheaper |
-| Normal CRUD (create/list/get/delete) | **Skills** | 31% cheaper |
-| Ingestion pipeline (rules, enrichments) | **Skills** | 54% cheaper |
-| Data governance (access rules, webhooks) | **Skills** | 55% cheaper |
+| Incident investigation (heavy log volume) | **MCP** | Server-side summarization avoids flooding context with raw logs |
+| Incident investigation (light data) | **Skills** | 36% cheaper — consolidated skill + domain guides |
+| Monitoring setup (alerts + dashboards) | **Skills** | 36% cheaper |
+| Cost/policy analysis | **Skills** | 49% cheaper |
+| Query authoring & validation | **Skills** | 23% cheaper |
+| Normal CRUD (create/list/get/delete) | **Skills** | 28% cheaper |
+| Ingestion pipeline (rules, enrichments) | **Skills** | 50% cheaper |
+| Data governance (access rules, webhooks) | **Skills** | 59% cheaper |
 | E2M & streaming configuration | **Skills** | 56% cheaper |
-| API discovery & navigation | **Skills** | 55% cheaper |
+| API discovery & navigation | **Skills** | 56% cheaper |
 | **Plan with Skills, execute with MCP** | **Both** | Use Skills for design, MCP for execution |
 
-**Rule of thumb:** If the task involves multi-step investigation or complex
-alert design, use MCP (fewer turns overcome the schema overhead). For
-everything else, use Skills.
+**Rule of thumb:** Use Skills for everything except incident investigation on
+high-volume instances where MCP's server-side summarization prevents context
+flooding from raw log data.
 
 **Why:** MCP loads all 96 tool schemas (18,229 tokens) on every API call to
 the LLM — that's 25,229 tokens/turn total overhead vs 7,000 for Skills.
-MCP wins only when compound tools (`investigate_incident`, `suggest_alert`)
-dramatically reduce the number of turns needed. Skills wins 7 of 9 scenarios.
+The consolidated 1-skill architecture (SKILL.md + domain guides on demand)
+wins all 9 scenarios by 23-59% against the au-syd instance.

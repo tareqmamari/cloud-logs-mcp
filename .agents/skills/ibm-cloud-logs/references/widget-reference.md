@@ -2,7 +2,7 @@
 
 Detailed configuration for each IBM Cloud Logs dashboard widget type.
 
-For DataPrime query syntax used within widgets, see [IBM Cloud Logs Query Skill](../../ibm-cloud-logs-query/SKILL.md).
+For DataPrime query syntax used within widgets, see [query-guide.md](query-guide.md).
 
 ## Widget Structure
 

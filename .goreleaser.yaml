@@ -116,7 +116,7 @@ release:
     **Or download a binary** from the assets below and add it to your `PATH`.
 
     ### Agent Skills {{ .Version }}
-    This release includes 8 portable Agent Skills (agentskills.io) embedded in the binary.
+    This release includes 1 portable Agent Skill (agentskills.io) with domain-specific references, embedded in the binary.
     Skills work with Bob, Claude Code, Cursor, Gemini CLI, GitHub Copilot, and 30+ other agents.
 
     ```bash
@@ -159,7 +159,7 @@ brews:
            export LOGS_SERVICE_URL='https://[instance-id].api.[region].logs.cloud.ibm.com'
         3. Configure in Claude Desktop
 
-      Agent Skills (8 skills for IBM Cloud Logs) have been installed to ~/.agents/skills/
+      Agent Skill (IBM Cloud Logs) has been installed to ~/.agents/skills/
       These work with Claude Code, Cursor, Gemini CLI, GitHub Copilot, and 30+ other agents.
 
       Manage skills:

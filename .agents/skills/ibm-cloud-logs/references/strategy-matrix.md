@@ -3,7 +3,7 @@
 Complete reference of the `AlertingStrategyMatrix` mapping component types to alerting strategies,
 recommended metrics, queries, thresholds, and best practices.
 
-For DataPrime syntax, see [IBM Cloud Logs Query Skill](../../ibm-cloud-logs-query/SKILL.md).
+For DataPrime syntax, see [query-guide.md](query-guide.md).
 
 ---
 

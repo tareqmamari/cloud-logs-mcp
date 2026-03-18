@@ -4,7 +4,7 @@ All DataPrime queries used by the `smart_investigate` tool across its three
 investigation modes. Queries are executed against the IBM Cloud Logs
 `/v1/query` endpoint with `syntax: dataprime`.
 
-For DataPrime syntax, commands, and functions, see [IBM Cloud Logs Query Skill](../../ibm-cloud-logs-query/SKILL.md).
+For DataPrime syntax, commands, and functions, see [query-guide.md](query-guide.md).
 
 ## Global Mode Queries
 

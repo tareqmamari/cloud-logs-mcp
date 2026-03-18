@@ -80,7 +80,7 @@ echo "Installing skills to $SKILLS_DEST ..."
 mkdir -p "$SKILLS_DEST"
 
 count=0
-for skill in "$SKILLS_SRC"/ibm-cloud-logs-*; do
+for skill in "$SKILLS_SRC"/ibm-cloud-logs*; do
   [ -d "$skill" ] || continue
   name="$(basename "$skill")"
   cp -r "$skill" "$SKILLS_DEST/"

@@ -26,7 +26,7 @@ jobs:
       - name: Validate SKILL.md frontmatter
         run: |
           errors=0
-          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+          for skill_dir in .agents/skills/ibm-cloud-logs/; do
             skill_name=$(basename "$skill_dir")
             skill_md="$skill_dir/SKILL.md"
 
@@ -73,7 +73,7 @@ jobs:
           errors=0
           max_lines=500
 
-          for skill_md in .agents/skills/ibm-cloud-logs-*/SKILL.md; do
+          for skill_md in .agents/skills/ibm-cloud-logs/SKILL.md; do
             lines=$(wc -l < "$skill_md")
             skill_name=$(basename "$(dirname "$skill_md")")
 
@@ -94,7 +94,7 @@ jobs:
         run: |
           errors=0
 
-          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+          for skill_dir in .agents/skills/ibm-cloud-logs/; do
             skill_md="$skill_dir/SKILL.md"
             [ -f "$skill_md" ] || continue
 
@@ -133,7 +133,7 @@ jobs:
         run: |
           errors=0
 
-          for script in .agents/skills/ibm-cloud-logs-*/scripts/*.sh; do
+          for script in .agents/skills/ibm-cloud-logs/scripts/*.sh; do
             [ -f "$script" ] || continue
 
             if ! bash -n "$script" 2>/tmp/syntax_err; then
@@ -159,7 +159,7 @@ jobs:
         run: |
           errors=0
 
-          for json_file in .agents/skills/ibm-cloud-logs-*/assets/*.json; do
+          for json_file in .agents/skills/ibm-cloud-logs/assets/*.json; do
             [ -f "$json_file" ] || continue
 
             if ! python3 -m json.tool "$json_file" > /dev/null 2>/tmp/json_err; then
@@ -184,7 +184,7 @@ jobs:
           echo "|-------|-------|------|--------|---------|" >> "$GITHUB_STEP_SUMMARY"
 
           total_skills=0
-          for skill_dir in .agents/skills/ibm-cloud-logs-*/; do
+          for skill_dir in .agents/skills/ibm-cloud-logs/; do
             name=$(basename "$skill_dir")
             lines=$(wc -l < "$skill_dir/SKILL.md" 2>/dev/null || echo 0)
             refs=$(find "$skill_dir/references" -type f 2>/dev/null | wc -l || echo 0)
@@ -215,12 +215,11 @@ jobs:
           ./scripts/install-skills.sh
 
           # Verify skills were installed
-          count=$(ls -d "$HOME/.agents/skills/ibm-cloud-logs-"* 2>/dev/null | wc -l)
-          if [ "$count" -eq 0 ]; then
+          if [ ! -d "$HOME/.agents/skills/ibm-cloud-logs" ]; then
             echo "::error::No skills installed to ~/.agents/skills/"
             exit 1
           fi
-          echo "✓ Installed $count skills to ~/.agents/skills/"
+          echo "✓ Installed ibm-cloud-logs skill to ~/.agents/skills/"
         shell: bash
 
       - name: Run install script with --ai bob

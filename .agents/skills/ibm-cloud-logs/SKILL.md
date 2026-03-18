@@ -1,13 +1,13 @@
 ---
-name: ibm-cloud-logs-query
+name: ibm-cloud-logs
 description: >
-  Write and validate DataPrime and Lucene queries for IBM Cloud Logs.
-  Activate when the user needs to search logs, build analytical queries,
-  filter by severity/application/subsystem, aggregate metrics, compute
-  percentiles, detect anomalies, or troubleshoot query syntax errors.
-  Covers DataPrime piped syntax, field prefixes ($l, $m, $d), 30+
-  commands, 25+ ready-to-use query templates, auto-correction rules,
-  and common mistakes to avoid.
+  Comprehensive IBM Cloud Logs skill covering query authoring, alerting,
+  incident investigation, dashboards, cost optimization, ingestion,
+  access control, and API reference. Activate for any IBM Cloud Logs task
+  including DataPrime queries, SLO-based alerting, incident debugging,
+  dashboard design, TCO policies, parsing rules, data access rules, or
+  API operations. Domain-specific details are loaded on demand from
+  references/*-guide.md files.
 license: Apache-2.0
 compatibility: Works with any agent that can read markdown. No runtime dependencies.
 metadata:
@@ -17,17 +17,27 @@ metadata:
   version: "0.10.0" # x-release-please-version
 ---
 
-# IBM Cloud Logs Query Skill
+# IBM Cloud Logs Skill
 
 ## When to Activate
 
-Use this skill when the user:
-- Wants to search, filter, or analyze logs in IBM Cloud Logs
-- Asks about DataPrime or Lucene query syntax
-- Needs to build queries for error investigation, performance analysis, or security auditing
-- Is troubleshooting query syntax errors or unexpected results
-- Wants to aggregate, group, or compute statistics on log data
-- Asks about log field names, severity levels, or data prefixes
+Use this skill when the user works with IBM Cloud Logs in **any** capacity:
+
+**Query & Analysis** — search/filter/analyze logs, DataPrime or Lucene syntax, aggregation, field names, severity levels, query troubleshooting
+
+**Alerting & Monitoring** — create alerts, SLO/burn-rate monitoring, RED/USE methodology, alert noise reduction, Terraform/JSON alert config, runbooks
+
+**Incident Investigation** — debug production issues, respond to incidents, root-cause analysis, trace requests across services, proactive health scans
+
+**Dashboards** — create/update dashboards, widget types, chart configuration, monitoring views, dashboard folders
+
+**Cost Optimization** — reduce costs, TCO policies, tier selection, Events-to-Metrics (E2M), data retention, query cost estimation
+
+**Ingestion** — send logs, parsing rules, enrichments, event streams, log entry format, ingestion testing
+
+**Access Control & Security** — data access rules, multi-tenant isolation, compliance (GDPR/PII), audit logging, security monitoring queries
+
+**API & Operations** — API endpoints, authentication, error handling, rate limits, CLI command mapping, background queries
 
 ## Prerequisites
 
@@ -54,7 +64,22 @@ Use this skill when the user:
   ```
   Then use `Authorization: Bearer $TOKEN` in subsequent requests to `$LOGS_SERVICE_URL`.
 
-## Core Concepts
+## Domain Routing
+
+Load the relevant guide from `references/` based on the user's task. **Do not load guides eagerly** — only when the task requires domain-specific detail beyond what this file provides.
+
+| Domain | Load | When |
+|--------|------|------|
+| Query authoring | [query-guide.md](references/query-guide.md) | Full command reference, all query patterns, auto-correction, tier selection |
+| Alerting | [alerting-guide.md](references/alerting-guide.md) | RED/USE methodology, burn rate tables, component profiles, alert output |
+| Incidents | [incident-guide.md](references/incident-guide.md) | 3 investigation modes, heuristic patterns, SOPs, remediation |
+| Dashboards | [dashboards-guide.md](references/dashboards-guide.md) | Widget types, standard patterns, JSON structure, REST API |
+| Cost | [cost-guide.md](references/cost-guide.md) | TCO policy design, tier selection strategy, E2M, cost checklist |
+| Ingestion | [ingestion-guide.md](references/ingestion-guide.md) | Log format, parsing rules, enrichments, event streams, testing |
+| Access control | [access-control-guide.md](references/access-control-guide.md) | Data access rules, views, audit, security queries, compliance |
+| API | [api-guide.md](references/api-guide.md) | 87 operations by category, cost/rate limits, error handling |
+
+## DataPrime Quick Reference
 
 ### Query Structure
 DataPrime uses piped syntax. Queries flow left to right:
@@ -84,8 +109,6 @@ Use named values, not numbers: `filter $m.severity >= WARNING`
 
 ## CRITICAL: Common Mistakes to Avoid
 
-These are the most frequent errors. Get these wrong and your query will fail:
-
 1. **Use `&&` not `AND`** — DataPrime uses `&&` for logical AND
    ```
    WRONG: filter $l.applicationname == 'myapp' AND $m.severity >= ERROR
@@ -93,16 +116,8 @@ These are the most frequent errors. Get these wrong and your query will fail:
    ```
 
 2. **Use `||` not `OR`** — DataPrime uses `||` for logical OR
-   ```
-   WRONG: filter severity == ERROR OR severity == CRITICAL
-   RIGHT: filter $m.severity == ERROR || $m.severity == CRITICAL
-   ```
 
 3. **Use `==` not `=`** — Single `=` is not valid for comparison
-   ```
-   WRONG: filter $l.applicationname = 'myapp'
-   RIGHT: filter $l.applicationname == 'myapp'
-   ```
 
 4. **Use single quotes, not double quotes** for string values
    ```
@@ -127,37 +142,32 @@ These are the most frequent errors. Get these wrong and your query will fail:
 
 8. **`$m.level` does not exist** — Use `$m.severity` with named values (ERROR, not 5)
 
-9. **`LIKE` and `IN` are not valid** — Use `contains()`/`matches()` and `||` chains instead
+9. **`LIKE` and `IN` are not valid** — Use `contains()`/`matches()` and `||` chains
 
-10. **Use `orderby` not `sort`** — DataPrime uses `orderby` (alias: `sortby`), not `sort`
+10. **Use `orderby` not `sort`** — DataPrime uses `orderby` (alias: `sortby`)
 
-11. **Use `desc` not `-` for timestamp ordering** — `-` prefix only works for numeric fields
-   ```
-   WRONG: orderby -$m.timestamp
-   RIGHT: orderby $m.timestamp desc
-   ```
+11. **Use `desc` not `-` for timestamp ordering**
+    ```
+    WRONG: orderby -$m.timestamp
+    RIGHT: orderby $m.timestamp desc
+    ```
 
-## DataPrime Quick Reference
-
-### Essential Commands
+## Essential Commands
 | Command | Aliases | Syntax | Example |
 |---------|---------|--------|---------|
 | `source` | — | `source <name>` | `source logs` |
 | `filter` | `f`, `where` | `filter <condition>` | `filter $m.severity >= ERROR` |
-| `groupby` | — | `groupby <expr> aggregate <func>` | `groupby $l.applicationname aggregate count() as cnt` (note: `calculate` can be used as an alias for `aggregate` within `groupby` pipelines) |
+| `groupby` | — | `groupby <expr> aggregate <func>` | `groupby $l.applicationname aggregate count() as cnt` |
 | `aggregate` | `agg` | `aggregate <func> as <alias>` | `aggregate avg(duration) as avg_dur` |
 | `orderby` | `sortby` | `orderby <expr> [asc\|desc]` | `orderby error_count desc` |
 | `limit` | `l` | `limit <n>` | `limit 100` |
 | `create` | `add`, `c`, `a` | `create <field> from <expr>` | `create is_error from status_code >= 400` |
 | `extract` | — | `extract <field> into <target> using <extractor>` | `extract message into fields using regexp(e=/(?<user>\w+)/)` |
 | `choose` | — | `choose <fields>` | `choose timestamp, message, severity` |
-| `remove` | — | `remove <fields>` | `remove sensitive_data` |
 | `distinct` | — | `distinct <expr>` | `distinct $l.applicationname` |
 | `countby` | — | `countby <expr>` | `countby status_code` |
-| `top` | — | `top <n> <expr> by <order>` | `top 5 endpoint by request_count` |
 | `lucene` | — | `lucene '<query>'` | `lucene 'error AND timeout'` |
 | `find` | `text` | `find '<text>' [in <field>]` | `find 'error' in message` |
-| `join` | — | `join (<subquery>) on left=><f> == right=><f> into <k>` | See references |
 | `roundTime` | — | `roundTime(<ts>, <interval>)` | `roundTime($m.timestamp, 5m)` |
 
 ### Key Functions
@@ -176,7 +186,7 @@ These are the most frequent errors. Get these wrong and your query will fail:
 | Logical | `&&`, `\|\|`, `!` | NOT `AND`/`OR` |
 | Text search | `~`, `!~` | Contains / does not contain |
 
-## Top 10 Query Patterns
+## Top 5 Query Patterns
 
 ### 1. Error Hotspots (Start here during incidents)
 ```
@@ -186,7 +196,7 @@ source logs | filter $m.severity >= ERROR
 | orderby -error_count | limit 20
 ```
 
-### 2. Error Timeline (Visualize when errors started)
+### 2. Error Timeline
 ```
 source logs | filter $m.severity >= ERROR
 | groupby roundTime($m.timestamp, 1m) as time_bucket
@@ -194,7 +204,7 @@ source logs | filter $m.severity >= ERROR
 | orderby time_bucket
 ```
 
-### 3. Top Error Messages (Find most impactful errors)
+### 3. Top Error Messages
 ```
 source logs | filter $m.severity >= ERROR
 | groupby $d.message:string
@@ -203,14 +213,7 @@ source logs | filter $m.severity >= ERROR
 | orderby -occurrences | limit 30
 ```
 
-### 4. Error Details for Specific App
-```
-source logs | filter $l.applicationname == '{APP_NAME}' && $m.severity >= ERROR
-| choose $m.timestamp, $m.severity, $l.subsystemname, $d.message, $d.error, $d.stack_trace
-| orderby $m.timestamp desc | limit 100
-```
-
-### 5. Latency Percentiles by Endpoint
+### 4. Latency Percentiles by Endpoint
 ```
 source logs | filter $d.response_time_ms > 0
 | groupby $d.endpoint
@@ -221,128 +224,13 @@ source logs | filter $d.response_time_ms > 0
 | orderby -requests | limit 20
 ```
 
-### 6. Authentication Failures
-```
-source logs
-| filter $d.event_type == 'auth_failure'
-   || $d.message:string.contains('authentication failed')
-   || $d.message:string.contains('invalid credentials')
-| groupby $d.source_ip, $d.username
-| aggregate count() as failures
-| filter failures > 3 | orderby -failures
-```
-
-### 7. Service Health Overview
-```
-source logs | filter $m.severity >= ERROR
-| groupby $l.applicationname
-| aggregate count() as error_count
-| orderby -error_count | limit 20
-```
-
-### 8. Traffic Overview by Service
-```
-source logs
-| groupby $l.applicationname
-| aggregate count() as volume, approx_count_distinct($l.subsystemname) as components
-| orderby -volume | limit 20
-```
-
-### 9. Restart / Crash Detection
-```
-source logs
-| filter $d.message:string.contains('starting')
-   || $d.message:string.contains('shutdown')
-   || $d.message:string.contains('OOMKilled')
-   || $d.message:string.contains('terminated')
-| choose $m.timestamp, $l.applicationname, $l.subsystemname, $d.message
-| orderby $m.timestamp desc | limit 50
-```
-
-### 10. Log Volume by Application Over Time
+### 5. Log Volume by Application Over Time
 ```
 source logs
 | groupby roundTime($m.timestamp, 1h) as time_bucket, $l.applicationname
 | aggregate count() as logs
 | orderby time_bucket
 ```
-
-## Auto-Correction Rules
-
-These common issues are auto-corrected by the IBM Cloud Logs API. When writing queries manually, be aware:
-
-| What You Write | What It Becomes | Why |
-|---------------|-----------------|-----|
-| `$m.severity >= 5` | `$m.severity >= CRITICAL` | Numeric severity not supported; use named values |
-| `$d.message.contains('x')` | `$d.message:string.contains('x')` | Mixed-type fields need `:string` cast |
-| `$d.level == 'ERROR'` | `$m.severity == ERROR` | Level field has mixed types; use $m.severity |
-| `\| sort -field` | `\| orderby field desc` | `sort` is not valid DataPrime; use `orderby` |
-| `count_distinct(f)` | `approx_count_distinct(f)` | Only approximate variant supported |
-| `bucket($m.timestamp, 5m)` | `roundTime($m.timestamp, 5m)` | `bucket()` not valid; use `roundTime()` |
-| `aggregate x = count()` | `aggregate count() as x` | Use `as` for aliases, not `=` |
-| `orderby -$m.timestamp` | `orderby $m.timestamp desc` | `-` prefix only works for numeric fields |
-
-## Choosing the Right Tier
-
-Before running a query, determine which storage tier to target. The tier affects both cost and data availability.
-
-### Step 1: Check TCO Policies
-
-```bash
-ibmcloud logs policies --output json --service-url $LOGS_SERVICE_URL
-```
-
-Review the output for policies matching your target application. Key fields:
-- `priority: "type_high"` → logs go to **both** `frequent_search` AND `archive`
-- `priority: "type_medium"` → logs go to `archive` **only**
-- `priority: "type_low"` or `"type_block"` → logs are **dropped** (not stored)
-
-### Step 2: Select Tier
-
-| Situation | Use `--tier` | Why |
-|-----------|-------------|-----|
-| No TCO policies exist | `frequent_search` | Logs go to both tiers by default; frequent_search is faster |
-| Target app has `type_high` policy | `frequent_search` | Logs are in both tiers; frequent_search is faster |
-| Target app has `type_medium` policy | `archive` | Logs are only in archive |
-| Querying > 24h of data | `archive` | Archive has longer retention |
-| Unsure | `archive` | Archive always has the data (safest default) |
-
-Pass the tier flag to the CLI: `ibmcloud logs query --tier archive ...`
-
-## Step-by-Step: Building a Query
-
-1. **Start with source:** `source logs`
-2. **Add time filter if needed:** `| last 1h` or `| between @'2024-01-01' and @'2024-01-02'`
-3. **Filter to relevant data:** `| filter $l.applicationname == 'myapp' && $m.severity >= WARNING`
-4. **Aggregate or select:** `| groupby $l.subsystemname aggregate count() as errors` or `| choose $m.timestamp, $d.message`
-5. **Order results:** `| orderby -errors` (prefix with `-` for descending)
-6. **Limit output:** `| limit 20`
-
-## Using the IBM Cloud CLI
-
-All queries can be executed directly via the [IBM Cloud Logs CLI plugin](https://cloud.ibm.com/docs/cloud-logs-cli-plugin):
-
-```bash
-# Prerequisites (one-time setup)
-ibmcloud plugin install logs
-ibmcloud login --apikey <your-api-key> -r <region>
-
-# Run a DataPrime query
-ibmcloud logs query \
-  --query 'source logs | filter $m.severity >= ERROR | groupby $l.applicationname aggregate count() as errors | orderby -errors | limit 20' \
-  --output json
-
-# Submit a background query for large time ranges
-ibmcloud logs bgq-create \
-  --query 'source logs | filter $m.severity >= ERROR' \
-  --output json
-
-# Check background query status and retrieve results
-ibmcloud logs bgq-status --id <query-id>
-ibmcloud logs bgq-data --id <query-id> --output json
-```
-
-The CLI handles authentication, SSE parsing, and output formatting automatically — no manual token exchange or header management required.
 
 ## CRITICAL: Query Execution Strategy
 
@@ -352,25 +240,21 @@ unfiltered query can return 148KB+ (39,000 tokens). Follow these rules strictly.
 ### Rule 1: Always Use Aggregation Before Raw Logs
 
 Before ANY raw log query (`limit` without `groupby`), run an aggregation first:
-
 ```
 source logs | filter $m.severity >= ERROR
 | groupby $l.applicationname aggregate count() as error_count
 | orderby -error_count | limit 20
 ```
-
 Only fetch raw logs for a SPECIFIC application/pattern identified by the aggregation.
 
 ### Rule 2: Use Companion Scripts for Execution
 
-For incident investigation, use the investigation script instead of manual queries:
-
+For incident investigation:
 ```bash
 python3 scripts/investigate.py --application api-gateway --time-range 1h --output-file /tmp/report.md
 ```
 
 For any query, use the compactor to avoid raw SSE in context:
-
 ```bash
 python3 scripts/query-compact.py \
   --query "source logs | filter $m.severity >= ERROR | limit 100" \
@@ -380,7 +264,6 @@ python3 scripts/query-compact.py \
 ### Rule 3: Aggregation-First Query Ladder
 
 Follow this order for any investigation:
-
 1. **Scope** (aggregation): `groupby $l.applicationname aggregate count() as errors`
 2. **Patterns** (aggregation): `groupby $d.message:string aggregate count() as occurrences`
 3. **Timeline** (aggregation): `groupby roundTime($m.timestamp, 5m) aggregate count() as errors`
@@ -393,32 +276,86 @@ Never skip to step 4.
 Never run `| limit 50` or higher on raw log queries. Use `| limit 10` maximum.
 For larger datasets, use aggregation queries or the query-compact script.
 
+## Using the IBM Cloud CLI
+
+```bash
+# Prerequisites (one-time setup)
+ibmcloud plugin install logs
+ibmcloud login --apikey <your-api-key> -r <region>
+
+# Run a DataPrime query
+ibmcloud logs query \
+  --query 'source logs | filter $m.severity >= ERROR | groupby $l.applicationname aggregate count() as errors | orderby -errors | limit 20' \
+  --output json
+
+# Background query for large time ranges
+ibmcloud logs bgq-create \
+  --query 'source logs | filter $m.severity >= ERROR' \
+  --output json
+```
+
 ## Context Management
 
 To minimize context window usage, follow these practices:
 
-- **Do not load references eagerly.** Only read files from `references/` when the user's question requires deeper detail than what this SKILL.md provides.
-- **Use scripts with `--output-file`** to write large results to disk instead of stdout:
-  ```
-  ./scripts/validate-query.sh --json --output-file /tmp/validation.json 'source logs | ...'
-  ```
-  Then read the summary line from stdout and only load the file if the user needs details.
-- **Write generated queries to files** when producing multiple queries or long outputs:
-  ```
-  # Write to file, show user the path
-  echo "source logs | filter ..." > /tmp/query.dpl
-  ```
+- **Do not load references eagerly.** Only read files from `references/` when the user's question requires deeper detail than what this SKILL.md provides. Use the Domain Routing table above.
+- **Use scripts with `--output-file`** to write large results to disk instead of stdout.
+- **Write generated configs to files** (alert JSON, Terraform, dashboard JSON, rule groups, etc.) instead of pasting inline.
 - **Prefer `--json` output** from scripts — it's structured and agents can extract only needed fields.
 - **Do not paste full reference files** into responses. Summarize and link instead.
 
-## Additional Resources
+## Resource Index
 
-- [DataPrime Command Reference](references/dataprime-commands.md) — Full 30+ command catalog with syntax, aliases, examples
-- [Query Templates Catalog](references/query-templates.md) — All 25+ templates across 7 categories
-- [DataPrime Functions Reference](references/dataprime-functions.md) — Aggregation, string, time, conditional, array functions
-- [Lucene Integration](references/lucene-integration.md) — Lucene syntax and combining with DataPrime
-- [Query Validation Script](scripts/validate-query.sh) — Offline DataPrime query validator (supports `--json`, `--output-file`)
-- [Query Compactor](../../scripts/query-compact.py) — Run any query with automatic SSE parsing and result compaction
-- [Investigation Script](../../scripts/investigate.py) — Run full incident investigation pipeline, returns compact markdown
+### Domain Guides (load on demand via Domain Routing table)
+- [query-guide.md](references/query-guide.md) — Full query authoring reference
+- [alerting-guide.md](references/alerting-guide.md) — Alerting & monitoring
+- [incident-guide.md](references/incident-guide.md) — Incident investigation
+- [dashboards-guide.md](references/dashboards-guide.md) — Dashboard design
+- [cost-guide.md](references/cost-guide.md) — Cost optimization
+- [ingestion-guide.md](references/ingestion-guide.md) — Ingestion pipelines
+- [access-control-guide.md](references/access-control-guide.md) — Access control & security
+- [api-guide.md](references/api-guide.md) — API reference
+
+### Deep References (21 files)
+- [dataprime-commands.md](references/dataprime-commands.md) — Full 30+ command catalog
+- [dataprime-functions.md](references/dataprime-functions.md) — Aggregation, string, time, conditional functions
+- [lucene-integration.md](references/lucene-integration.md) — Lucene syntax and DataPrime integration
+- [query-templates.md](references/query-templates.md) — 25+ templates across 7 categories
+- [burn-rate-math.md](references/burn-rate-math.md) — Detailed burn rate formulas
+- [component-profiles.md](references/component-profiles.md) — Detection keywords, labels, tiers
+- [runbook-templates.md](references/runbook-templates.md) — Per-component runbook templates
+- [strategy-matrix.md](references/strategy-matrix.md) — Full metric recommendations
+- [heuristic-details.md](references/heuristic-details.md) — Pattern lists, SOPs, escalation
+- [investigation-queries.md](references/investigation-queries.md) — All investigation DataPrime queries
+- [remediation-assets.md](references/remediation-assets.md) — Alert and dashboard generation
+- [dashboard-schema.md](references/dashboard-schema.md) — Full JSON schema
+- [widget-reference.md](references/widget-reference.md) — Widget configuration per type
+- [e2m-guide.md](references/e2m-guide.md) — Events-to-Metrics configuration
+- [tco-policies.md](references/tco-policies.md) — TCO policy details
+- [enrichment-types.md](references/enrichment-types.md) — Enrichment types and config
+- [log-format.md](references/log-format.md) — Log entry JSON schema
+- [parsing-rules.md](references/parsing-rules.md) — Rule types and config
+- [access-rules.md](references/access-rules.md) — Access rules API details
+- [authentication.md](references/authentication.md) — IAM token exchange
+- [endpoints.md](references/endpoints.md) — All endpoints by category
+
+### Assets (10 files)
+- [alert-config.json](assets/alert-config.json), [alert-terraform.tf](assets/alert-terraform.tf)
+- [incident-dashboard.json](assets/incident-dashboard.json), [service-health-dashboard.json](assets/service-health-dashboard.json)
+- [access-rule-template.json](assets/access-rule-template.json)
+- [api-endpoints.json](assets/api-endpoints.json)
+- [cost-analysis-queries.json](assets/cost-analysis-queries.json)
+- [query-templates.json](assets/query-templates.json)
+- [sample-logs.json](assets/sample-logs.json)
+- [investigation-checklist.md](assets/investigation-checklist.md)
+
+### Scripts (3 files)
+- [validate-query.sh](scripts/validate-query.sh) — Offline DataPrime query validator
+- [calculate-burn-rate.sh](scripts/calculate-burn-rate.sh) — Burn rate table calculator
+- [send-test-logs.sh](scripts/send-test-logs.sh) — Ingestion test script
+
+### Companion Scripts (in project root)
+- [Query Compactor](../../scripts/query-compact.py) — SSE parsing and result compaction
+- [Investigation Script](../../scripts/investigate.py) — Full incident investigation pipeline
 
 > **Windows note:** Bash scripts require bash (available via [Git for Windows](https://gitforwindows.org/) or WSL). Python scripts require Python 3.9+ and `pip install requests`.
