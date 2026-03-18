@@ -113,10 +113,13 @@ print("── 4a: Alert Lifecycle (Skills + CLI) ──")
 print()
 
 # Agent reads skill files to learn how alerts work
-alert_skill = os.path.join(SKILLS_DIR, "ibm-cloud-logs-alerting", "SKILL.md")
-skills_ledger.append(log_entry("Read alerting/SKILL.md", file_size(alert_skill), "skill_read"))
+alert_skill = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")
+skills_ledger.append(log_entry("Read ibm-cloud-logs/SKILL.md", file_size(alert_skill), "skill_read"))
 
-strategy_ref = os.path.join(SKILLS_DIR, "ibm-cloud-logs-alerting", "references", "strategy-matrix.md")
+alerting_guide = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "alerting-guide.md")
+skills_ledger.append(log_entry("Read alerting-guide.md", file_size(alerting_guide), "skill_read"))
+
+strategy_ref = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "strategy-matrix.md")
 skills_ledger.append(log_entry("Read strategy-matrix.md", file_size(strategy_ref), "skill_read"))
 
 # Create alert (IBM Cloud Logs native API format)
@@ -179,10 +182,10 @@ print()
 print("── 4b: Dashboard Lifecycle (Skills + CLI) ──")
 print()
 
-dash_skill = os.path.join(SKILLS_DIR, "ibm-cloud-logs-dashboards", "SKILL.md")
-skills_ledger.append(log_entry("Read dashboards/SKILL.md", file_size(dash_skill), "skill_read"))
+dash_guide = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "dashboards-guide.md")
+skills_ledger.append(log_entry("Read dashboards-guide.md", file_size(dash_guide), "skill_read"))
 
-dash_schema_ref = os.path.join(SKILLS_DIR, "ibm-cloud-logs-dashboards", "references", "dashboard-schema.md")
+dash_schema_ref = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "dashboard-schema.md")
 skills_ledger.append(log_entry("Read dashboard-schema.md", file_size(dash_schema_ref), "skill_read"))
 
 # Create dashboard (format matching IBM Cloud Logs API)
@@ -253,8 +256,8 @@ print()
 print("── 4c: View Lifecycle (Skills + CLI) ──")
 print()
 
-access_skill = os.path.join(SKILLS_DIR, "ibm-cloud-logs-access-control", "SKILL.md")
-skills_ledger.append(log_entry("Read access-control/SKILL.md", file_size(access_skill), "skill_read"))
+access_guide = os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "access-control-guide.md")
+skills_ledger.append(log_entry("Read access-control-guide.md", file_size(access_guide), "skill_read"))
 
 # Create view
 view_def = {

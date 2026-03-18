@@ -6,7 +6,7 @@
       "steps": [
         {
           "label": "investigate_incident (global, 24h)",
-          "bytes": 879,
+          "bytes": 881,
           "tokens": 232,
           "category": "tool_response"
         },
@@ -30,20 +30,20 @@
       "steps": [
         {
           "label": "list_policies",
-          "bytes": 6568,
-          "tokens": 1733,
+          "bytes": 219,
+          "tokens": 58,
           "category": "tool_response"
         },
         {
           "label": "query_logs (volume by severity)",
-          "bytes": 441,
-          "tokens": 116,
+          "bytes": 303,
+          "tokens": 80,
           "category": "tool_response"
         },
         {
           "label": "query_logs (volume by app)",
-          "bytes": 621,
-          "tokens": 164,
+          "bytes": 303,
+          "tokens": 80,
           "category": "tool_response"
         },
         {
@@ -59,15 +59,15 @@
           "category": "tool_response"
         }
       ],
-      "response_tokens": 2486,
-      "total_tokens": 20715
+      "response_tokens": 691,
+      "total_tokens": 18920
     },
     "s3": {
       "steps": [
         {
           "label": "query_logs (discover apps)",
-          "bytes": 622,
-          "tokens": 164,
+          "bytes": 304,
+          "tokens": 80,
           "category": "tool_response"
         },
         {
@@ -95,9 +95,9 @@
           "category": "tool_response"
         }
       ],
-      "response_tokens": 6709,
-      "total_tokens": 24938
+      "response_tokens": 6625,
+      "total_tokens": 24854
     }
   },
-  "grand_total_tokens": 32782
+  "grand_total_tokens": 30903
 }

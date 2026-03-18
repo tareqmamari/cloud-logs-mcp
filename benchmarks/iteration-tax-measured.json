@@ -4,16 +4,16 @@
       "steps": [
         {
           "step": 1,
-          "name": "Read skill: incident-investigation/SKILL.md",
-          "bytes": 16265,
-          "tokens": 4292,
+          "name": "Read skill: ibm-cloud-logs/SKILL.md",
+          "bytes": 17079,
+          "tokens": 4506,
           "category": "skill_read"
         },
         {
           "step": 2,
-          "name": "Read skill: query/SKILL.md",
-          "bytes": 15712,
-          "tokens": 4146,
+          "name": "Read skill: ibm-cloud-logs/references/incident-guide.md",
+          "bytes": 7019,
+          "tokens": 1852,
           "category": "skill_read"
         },
         {
@@ -33,8 +33,8 @@
         {
           "step": 5,
           "name": "Query global error rate (archive)",
-          "bytes": 1978,
-          "tokens": 522,
+          "bytes": 221,
+          "tokens": 58,
           "category": "query_success"
         },
         {
@@ -47,29 +47,29 @@
         {
           "step": 7,
           "name": "Query with && (fixed)",
-          "bytes": 25545,
-          "tokens": 6740,
+          "bytes": 221,
+          "tokens": 58,
           "category": "query_success"
         },
         {
           "step": 8,
           "name": "Global error timeline",
-          "bytes": 1675,
-          "tokens": 442,
+          "bytes": 82,
+          "tokens": 22,
           "category": "query_success"
         },
         {
           "step": 9,
           "name": "Critical errors (raw)",
-          "bytes": 148099,
-          "tokens": 39076,
+          "bytes": 82,
+          "tokens": 22,
           "category": "query_success"
         },
         {
           "step": 10,
-          "name": "Read skill: investigation-queries.md",
-          "bytes": 6180,
-          "tokens": 1631,
+          "name": "Read skill: ibm-cloud-logs/references/investigation-queries.md",
+          "bytes": 6147,
+          "tokens": 1622,
           "category": "skill_read"
         },
         {
@@ -82,41 +82,41 @@
         {
           "step": 12,
           "name": "Component error patterns (fixed)",
-          "bytes": 203,
-          "tokens": 54,
+          "bytes": 352,
+          "tokens": 93,
           "category": "query_success"
         },
         {
           "step": 13,
           "name": "Component subsystems",
-          "bytes": 659,
-          "tokens": 174,
+          "bytes": 358,
+          "tokens": 94,
           "category": "query_success"
         },
         {
           "step": 14,
           "name": "Component dependencies",
-          "bytes": 82,
-          "tokens": 22,
+          "bytes": 616,
+          "tokens": 163,
           "category": "query_success"
         },
         {
           "step": 15,
-          "name": "Read skill: heuristic-details.md",
+          "name": "Read skill: ibm-cloud-logs/references/heuristic-details.md",
           "bytes": 8118,
           "tokens": 2142,
           "category": "skill_read"
         },
         {
           "step": 16,
-          "name": "Read skill: alerting/SKILL.md",
-          "bytes": 19514,
-          "tokens": 5149,
+          "name": "Read skill: ibm-cloud-logs/references/alerting-guide.md",
+          "bytes": 9763,
+          "tokens": 2576,
           "category": "skill_read"
         },
         {
           "step": 17,
-          "name": "Read skill: burn-rate-math.md",
+          "name": "Read skill: ibm-cloud-logs/references/burn-rate-math.md",
           "bytes": 5927,
           "tokens": 1564,
           "category": "skill_read"
@@ -136,24 +136,24 @@
           "category": "api_call"
         }
       ],
-      "happy_path_tokens": 65954,
+      "happy_path_tokens": 14772,
       "iteration_tax_tokens": 223,
-      "total_tokens": 66177
+      "total_tokens": 14995
     },
     "s2": {
       "steps": [
         {
           "step": 1,
-          "name": "Read skill: cost-optimization/SKILL.md",
-          "bytes": 14865,
-          "tokens": 3922,
+          "name": "Read skill: ibm-cloud-logs/SKILL.md",
+          "bytes": 17079,
+          "tokens": 4506,
           "category": "skill_read"
         },
         {
           "step": 2,
-          "name": "Read skill: query/SKILL.md",
-          "bytes": 15712,
-          "tokens": 4146,
+          "name": "Read skill: ibm-cloud-logs/references/cost-guide.md",
+          "bytes": 5738,
+          "tokens": 1514,
           "category": "skill_read"
         },
         {
@@ -173,27 +173,27 @@
         {
           "step": 5,
           "name": "Volume by severity (fixed)",
-          "bytes": 638,
-          "tokens": 168,
+          "bytes": 82,
+          "tokens": 22,
           "category": "query_success"
         },
         {
           "step": 6,
           "name": "Volume by application",
-          "bytes": 2021,
-          "tokens": 533,
+          "bytes": 221,
+          "tokens": 58,
           "category": "query_success"
         },
         {
           "step": 7,
           "name": "Volume by app + severity",
-          "bytes": 5967,
-          "tokens": 1574,
+          "bytes": 221,
+          "tokens": 58,
           "category": "query_success"
         },
         {
           "step": 8,
-          "name": "Read skill: tco-policies.md",
+          "name": "Read skill: ibm-cloud-logs/references/tco-policies.md",
           "bytes": 4938,
           "tokens": 1303,
           "category": "skill_read"
@@ -214,37 +214,37 @@
         },
         {
           "step": 11,
-          "name": "Read skill: e2m-guide.md",
+          "name": "Read skill: ibm-cloud-logs/references/e2m-guide.md",
           "bytes": 7662,
           "tokens": 2022,
           "category": "skill_read"
         }
       ],
-      "happy_path_tokens": 13668,
+      "happy_path_tokens": 9483,
       "iteration_tax_tokens": 158,
-      "total_tokens": 13826
+      "total_tokens": 9641
     },
     "s3": {
       "steps": [
         {
           "step": 1,
-          "name": "Read skill: query/SKILL.md",
-          "bytes": 15712,
-          "tokens": 4146,
+          "name": "Read skill: ibm-cloud-logs/SKILL.md",
+          "bytes": 17079,
+          "tokens": 4506,
           "category": "skill_read"
         },
         {
           "step": 2,
-          "name": "Read skill: alerting/SKILL.md",
-          "bytes": 19514,
-          "tokens": 5149,
+          "name": "Read skill: ibm-cloud-logs/references/alerting-guide.md",
+          "bytes": 9763,
+          "tokens": 2576,
           "category": "skill_read"
         },
         {
           "step": 3,
           "name": "Discover applications",
-          "bytes": 2367,
-          "tokens": 625,
+          "bytes": 358,
+          "tokens": 94,
           "category": "query_success"
         },
         {
@@ -257,29 +257,29 @@
         {
           "step": 5,
           "name": "App patterns (single quotes)",
-          "bytes": 2507,
-          "tokens": 661,
+          "bytes": 358,
+          "tokens": 94,
           "category": "query_success"
         },
         {
           "step": 6,
           "name": "Error rate baseline",
-          "bytes": 391,
-          "tokens": 103,
+          "bytes": 221,
+          "tokens": 58,
           "category": "query_success"
         },
         {
           "step": 7,
-          "name": "Read skill: component-profiles.md",
+          "name": "Read skill: ibm-cloud-logs/references/component-profiles.md",
           "bytes": 7235,
           "tokens": 1909,
           "category": "skill_read"
         },
         {
           "step": 8,
-          "name": "Read skill: strategy-matrix.md",
-          "bytes": 12870,
-          "tokens": 3396,
+          "name": "Read skill: ibm-cloud-logs/references/strategy-matrix.md",
+          "bytes": 12837,
+          "tokens": 3387,
           "category": "skill_read"
         },
         {
@@ -299,20 +299,20 @@
         {
           "step": 11,
           "name": "GET /v1/outgoing_webhooks",
-          "bytes": 24,
-          "tokens": 6,
+          "bytes": 0,
+          "tokens": 0,
           "category": "api_call"
         },
         {
           "step": 12,
-          "name": "Read skill: dashboards/SKILL.md",
-          "bytes": 11614,
-          "tokens": 3064,
+          "name": "Read skill: ibm-cloud-logs/references/dashboards-guide.md",
+          "bytes": 5269,
+          "tokens": 1390,
           "category": "skill_read"
         },
         {
           "step": 13,
-          "name": "Read skill: dashboard-schema.md",
+          "name": "Read skill: ibm-cloud-logs/references/dashboard-schema.md",
           "bytes": 6144,
           "tokens": 1621,
           "category": "skill_read"
@@ -339,14 +339,14 @@
           "category": "error_retry"
         }
       ],
-      "happy_path_tokens": 20718,
+      "happy_path_tokens": 15673,
       "iteration_tax_tokens": 146,
-      "total_tokens": 20864
+      "total_tokens": 15819
     }
   },
-  "auth_tokens": 440,
-  "grand_happy_path": 100340,
+  "auth_tokens": 437,
+  "grand_happy_path": 39928,
   "grand_iteration_tax": 527,
-  "grand_total": 101307,
+  "grand_total": 40892,
   "mcp_total": 71382
 }

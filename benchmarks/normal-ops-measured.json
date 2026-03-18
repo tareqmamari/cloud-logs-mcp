@@ -3,15 +3,21 @@
   "skills": {
     "steps": [
       {
-        "label": "Read alerting/SKILL.md",
-        "bytes": 19514,
-        "tokens": 5149,
+        "label": "Read ibm-cloud-logs/SKILL.md",
+        "bytes": 17079,
+        "tokens": 4506,
+        "category": "skill_read"
+      },
+      {
+        "label": "Read alerting-guide.md",
+        "bytes": 9763,
+        "tokens": 2576,
         "category": "skill_read"
       },
       {
         "label": "Read strategy-matrix.md",
-        "bytes": 12870,
-        "tokens": 3396,
+        "bytes": 12837,
+        "tokens": 3387,
         "category": "skill_read"
       },
       {
@@ -39,9 +45,9 @@
         "category": "api_call"
       },
       {
-        "label": "Read dashboards/SKILL.md",
-        "bytes": 11614,
-        "tokens": 3064,
+        "label": "Read dashboards-guide.md",
+        "bytes": 5269,
+        "tokens": 1390,
         "category": "skill_read"
       },
       {
@@ -57,9 +63,9 @@
         "category": "api_call"
       },
       {
-        "label": "GET /v1/dashboards (list, 4 dashboards)",
-        "bytes": 870,
-        "tokens": 230,
+        "label": "GET /v1/dashboards (list, 7 dashboards)",
+        "bytes": 1503,
+        "tokens": 397,
         "category": "api_call"
       },
       {
@@ -75,9 +81,9 @@
         "category": "api_call"
       },
       {
-        "label": "Read access-control/SKILL.md",
-        "bytes": 14659,
-        "tokens": 3868,
+        "label": "Read access-control-guide.md",
+        "bytes": 5364,
+        "tokens": 1415,
         "category": "skill_read"
       },
       {
@@ -87,9 +93,9 @@
         "category": "api_call"
       },
       {
-        "label": "GET /v1/views (list, 13 views)",
-        "bytes": 4644,
-        "tokens": 1225,
+        "label": "GET /v1/views (list, 17 views)",
+        "bytes": 5985,
+        "tokens": 1579,
         "category": "api_call"
       },
       {
@@ -101,17 +107,17 @@
     ],
     "by_category": {
       "skill_read": {
-        "tokens": 17098,
-        "bytes": 64801,
-        "count": 5
+        "tokens": 14895,
+        "bytes": 56456,
+        "count": 6
       },
       "api_call": {
-        "tokens": 2520,
-        "bytes": 9548,
+        "tokens": 3041,
+        "bytes": 11522,
         "count": 11
       }
     },
-    "total_tokens": 19618
+    "total_tokens": 17936
   },
   "mcp": {
     "steps": [
@@ -153,8 +159,8 @@
       },
       {
         "label": "list_dashboards",
-        "bytes": 1540,
-        "tokens": 406,
+        "bytes": 2470,
+        "tokens": 652,
         "category": "tool_response"
       },
       {
@@ -177,8 +183,8 @@
       },
       {
         "label": "list_views",
-        "bytes": 9964,
-        "tokens": 2629,
+        "bytes": 12533,
+        "tokens": 3307,
         "category": "tool_response"
       }
     ],
@@ -189,14 +195,14 @@
         "count": 1
       },
       "tool_response": {
-        "tokens": 5766,
-        "bytes": 21854,
+        "tokens": 6690,
+        "bytes": 25353,
         "count": 10
       }
     },
-    "total_tokens": 23995
+    "total_tokens": 24919
   },
   "winner": "Skills",
-  "delta_tokens": 4377,
-  "delta_pct": 18
+  "delta_tokens": 6983,
+  "delta_pct": 28
 }
