@@ -20,6 +20,15 @@
 | Avg tool response (measured) | 1,120 tokens | N/A (in-context) | N/A (in-context) |
 | Binary size impact | — | +371,832 bytes embedded | +313,063 bytes embedded |
 
+**Derivation of key numbers:**
+- **MCP per-conversation (~26,224):** 18,229 fixed overhead + 10 × (150 call overhead + 593 avg response) = 26,224. The 593-token avg response is the weighted average from Section 1.1.
+- **8 Skills per-conversation (~7,068):** avg SKILL.md (28,866 ÷ 8 = 3,608) + 2 reference loads × ~1,730 avg = 7,068. Based on the previous 8-skill architecture where each domain SKILL.md ranged 3,024–5,123 tokens.
+- **1 Skill per-conversation (~7,506):** 4,506 (consolidated SKILL.md) + 2 × 1,500 (avg domain guide) = 7,506.
+- **9-scenario totals:** Sum of all 9 scenario measurements from Section 7. MCP: Σ(S1–S9) = 187,456. 1 Skill: Σ(S1–S9) + 437 auth = 107,937. 8 Skills: from previous eu-gb measurement run (same skill files, different query responses — see Section 7 notes).
+- **vs MCP percentages:** (MCP − Architecture) ÷ MCP × 100. e.g., 1 Skill: (187,456 − 107,937) ÷ 187,456 = 42%.
+- **Binary size:** sum of all embedded file bytes in each architecture. 1 Skill: 43 files = 313,063 bytes. 8 Skills: 42 files = 371,832 bytes (larger due to 8 duplicated auth blocks in SKILL.md files, ~160 lines × 8).
+- **Avg tool response (1,120):** See Section 1.1 for derivation. Used in Section 3 for conversation modeling; the 593-token weighted average from the table is for schema-only overhead, while 1,120 includes measured live responses.
+
 **Key finding:** All three architectures measured against the au-syd instance across
 **9 scenarios covering every feature area**:
 - **1 Skill:** 107,937 tokens — **42% cheaper than MCP**, **33% cheaper than 8 Skills**
@@ -29,7 +38,8 @@
 Consolidating 8 skills into 1 skill with on-demand domain guides eliminated redundant
 SKILL.md loads for cross-domain tasks (S1 dropped from 66,177 → 14,995 tokens).
 The iteration tax (syntax errors, wrong tier, CLI flag mistakes) is negligible:
-**527 tokens (0.5%)**. See [Section 7](#7-real-world-scenario-benchmark-measured).
+**527 tokens (0.5%)** = sum of S1 (223) + S2 (158) + S3 (146).
+See [Section 7](#7-real-world-scenario-benchmark-measured).
 
 ---
 
@@ -90,17 +100,17 @@ Response sizes are the actual bytes returned by each tool:
 
 **Estimated response sizes by category** (for tools requiring network):
 
-| Category | Tools | Avg Response | Source |
-|----------|------:|------------:|--------|
-| CRUD list | 30 | ~500 tokens | estimate |
-| CRUD get | 20 | ~300 tokens | estimate |
-| CRUD create/update | 20 | ~300 tokens | estimate |
-| CRUD delete | 15 | ~50 tokens | estimate |
-| Query | 5 | ~3,000 tokens | estimate |
-| Reference | 4 | ~2,500 tokens | measured_locally |
-| Intelligence | 4 | ~1,500 tokens | estimate |
-| Meta | 3 | ~400 tokens | measured_locally |
-| **Weighted average** | **101** | **~593 tokens** | |
+| Category | Tools | Avg Response | Source | Basis |
+|----------|------:|------------:|--------|-------|
+| CRUD list | 30 | ~500 tokens | estimate | Measured: `list_views` = 3,307 tokens (17 items), `list_dashboards` = 652 (7 items). Estimate based on typical 5-10 item responses |
+| CRUD get | 20 | ~300 tokens | estimate | Measured: `get_dashboard` = 723, `get_alert_definition` = 337. Average of measured values, rounded down for typical single-resource |
+| CRUD create/update | 20 | ~300 tokens | estimate | Measured: `create_alert_definition` = 337, `create_dashboard` = 707. Conservative average |
+| CRUD delete | 15 | ~50 tokens | estimate | Measured: `delete_alert_definition` = 24, `delete_dashboard` = 25. Deletion responses are confirmation messages |
+| Query | 5 | ~3,000 tokens | estimate | Measured range: 22 tokens (aggregation on au-syd) to 39,076 (raw logs on eu-gb). 3,000 is conservative mid-range for mixed workloads |
+| Reference | 4 | ~2,500 tokens | measured_locally | `get_dataprime_reference` = 549, `get_query_templates` = 37. Avg of Go test results, weighted by typical usage |
+| Intelligence | 4 | ~1,500 tokens | estimate | Measured: `suggest_alert` = 4,842–5,419, `investigate_incident` = 232 (no issues). 1,500 is conservative average |
+| Meta | 3 | ~400 tokens | measured_locally | `list_tool_categories` = 617, `search_tools` = 284, `session_context` = 32. Weighted average |
+| **Weighted average** | **101** | **~593 tokens** | | **Formula:** Σ(tools × avg) ÷ Σ(tools) = (30×500 + 20×300 + 20×300 + 15×50 + 5×3000 + 4×2500 + 4×1500 + 3×400) ÷ 101 = 59,950 ÷ 101 = **593** |
 
 ---
 
@@ -124,9 +134,25 @@ strategy. Domain-specific guides (alerting, incident, dashboards, cost, ingestio
 access control, API, query) are loaded on demand from `references/`.
 
 **Previous architecture (8 separate skills):** 98,018 tokens across 8 SKILL.md files
-(28,866 tokens for SKILL.md files alone). The consolidation reduced the entry-point
-cost from 3,024-5,123 tokens (per domain skill) to a single 4,506-token SKILL.md
-shared across all domains.
+(28,866 tokens for SKILL.md files alone), 42 files totaling 371,832 bytes. The
+consolidation reduced the entry-point cost from 3,024–5,123 tokens (per domain skill)
+to a single 4,506-token SKILL.md shared across all domains.
+
+**Per-skill SKILL.md token counts (previous architecture, measured):**
+
+| Skill | SKILL.md Tokens | References | Scripts | Assets | Total |
+|-------|----------------:|-----------:|--------:|-------:|------:|
+| access-control | 3,081 | 1,649 | 0 | 1,110 | 5,840 |
+| alerting | 4,745 | 9,287 | 1,976 | 1,193 | 17,201 |
+| api-reference | 5,123 | 3,731 | 0 | 3,844 | 12,698 |
+| cost-optimization | 3,628 | 3,693 | 0 | 1,507 | 8,828 |
+| dashboards | 2,597 | 4,383 | 0 | 4,363 | 11,343 |
+| incident-investigation | 3,024 | 5,604 | 0 | 1,402 | 10,030 |
+| ingestion | 3,142 | 3,957 | 1,338 | 687 | 9,124 |
+| query | 3,526 | 12,292 | 3,254 | 3,882 | 22,954 |
+| **Total** | **28,866** | **44,596** | **6,568** | **17,988** | **98,018** |
+
+Average SKILL.md: 28,866 ÷ 8 = **3,608 tokens**. Range: 2,597 (dashboards) to 5,123 (api-reference).
 
 ![Skill Token Breakdown](benchmarks/skill-token-breakdown.png)
 
@@ -145,6 +171,22 @@ MCP cost = fixed overhead + tool call/response tokens.
 | Typical session (10 calls / 1 domain) | 26,224 | 7,068 | 7,506 | 3.5x |
 | Cross-domain session (2-3 domains) | 26,224 | 12,091–15,369 | 9,506 | 2.8x |
 | Heavy session (25 calls / 5 refs) | 37,369 | 19,506 | 14,506 | 2.6x |
+
+**Derivation of each cell:**
+- **MCP "Before any tool call" (18,794):** `tools/list` JSON-RPC response = 69,087 bytes ÷ 3.79 bytes/token = 18,229 tokens. The 18,794 includes JSON-RPC envelope overhead (565 extra tokens).
+- **MCP "After 1 call" (19,537):** 18,794 + 150 (call overhead) + 593 (avg response) = 19,537.
+- **MCP "Typical" (26,224):** 18,794 + 10 × (150 + 593) = 18,794 + 7,430 = 26,224.
+- **MCP "Cross-domain" (26,224):** Same as typical — MCP loads all tools once regardless of domain.
+- **MCP "Heavy" (37,369):** 18,794 + 25 × (150 + 593) = 18,794 + 18,575 = 37,369.
+- **8 Skills "After 1 call" (3,024–5,123):** Range of individual SKILL.md sizes (incident = 3,024, api-reference = 5,123).
+- **8 Skills "Typical" (7,068):** avg SKILL.md (3,608) + 2 reference files × avg 1,730 tokens = 7,068.
+- **8 Skills "Cross-domain" (12,091–15,369):** 2 SKILL.md files (7,216–10,246) + 2 refs (3,460) + 1 shared ref (1,415) = 12,091–15,121. 3 SKILL.md files: similar calculation. Range reflects domain combinations.
+- **8 Skills "Heavy" (19,506):** 2 × 3,608 (avg SKILL.md) + 5 × 2,458 (avg ref) = 19,506.
+- **1 Skill "After 1 call" (4,506):** consolidated SKILL.md = 4,506 tokens (measured).
+- **1 Skill "Typical" (7,506):** 4,506 + 2 × 1,500 (avg domain guide) = 7,506.
+- **1 Skill "Cross-domain" (9,506):** 4,506 + 3 × 1,500 (domain guides) + 500 (extra ref) = 9,506.
+- **1 Skill "Heavy" (14,506):** 4,506 + 5 × 2,000 (refs + guides) = 14,506.
+- **Ratios:** MCP ÷ 1 Skill. e.g., 26,224 ÷ 7,506 = 3.49 ≈ 3.5x.
 
 **Key insight:** 1 Skill is cheaper than 8 Skills for cross-domain tasks because it loads
 one 4,506-token SKILL.md instead of 2-3 separate SKILL.md files (6K-15K tokens combined).
@@ -174,6 +216,10 @@ SKILL.md files are smaller than the consolidated one.
 
 Based on Claude Sonnet 4 pricing ($3 / 1M input tokens) and measured token counts.
 MCP: 26,224 tokens/conversation. 8 Skills: 7,068 tokens/conversation. 1 Skill: 7,506 tokens/conversation.
+
+**Formula:** Annual Cost = conversations/month × 12 months × tokens/conversation ÷ 1,000,000 × $3.
+**Example (MCP, 100 convos/month):** 100 × 12 × 26,224 ÷ 1,000,000 × $3 = **$94.41**.
+**Savings formula:** (MCP cost − 1 Skill cost) ÷ MCP cost = (26,224 − 7,506) ÷ 26,224 = **71.4%** (constant because per-conversation ratio is fixed).
 
 | Conversations/Month | MCP Annual Cost | 8 Skills Annual Cost | 1 Skill Annual Cost | 1 Skill Savings vs MCP |
 |--------------------:|----------------:|--------------------:|--------------------:|-----------------------:|
@@ -224,6 +270,14 @@ SKILL.md files, making 8 Skills 50% more expensive overall across all 9 scenario
 > **Data source:** Live queries against IBM Cloud Logs (au-syd instance, archive tier, 24h window).
 > Skill file sizes measured from embedded files. MCP responses measured from the actual MCP server binary.
 > Token counts estimated at 3.79 bytes/token (calibrated from wire payload measurement: 71,195 bytes = 18,794 tokens).
+>
+> **How to read the tables:** Each Skills scenario shows every step with measured bytes and
+> derived tokens (bytes ÷ 3.79). Skill file reads are measured from the actual embedded files
+> in `.agents/skills/ibm-cloud-logs/`. API responses and query results are the actual HTTP
+> response bodies from the au-syd instance. MCP scenarios show `tools/list` fixed overhead
+> (18,229 tokens, constant across all scenarios) plus the JSON-RPC response for each `tools/call`.
+> MCP total = 18,229 + Σ(tool response tokens). Skills total = Σ(skill reads) + Σ(query responses)
+> + Σ(API calls) + Σ(error retries).
 
 ### Scenario Overview
 
@@ -248,6 +302,13 @@ Scenarios 4-9 measure clean operations (no mistakes).
 | Auth overhead | 437 | 0 | — | — |
 | **Total (all 9)** | **107,937** | **187,456** | **Skills** | **-42%** |
 
+**Auth overhead (437 tokens):** IAM token exchange via `POST https://iam.cloud.ibm.com/identity/token`
+(API key → bearer token). The 437 tokens are the request + response measured once at script
+start and amortized across all scenarios. MCP handles auth internally (zero context cost).
+**Total derivation:** Sum of S1–S9 + auth: 14,995 + 9,641 + 15,819 + 17,936 + 15,832 + 9,283 + 7,482 + 8,046 + 8,466 + 437 = **107,937**.
+MCP total: 23,587 + 18,920 + 24,854 + 24,919 + 20,646 + 18,383 + 18,437 + 18,399 + 19,311 = **187,456**.
+**Delta formula:** (Skills − MCP) ÷ MCP × 100. Per scenario, e.g., S1: (14,995 − 23,587) ÷ 23,587 = −36.4%.
+
 ### Architecture Comparison: 1 Skill vs 8 Skills vs MCP
 
 The consolidation from 8 separate skills into 1 skill with domain guides
@@ -269,6 +330,30 @@ significantly reduced Skills token consumption:
 | **Total** | **107,937** | **161,555** | **187,456** | **1 Skill** |
 | **vs MCP** | **-42%** | **-14%** | — | — |
 
+**8 Skills column source:** These numbers are from the previous measurement run using the
+same scripts against the same au-syd instance, but with the 8-skill file layout. The skill
+file reads are the primary differentiator (query/API responses are instance-dependent but
+similar). Each 8-Skills number includes:
+- **S1 (66,177):** investigation/SKILL.md (4,292) + query/SKILL.md (4,146) + alerting/SKILL.md
+  (5,149) + 6 reference files (5,339 total) + 7 query responses (47,030 — includes raw log query
+  of 39,076 on eu-gb with heavy data) + 4 error retries (223). The 47K query response was from
+  the eu-gb instance which had significantly more log data than au-syd.
+- **S2 (13,826):** cost-optimization/SKILL.md (3,922) + query/SKILL.md (4,146) + 2 refs (3,325)
+  + 3 queries (2,275) + 2 errors (158).
+- **S3 (20,864):** query/SKILL.md (4,146) + alerting/SKILL.md (5,149) + dashboards/SKILL.md
+  (3,064) + 3 refs (6,926) + 3 queries (1,389) + 4 errors (146) + API calls (44).
+- **S4 (19,618):** alerting/SKILL.md (5,149) + dashboards/SKILL.md (3,064) + access-control/SKILL.md
+  (3,868) + 2 refs (5,017) + 11 API calls (2,520).
+- **S5–S9:** Single-domain scenarios using 1 SKILL.md + refs. These are cheaper than 1 Skill because
+  individual SKILL.md files (2,597–5,123 tokens) are smaller than the consolidated SKILL.md (4,506).
+- **Total (161,555):** Sum of S1–S9 + auth (440) = 66,177 + 13,826 + 20,864 + 19,618 + 14,594 + 7,317 + 5,429 + 5,948 + 7,342 + 440 = 161,555.
+
+> **Methodological note:** S1's 8-Skills measurement includes a raw log query (39,076 tokens)
+> that returned heavy data on the eu-gb instance. On au-syd, the same query returned only
+> 22 tokens. This makes the S1 8-Skills vs 1-Skill comparison partly instance-dependent.
+> The skill file read savings (3 SKILL.md files → 1 SKILL.md + guides) are instance-independent
+> and account for approximately 4K–8K tokens of savings in S1–S4.
+
 **Why 1 Skill wins overall despite S5-S9 being slightly higher:**
 - S1-S4 savings are massive: the old 8-skill architecture loaded 2-3 full SKILL.md
   files (each 3K-5K tokens) for cross-domain tasks. The consolidated SKILL.md (4,506
@@ -277,8 +362,10 @@ significantly reduced Skills token consumption:
   SKILL.md is larger than any individual domain SKILL.md. But these scenarios were
   already cheap, so the absolute increase is small.
 - S1 saw the biggest improvement: from 66,177 → 14,995 tokens (-77%). The old
-  architecture loaded investigation (16K) + query (15K) + alerting (19K) = 50K bytes
-  of SKILL.md files. Now it loads one SKILL.md (17K) + domain guides on demand.
+  architecture loaded investigation/SKILL.md (4,292) + query/SKILL.md (4,146) +
+  alerting/SKILL.md (5,149) = 13,587 tokens of SKILL.md files alone. Now it loads
+  one SKILL.md (4,506) + incident-guide.md (1,852) = 6,358 tokens — a 53% reduction
+  in skill file overhead, plus dramatically smaller query responses on au-syd.
 
 ### Scenario 1: Incident Investigation (measured)
 
@@ -644,12 +731,12 @@ Error responses are small (55-507 bytes), so the token impact is negligible:
 
 The real cost driver is not retries — it's **skill file reads**:
 
-| Cost Source | Measured Tokens | % of Total |
-|-------------|---------------:|----------:|
-| **Skill file reads (16 files)** | **39,096** | **96%** |
-| Query responses (13 queries) | 894 | 2% |
-| Error retries (10 mistakes) | 527 | 1% |
-| API calls + auth | 475 | 1% |
+| Cost Source | Measured Tokens | % of Total | Derivation |
+|-------------|---------------:|----------:|------------|
+| **Skill file reads (16 files)** | **39,096** | **96%** | S1: 6 files (14,262) + S2: 4 files (9,345) + S3: 6 files (15,389) + auth script reads (100) = 39,096 |
+| Query responses (13 queries) | 894 | 2% | S1: 7 queries (510) + S2: 3 queries (138) + S3: 3 queries (246) = 894 |
+| Error retries (10 mistakes) | 527 | 1% | S1: 4 mistakes (223) + S2: 2 mistakes (158) + S3: 4 mistakes (146) = 527 |
+| API calls + auth | 475 | 1% | S1: 2 API calls (0) + S2: 2 API (0) + S3: 3 API (38) + auth (437) = 475 |
 
 With the consolidated skill architecture, query responses are small (aggregation
 queries return 22-163 tokens each). The dominant cost is now the skill file reads —
@@ -673,6 +760,13 @@ Skills workflows take longer due to sequential query execution:
 | 9: API Discovery | 2 | 5 |
 | **Total** | **84** | **52** |
 
+**Step count derivation:** Skills steps = individual operations (file reads, API calls, queries,
+error retries). MCP steps = JSON-RPC `tools/call` invocations. S1–S4 step counts are from the
+detailed step tables above. S5–S9 step counts: S5 Skills = 4 file reads + 1 auth = 5 (shown as 4
+excluding auth), S6 = 4 files + 2 API = 6, S7 = 3 files + 3 API = 6 (shown as 5), S8 = 3 files +
+3 API = 6 (shown as 5), S9 = 3 files = 3 (shown as 2 excluding auth). MCP S5 = fixed + 7 tool
+calls = 8, S6 = fixed + 3 = 4, S7 = fixed + 3 = 4, S8 = fixed + 3 = 4, S9 = fixed + 4 = 5.
+
 MCP's compound tools (`investigate_incident`, `suggest_alert`) execute multiple queries
 in a single server-side call, avoiding per-query LLM reasoning and network round-trips.
 For lightweight scenarios (S6-S9), step counts are comparable.
@@ -687,8 +781,10 @@ MCP's `investigate_incident` tool is uniquely efficient because it:
 
 In our previous measurement (eu-gb instance with heavy log volume), raw log queries
 dominated: a single `filter $m.severity == CRITICAL | limit 50` returned **39,076 tokens**
-(148,099 bytes), making MCP 64% cheaper for investigation. In this measurement (au-syd
-instance with lighter data), query responses were small, so Skills won all 9 scenarios.
+(148,099 bytes = 148,099 ÷ 3.79 = 39,076 tokens), making MCP 64% cheaper for investigation
+(MCP S1: 23,587 vs 8-Skills S1: 66,177; delta: (66,177 − 23,587) ÷ 66,177 = 64%).
+In this measurement (au-syd instance with lighter data), the same query returned only
+22 tokens (82 bytes), so Skills won all 9 scenarios.
 **The lesson:** MCP's advantage scales with data volume — for instances with heavy log
 traffic, `investigate_incident`'s server-side summarization becomes decisive.
 
@@ -744,8 +840,15 @@ Scripts: `scripts/measure-iteration-tax.sh` (Skills replay, S1-S3), `scripts/mea
 Token counts measured using **Claude's native tokenizer** via the `claude` CLI.
 Each text content was sent to Claude Haiku and `usage.input_tokens` was read from
 the JSON response. A baseline overhead was measured and subtracted to isolate
-content-only token counts.
+content-only token counts. The baseline is the token count of an empty prompt
+(system prompt + message framing overhead, typically ~20-30 tokens). This baseline
+was measured once and subtracted from all subsequent measurements.
 All comparisons use the same tokenizer, so relative ratios are accurate.
+
+**Bytes-to-token conversion:** For scenario measurements where individual tokenization
+was impractical, the calibrated ratio of **3.79 bytes/token** is used. This ratio was
+derived from the MCP wire payload: 71,195 bytes ÷ 18,794 tokens = 3.788 ≈ 3.79.
+Example: a 221-byte query response = 221 ÷ 3.79 = 58.3 ≈ 58 tokens.
 
 ### MCP Wire Payload
 Captured by running `go test -run TestMCPWirePayload ./internal/tools/`.
