@@ -77,8 +77,8 @@ SKILLS=".agents/skills"
 step_counter=0
 
 # Agent reads skill files
-measure_skill "$SKILLS/ibm-cloud-logs-incident-investigation/SKILL.md" "$OUT/s1/skill-investigation.md" "s1" "incident-investigation/SKILL.md"
-measure_skill "$SKILLS/ibm-cloud-logs-query/SKILL.md" "$OUT/s1/skill-query.md" "s1" "query/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/SKILL.md" "$OUT/s1/skill-consolidated.md" "s1" "ibm-cloud-logs/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/incident-guide.md" "$OUT/s1/ref-incident-guide.md" "s1" "ibm-cloud-logs/references/incident-guide.md"
 
 # Phase 0: Agent checks TCO policies to pick tier (skill says to do this)
 echo ""
@@ -135,8 +135,8 @@ echo ""
 echo "── Phase 2: Component Deep-Dive (radiant) ──"
 
 # Agent loads investigation queries reference
-measure_skill "$SKILLS/ibm-cloud-logs-incident-investigation/references/investigation-queries.md" \
-  "$OUT/s1/ref-investigation-queries.md" "s1" "investigation-queries.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/investigation-queries.md" \
+  "$OUT/s1/ref-investigation-queries.md" "s1" "ibm-cloud-logs/references/investigation-queries.md"
 
 # MISTAKE 3: Agent uses = instead of ==
 echo ""
@@ -167,15 +167,15 @@ log_step "s1" "Component dependencies" "$OUT/s1/07-deps.json" "query_success"
 # Heuristic matching — agent loads heuristic reference
 echo ""
 echo "── Heuristic Matching ──"
-measure_skill "$SKILLS/ibm-cloud-logs-incident-investigation/references/heuristic-details.md" \
-  "$OUT/s1/ref-heuristics.md" "s1" "heuristic-details.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/heuristic-details.md" \
+  "$OUT/s1/ref-heuristics.md" "s1" "ibm-cloud-logs/references/heuristic-details.md"
 
 # Alert follow-up — agent loads alerting skill
 echo ""
 echo "── Alert Follow-up ──"
-measure_skill "$SKILLS/ibm-cloud-logs-alerting/SKILL.md" "$OUT/s1/skill-alerting.md" "s1" "alerting/SKILL.md"
-measure_skill "$SKILLS/ibm-cloud-logs-alerting/references/burn-rate-math.md" \
-  "$OUT/s1/ref-burn-rate.md" "s1" "burn-rate-math.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/alerting-guide.md" "$OUT/s1/ref-alerting-guide.md" "s1" "ibm-cloud-logs/references/alerting-guide.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/burn-rate-math.md" \
+  "$OUT/s1/ref-burn-rate.md" "s1" "ibm-cloud-logs/references/burn-rate-math.md"
 
 # MISTAKE 4: Agent tries --from-file for alert creation
 echo ""
@@ -204,8 +204,8 @@ echo "═══ SCENARIO 2: Cost Optimization ═══"
 echo ""
 step_counter=0
 
-measure_skill "$SKILLS/ibm-cloud-logs-cost-optimization/SKILL.md" "$OUT/s2/skill-cost.md" "s2" "cost-optimization/SKILL.md"
-measure_skill "$SKILLS/ibm-cloud-logs-query/SKILL.md" "$OUT/s2/skill-query.md" "s2" "query/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/SKILL.md" "$OUT/s2/skill-consolidated.md" "s2" "ibm-cloud-logs/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/cost-guide.md" "$OUT/s2/ref-cost-guide.md" "s2" "ibm-cloud-logs/references/cost-guide.md"
 
 # Step 1: List TCO policies
 echo ""
@@ -242,8 +242,8 @@ query_api "$OUT/s2/04-volume-app-sev.json" \
 log_step "s2" "Volume by app + severity" "$OUT/s2/04-volume-app-sev.json" "query_success"
 
 # Load TCO reference for policy creation guidance
-measure_skill "$SKILLS/ibm-cloud-logs-cost-optimization/references/tco-policies.md" \
-  "$OUT/s2/ref-tco-policies.md" "s2" "tco-policies.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/tco-policies.md" \
+  "$OUT/s2/ref-tco-policies.md" "s2" "ibm-cloud-logs/references/tco-policies.md"
 
 # Step 3: Create optimized policy
 echo ""
@@ -265,8 +265,8 @@ curl -s -X POST "${LOGS_SERVICE_URL}/v1/tco_policies" \
 log_step "s2" "Create TCO policy via API" "$OUT/s2/05-create-policy.json" "api_call"
 
 # Load E2M reference
-measure_skill "$SKILLS/ibm-cloud-logs-cost-optimization/references/e2m-guide.md" \
-  "$OUT/s2/ref-e2m.md" "s2" "e2m-guide.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/e2m-guide.md" \
+  "$OUT/s2/ref-e2m.md" "s2" "ibm-cloud-logs/references/e2m-guide.md"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -277,8 +277,8 @@ echo "═══ SCENARIO 3: Monitoring Setup ═══"
 echo ""
 step_counter=0
 
-measure_skill "$SKILLS/ibm-cloud-logs-query/SKILL.md" "$OUT/s3/skill-query.md" "s3" "query/SKILL.md"
-measure_skill "$SKILLS/ibm-cloud-logs-alerting/SKILL.md" "$OUT/s3/skill-alerting.md" "s3" "alerting/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/SKILL.md" "$OUT/s3/skill-consolidated.md" "s3" "ibm-cloud-logs/SKILL.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/alerting-guide.md" "$OUT/s3/ref-alerting-guide.md" "s3" "ibm-cloud-logs/references/alerting-guide.md"
 
 # Step 1: Discover applications
 echo ""
@@ -311,10 +311,10 @@ query_api "$OUT/s3/03-error-rate.json" \
 log_step "s3" "Error rate baseline" "$OUT/s3/03-error-rate.json" "query_success"
 
 # Load alerting references
-measure_skill "$SKILLS/ibm-cloud-logs-alerting/references/component-profiles.md" \
-  "$OUT/s3/ref-component-profiles.md" "s3" "component-profiles.md"
-measure_skill "$SKILLS/ibm-cloud-logs-alerting/references/strategy-matrix.md" \
-  "$OUT/s3/ref-strategy-matrix.md" "s3" "strategy-matrix.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/component-profiles.md" \
+  "$OUT/s3/ref-component-profiles.md" "s3" "ibm-cloud-logs/references/component-profiles.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/strategy-matrix.md" \
+  "$OUT/s3/ref-strategy-matrix.md" "s3" "ibm-cloud-logs/references/strategy-matrix.md"
 
 # Step 3: Create alert
 echo ""
@@ -344,9 +344,9 @@ echo ""
 echo "── Step 5: Create Dashboard ──"
 
 # Load dashboard skill
-measure_skill "$SKILLS/ibm-cloud-logs-dashboards/SKILL.md" "$OUT/s3/skill-dashboards.md" "s3" "dashboards/SKILL.md"
-measure_skill "$SKILLS/ibm-cloud-logs-dashboards/references/dashboard-schema.md" \
-  "$OUT/s3/ref-dashboard-schema.md" "s3" "dashboard-schema.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/dashboards-guide.md" "$OUT/s3/ref-dashboards-guide.md" "s3" "ibm-cloud-logs/references/dashboards-guide.md"
+measure_skill "$SKILLS/ibm-cloud-logs/references/dashboard-schema.md" \
+  "$OUT/s3/ref-dashboard-schema.md" "s3" "ibm-cloud-logs/references/dashboard-schema.md"
 
 # MISTAKE 3: Agent tries ibmcloud logs dashboard-create (doesn't exist)
 echo '{"error": "unknown command \"dashboard-create\" for \"ibmcloud logs\"", "exit_code": 1}' > "$OUT/s3/err-no-dashboard-cli.json"

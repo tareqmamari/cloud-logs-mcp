@@ -415,14 +415,14 @@ def s1_skills(api):
     """Scenario 1: Incident Investigation (Skills)"""
     c = Conversation("Incident Investigation", "skills", SKILLS_OVERHEAD)
 
-    # Turn 1: User asks → Claude reads skill files + checks TCO
+    # Turn 1: User asks → Claude reads consolidated skill + incident guide + checks TCO
     _, tco_bytes, tco_ms = api.call("GET", "/v1/tco_policies")
     c.turn("Read skill files, check TCO policies", output_tokens=200,
         user_tokens=25, tool_results=[
-        ("Read investigation/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-incident-investigation", "SKILL.md")), False, 1),
-        ("Read query/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-query", "SKILL.md")), False, 1),
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read incident-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "incident-guide.md")), False, 1),
         ("GET /v1/tco_policies", tco_bytes, False, tco_ms),
     ])
 
@@ -468,7 +468,7 @@ def s1_skills(api):
         "archive")
     c.turn("Read investigation-queries.md, run component query (= error)", output_tokens=200, tool_results=[
         ("Read investigation-queries.md",
-            fsize(skill_path("ibm-cloud-logs-incident-investigation", "references", "investigation-queries.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "investigation-queries.md")), False, 1),
         ("Query with = (wrong syntax)", q6_bytes, True, q6_ms),
     ])
 
@@ -491,11 +491,11 @@ def s1_skills(api):
     # Turn 7: Read heuristic + alerting refs
     c.turn("Read heuristic details + alerting skill", output_tokens=200, tool_results=[
         ("Read heuristic-details.md",
-            fsize(skill_path("ibm-cloud-logs-incident-investigation", "references", "heuristic-details.md")), False, 1),
-        ("Read alerting/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "SKILL.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "heuristic-details.md")), False, 1),
+        ("Read alerting-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "alerting-guide.md")), False, 1),
         ("Read burn-rate-math.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "references", "burn-rate-math.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "burn-rate-math.md")), False, 1),
     ])
 
     # Turn 8: CLI error then create alert via API
@@ -565,13 +565,13 @@ def s2_skills(api):
     """Scenario 2: Cost Optimization (Skills)"""
     c = Conversation("Cost Optimization", "skills", SKILLS_OVERHEAD)
 
-    # Turn 1: Read skills + check TCO policies
+    # Turn 1: Read consolidated skill + cost guide + check TCO policies
     _, tco_bytes, tco_ms = api.call("GET", "/v1/tco_policies")
     c.turn("Read skill files, check TCO", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read cost-optimization/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-cost-optimization", "SKILL.md")), False, 1),
-        ("Read query/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-query", "SKILL.md")), False, 1),
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read cost-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "cost-guide.md")), False, 1),
         ("GET /v1/tco_policies", tco_bytes, False, tco_ms),
     ])
 
@@ -604,7 +604,7 @@ def s2_skills(api):
     })
     c.turn("Read TCO ref, CLI error, create policy via REST", output_tokens=200, tool_results=[
         ("Read tco-policies.md",
-            fsize(skill_path("ibm-cloud-logs-cost-optimization", "references", "tco-policies.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "tco-policies.md")), False, 1),
         ("CLI --from-file error", 91, True, 0),
         ("Create TCO policy", pol_bytes, False, pol_ms),
     ])
@@ -612,7 +612,7 @@ def s2_skills(api):
     # Turn 5: Read E2M guide + summary
     c.turn("Read E2M guide, generate cost report", output_tokens=400, tool_results=[
         ("Read e2m-guide.md",
-            fsize(skill_path("ibm-cloud-logs-cost-optimization", "references", "e2m-guide.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "e2m-guide.md")), False, 1),
     ])
 
     return c
@@ -669,10 +669,10 @@ def s3_skills(api):
         "source logs | groupby $l.applicationname aggregate count() as volume, approx_count_distinct($l.subsystemname) as components | orderby -volume | limit 20",
         "archive")
     c.turn("Read query+alerting skills, discover apps", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read query/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-query", "SKILL.md")), False, 1),
-        ("Read alerting/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "SKILL.md")), False, 1),
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read alerting-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "alerting-guide.md")), False, 1),
         ("Discover applications", q1_bytes, False, q1_ms),
     ])
 
@@ -710,9 +710,9 @@ def s3_skills(api):
     _, wh_bytes, wh_ms = api.call("GET", "/v1/outgoing_webhooks")
     c.turn("Read alerting refs, create alert, list webhooks", output_tokens=250, tool_results=[
         ("Read component-profiles.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "references", "component-profiles.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "component-profiles.md")), False, 1),
         ("Read strategy-matrix.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "references", "strategy-matrix.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "strategy-matrix.md")), False, 1),
         ("CLI --from-file error", 55, True, 0),
         ("Create alert via API", alert_bytes, False, alert_ms),
         ("GET /v1/outgoing_webhooks", wh_bytes, False, wh_ms),
@@ -732,10 +732,10 @@ def s3_skills(api):
     data, dash_bytes, dash_ms = api.call("POST", "/v1/dashboards", dash_def)
     dash_id = data.get("id")
     c.turn("Read dashboard skill, create dashboard", output_tokens=200, tool_results=[
-        ("Read dashboards/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-dashboards", "SKILL.md")), False, 1),
+        ("Read dashboards-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "dashboards-guide.md")), False, 1),
         ("Read dashboard-schema.md",
-            fsize(skill_path("ibm-cloud-logs-dashboards", "references", "dashboard-schema.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "dashboard-schema.md")), False, 1),
         ("CLI dashboard-create error", 88, True, 0),
         ("Create dashboard via REST", dash_bytes, False, dash_ms),
     ])
@@ -812,11 +812,13 @@ def s4_skills(api):
     }
     data, create_bytes, create_ms = api.call("POST", "/v1/alert_definitions", alert_def)
     alert_id = data.get("id", data.get("unique_identifier"))
-    c.turn("Read alerting skill, create alert", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read alerting/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "SKILL.md")), False, 1),
+    c.turn("Read skill + alerting guide, create alert", output_tokens=200, user_tokens=25, tool_results=[
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read alerting-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "alerting-guide.md")), False, 1),
         ("Read strategy-matrix.md",
-            fsize(skill_path("ibm-cloud-logs-alerting", "references", "strategy-matrix.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "strategy-matrix.md")), False, 1),
         ("POST /v1/alert_definitions (create)", create_bytes, False, create_ms),
     ])
 
@@ -842,10 +844,10 @@ def s4_skills(api):
     data, create_bytes, create_ms = api.call("POST", "/v1/dashboards", dash_def)
     dash_id = data.get("id")
     c.turn("Read dashboard skill, create dashboard", output_tokens=200, tool_results=[
-        ("Read dashboards/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-dashboards", "SKILL.md")), False, 1),
+        ("Read dashboards-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "dashboards-guide.md")), False, 1),
         ("Read dashboard-schema.md",
-            fsize(skill_path("ibm-cloud-logs-dashboards", "references", "dashboard-schema.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "dashboard-schema.md")), False, 1),
         ("POST /v1/dashboards (create)", create_bytes, False, create_ms),
     ])
 
@@ -869,8 +871,8 @@ def s4_skills(api):
     view_id = data.get("id")
     _, list_bytes, list_ms = api.call("GET", "/v1/views")
     results = [
-        ("Read access-control/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-access-control", "SKILL.md")), False, 1),
+        ("Read access-control-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "access-control-guide.md")), False, 1),
         ("POST /v1/views (create)", create_bytes, False, create_ms),
         ("GET /v1/views (list)", list_bytes, False, list_ms),
     ]
@@ -963,14 +965,14 @@ def s5_skills(api):
 
     # Turn 1: Read all query reference materials
     c.turn("Read query skill + all references", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read query/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-query", "SKILL.md")), False, 1),
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
         ("Read dataprime-commands.md",
-            fsize(skill_path("ibm-cloud-logs-query", "references", "dataprime-commands.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "dataprime-commands.md")), False, 1),
         ("Read query-templates.md",
-            fsize(skill_path("ibm-cloud-logs-query", "references", "query-templates.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "query-templates.md")), False, 1),
         ("Read dataprime-functions.md",
-            fsize(skill_path("ibm-cloud-logs-query", "references", "dataprime-functions.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "dataprime-functions.md")), False, 1),
     ])
 
     # Turn 2: Generate query with explanation
@@ -1025,15 +1027,17 @@ def s6_skills(api):
     # Turn 1: Read skill files + list existing config
     _, rg_bytes, rg_ms = api.call("GET", "/v1/rule_groups")
     _, en_bytes, en_ms = api.call("GET", "/v1/enrichments")
-    c.turn("Read ingestion skill + list config", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read ingestion/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-ingestion", "SKILL.md")), False, 1),
+    c.turn("Read skill + ingestion guide + list config", output_tokens=200, user_tokens=25, tool_results=[
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read ingestion-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "ingestion-guide.md")), False, 1),
         ("Read parsing-rules.md",
-            fsize(skill_path("ibm-cloud-logs-ingestion", "references", "parsing-rules.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "parsing-rules.md")), False, 1),
         ("Read enrichment-types.md",
-            fsize(skill_path("ibm-cloud-logs-ingestion", "references", "enrichment-types.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "enrichment-types.md")), False, 1),
         ("Read log-format.md",
-            fsize(skill_path("ibm-cloud-logs-ingestion", "references", "log-format.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "log-format.md")), False, 1),
         ("GET /v1/rule_groups (list)", rg_bytes, False, rg_ms),
         ("GET /v1/enrichments (list)", en_bytes, False, en_ms),
     ])
@@ -1071,11 +1075,13 @@ def s7_skills(api):
     # Turn 1: Read skills + list access rules + webhooks
     _, dar_bytes, dar_ms = api.call("GET", "/v1/data_access_rules")
     _, wh_bytes, wh_ms = api.call("GET", "/v1/outgoing_webhooks")
-    c.turn("Read access-control skill, list rules + webhooks", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read access-control/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-access-control", "SKILL.md")), False, 1),
+    c.turn("Read skill + access-control guide, list rules + webhooks", output_tokens=200, user_tokens=25, tool_results=[
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read access-control-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "access-control-guide.md")), False, 1),
         ("Read access-rules.md",
-            fsize(skill_path("ibm-cloud-logs-access-control", "references", "access-rules.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "access-rules.md")), False, 1),
         ("GET /v1/data_access_rules (list)", dar_bytes, False, dar_ms),
         ("GET /v1/outgoing_webhooks (list)", wh_bytes, False, wh_ms),
     ])
@@ -1137,11 +1143,13 @@ def s8_skills(api):
     _, e2m_bytes, e2m_ms = api.call("GET", "/v1/e2m")
     _, str_bytes, str_ms = api.call("GET", "/v1/streams")
     _, est_bytes, est_ms = api.call("GET", "/v1/event_stream_targets")
-    c.turn("Read cost-optimization skill + list E2M/streams", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read cost-optimization/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-cost-optimization", "SKILL.md")), False, 1),
+    c.turn("Read skill + cost guide + list E2M/streams", output_tokens=200, user_tokens=25, tool_results=[
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read cost-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "cost-guide.md")), False, 1),
         ("Read e2m-guide.md",
-            fsize(skill_path("ibm-cloud-logs-cost-optimization", "references", "e2m-guide.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "e2m-guide.md")), False, 1),
         ("GET /v1/e2m (list)", e2m_bytes, False, e2m_ms),
         ("GET /v1/streams (list)", str_bytes, False, str_ms),
         ("GET /v1/event_stream_targets (list)", est_bytes, False, est_ms),
@@ -1178,11 +1186,13 @@ def s9_skills(api):
     c = Conversation("API Discovery & Meta", "skills", SKILLS_OVERHEAD)
 
     # Turn 1: Read API reference skill
-    c.turn("Read API reference skill + endpoints", output_tokens=200, user_tokens=25, tool_results=[
-        ("Read api-reference/SKILL.md",
-            fsize(skill_path("ibm-cloud-logs-api-reference", "SKILL.md")), False, 1),
+    c.turn("Read skill + api-guide + endpoints", output_tokens=200, user_tokens=25, tool_results=[
+        ("Read ibm-cloud-logs/SKILL.md",
+            fsize(skill_path("ibm-cloud-logs", "SKILL.md")), False, 1),
+        ("Read api-guide.md",
+            fsize(skill_path("ibm-cloud-logs", "references", "api-guide.md")), False, 1),
         ("Read endpoints.md",
-            fsize(skill_path("ibm-cloud-logs-api-reference", "references", "endpoints.md")), False, 1),
+            fsize(skill_path("ibm-cloud-logs", "references", "endpoints.md")), False, 1),
     ])
 
     # Turn 2: Answer with explanation

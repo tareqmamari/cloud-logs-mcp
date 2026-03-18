@@ -128,14 +128,16 @@ print("── S5: Query Authoring & Validation (Skills) ──")
 print()
 s5 = start_scenario("s5")
 
-s5["skills"].append(log_entry("Read query/SKILL.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-query", "SKILL.md")), "skill_read"))
+s5["skills"].append(log_entry("Read ibm-cloud-logs/SKILL.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")), "skill_read"))
+s5["skills"].append(log_entry("Read query-guide.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "query-guide.md")), "skill_read"))
 s5["skills"].append(log_entry("Read dataprime-commands.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-query", "references", "dataprime-commands.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "dataprime-commands.md")), "skill_read"))
 s5["skills"].append(log_entry("Read query-templates.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-query", "references", "query-templates.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "query-templates.md")), "skill_read"))
 s5["skills"].append(log_entry("Read dataprime-functions.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-query", "references", "dataprime-functions.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "dataprime-functions.md")), "skill_read"))
 print()
 
 # ── S6: Ingestion Pipeline ───────────────────────────────────────
@@ -144,14 +146,16 @@ print("── S6: Ingestion Pipeline (Skills) ──")
 print()
 s6 = start_scenario("s6")
 
-s6["skills"].append(log_entry("Read ingestion/SKILL.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-ingestion", "SKILL.md")), "skill_read"))
+s6["skills"].append(log_entry("Read ibm-cloud-logs/SKILL.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")), "skill_read"))
+s6["skills"].append(log_entry("Read ingestion-guide.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "ingestion-guide.md")), "skill_read"))
 s6["skills"].append(log_entry("Read parsing-rules.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-ingestion", "references", "parsing-rules.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "parsing-rules.md")), "skill_read"))
 s6["skills"].append(log_entry("Read enrichment-types.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-ingestion", "references", "enrichment-types.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "enrichment-types.md")), "skill_read"))
 s6["skills"].append(log_entry("Read log-format.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-ingestion", "references", "log-format.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "log-format.md")), "skill_read"))
 
 # Rule groups
 data, nbytes = api_call("GET", "/v1/rule_groups")
@@ -172,10 +176,12 @@ print("── S7: Data Governance (Skills) ──")
 print()
 s7 = start_scenario("s7")
 
-s7["skills"].append(log_entry("Read access-control/SKILL.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-access-control", "SKILL.md")), "skill_read"))
+s7["skills"].append(log_entry("Read ibm-cloud-logs/SKILL.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")), "skill_read"))
+s7["skills"].append(log_entry("Read access-control-guide.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "access-control-guide.md")), "skill_read"))
 s7["skills"].append(log_entry("Read access-rules.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-access-control", "references", "access-rules.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "access-rules.md")), "skill_read"))
 
 # Data access rules
 data, nbytes = api_call("GET", "/v1/data_access_rules")
@@ -213,10 +219,12 @@ print("── S8: E2M & Streaming (Skills) ──")
 print()
 s8 = start_scenario("s8")
 
-s8["skills"].append(log_entry("Read cost-optimization/SKILL.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-cost-optimization", "SKILL.md")), "skill_read"))
+s8["skills"].append(log_entry("Read ibm-cloud-logs/SKILL.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")), "skill_read"))
+s8["skills"].append(log_entry("Read cost-guide.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "cost-guide.md")), "skill_read"))
 s8["skills"].append(log_entry("Read e2m-guide.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-cost-optimization", "references", "e2m-guide.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "e2m-guide.md")), "skill_read"))
 
 # E2M
 data, nbytes = api_call("GET", "/v1/e2m")
@@ -241,10 +249,12 @@ print("── S9: API Discovery & Meta (Skills) ──")
 print()
 s9 = start_scenario("s9")
 
-s9["skills"].append(log_entry("Read api-reference/SKILL.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-api-reference", "SKILL.md")), "skill_read"))
+s9["skills"].append(log_entry("Read ibm-cloud-logs/SKILL.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "SKILL.md")), "skill_read"))
+s9["skills"].append(log_entry("Read api-guide.md",
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "api-guide.md")), "skill_read"))
 s9["skills"].append(log_entry("Read endpoints.md",
-    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs-api-reference", "references", "endpoints.md")), "skill_read"))
+    file_size(os.path.join(SKILLS_DIR, "ibm-cloud-logs", "references", "endpoints.md")), "skill_read"))
 
 print()
 

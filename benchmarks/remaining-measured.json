@@ -7,9 +7,15 @@
       "skills": {
         "steps": [
           {
-            "label": "Read query/SKILL.md",
-            "bytes": 17714,
-            "tokens": 4674,
+            "label": "Read ibm-cloud-logs/SKILL.md",
+            "bytes": 17079,
+            "tokens": 4506,
+            "category": "skill_read"
+          },
+          {
+            "label": "Read query-guide.md",
+            "bytes": 5327,
+            "tokens": 1406,
             "category": "skill_read"
           },
           {
@@ -31,7 +37,7 @@
             "category": "skill_read"
           }
         ],
-        "total_tokens": 14594
+        "total_tokens": 15832
       },
       "mcp": {
         "steps": [
@@ -82,17 +88,23 @@
         "total_tokens": 20646
       },
       "winner": "Skills",
-      "delta_tokens": 6052,
-      "delta_pct": 29
+      "delta_tokens": 4814,
+      "delta_pct": 23
     },
     "s6": {
       "label": "S6: Ingestion Pipeline",
       "skills": {
         "steps": [
           {
-            "label": "Read ingestion/SKILL.md",
-            "bytes": 14521,
-            "tokens": 3831,
+            "label": "Read ibm-cloud-logs/SKILL.md",
+            "bytes": 17079,
+            "tokens": 4506,
+            "category": "skill_read"
+          },
+          {
+            "label": "Read ingestion-guide.md",
+            "bytes": 4893,
+            "tokens": 1291,
             "category": "skill_read"
           },
           {
@@ -126,7 +138,7 @@
             "category": "api_call"
           }
         ],
-        "total_tokens": 7317
+        "total_tokens": 9283
       },
       "mcp": {
         "steps": [
@@ -153,17 +165,23 @@
         "total_tokens": 18383
       },
       "winner": "Skills",
-      "delta_tokens": 11066,
-      "delta_pct": 60
+      "delta_tokens": 9100,
+      "delta_pct": 50
     },
     "s7": {
       "label": "S7: Data Governance",
       "skills": {
         "steps": [
           {
-            "label": "Read access-control/SKILL.md",
-            "bytes": 14659,
-            "tokens": 3868,
+            "label": "Read ibm-cloud-logs/SKILL.md",
+            "bytes": 17079,
+            "tokens": 4506,
+            "category": "skill_read"
+          },
+          {
+            "label": "Read access-control-guide.md",
+            "bytes": 5364,
+            "tokens": 1415,
             "category": "skill_read"
           },
           {
@@ -191,7 +209,7 @@
             "category": "api_call"
           }
         ],
-        "total_tokens": 5429
+        "total_tokens": 7482
       },
       "mcp": {
         "steps": [
@@ -218,17 +236,23 @@
         "total_tokens": 18437
       },
       "winner": "Skills",
-      "delta_tokens": 13008,
-      "delta_pct": 71
+      "delta_tokens": 10955,
+      "delta_pct": 59
     },
     "s8": {
       "label": "S8: E2M & Streaming",
       "skills": {
         "steps": [
           {
-            "label": "Read cost-optimization/SKILL.md",
-            "bytes": 14865,
-            "tokens": 3922,
+            "label": "Read ibm-cloud-logs/SKILL.md",
+            "bytes": 17079,
+            "tokens": 4506,
+            "category": "skill_read"
+          },
+          {
+            "label": "Read cost-guide.md",
+            "bytes": 5738,
+            "tokens": 1514,
             "category": "skill_read"
           },
           {
@@ -256,7 +280,7 @@
             "category": "api_call"
           }
         ],
-        "total_tokens": 5948
+        "total_tokens": 8046
       },
       "mcp": {
         "steps": [
@@ -283,17 +307,23 @@
         "total_tokens": 18399
       },
       "winner": "Skills",
-      "delta_tokens": 12451,
-      "delta_pct": 68
+      "delta_tokens": 10353,
+      "delta_pct": 56
     },
     "s9": {
       "label": "S9: API Discovery & Meta",
       "skills": {
         "steps": [
           {
-            "label": "Read api-reference/SKILL.md",
-            "bytes": 20838,
-            "tokens": 5498,
+            "label": "Read ibm-cloud-logs/SKILL.md",
+            "bytes": 17079,
+            "tokens": 4506,
+            "category": "skill_read"
+          },
+          {
+            "label": "Read api-guide.md",
+            "bytes": 8021,
+            "tokens": 2116,
             "category": "skill_read"
           },
           {
@@ -303,7 +333,7 @@
             "category": "skill_read"
           }
         ],
-        "total_tokens": 7342
+        "total_tokens": 8466
       },
       "mcp": {
         "steps": [
@@ -315,8 +345,8 @@
           },
           {
             "label": "search_tools (alert)",
-            "bytes": 1007,
-            "tokens": 266,
+            "bytes": 1076,
+            "tokens": 284,
             "category": "tool_response"
           },
           {
@@ -332,12 +362,12 @@
             "category": "tool_response"
           }
         ],
-        "response_tokens": 1064,
-        "total_tokens": 19293
+        "response_tokens": 1082,
+        "total_tokens": 19311
       },
       "winner": "Skills",
-      "delta_tokens": 11951,
-      "delta_pct": 62
+      "delta_tokens": 10845,
+      "delta_pct": 56
     }
   }
 }
