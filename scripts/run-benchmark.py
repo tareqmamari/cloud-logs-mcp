@@ -51,6 +51,7 @@ plt.rcParams.update({
 COLORS = {
     "mcp": "#e74c3c",
     "skills": "#2ecc71",
+    "8skills": "#f39c12",
     "combined": "#3498db",
     "neutral": "#95a5a6",
     "mcp_light": "#fadbd8",
@@ -549,26 +550,31 @@ def chart_mcp_tool_distribution(tools: list[dict], output: Path):
 
 
 def chart_cost_projection(mcp_per_convo: int, skills_per_convo: int, output: Path):
-    """Line chart: projected annual token cost for different usage levels."""
+    """Line chart: projected annual token cost for 3 architectures."""
     fig, ax = plt.subplots(figsize=(9, 5))
 
     convos = np.array([10, 25, 50, 100, 200, 500, 1000])
     months = 12
     cost_per_m = 3.0  # Claude Sonnet 4 pricing
 
+    # 8 Skills uses avg individual SKILL.md (~3608) + 2 refs (~3000) = ~6608
+    eight_skills_per_convo = 7068
+
     mcp_annual = convos * months * mcp_per_convo / 1_000_000 * cost_per_m
     skills_annual = convos * months * skills_per_convo / 1_000_000 * cost_per_m
+    eight_skills_annual = convos * months * eight_skills_per_convo / 1_000_000 * cost_per_m
 
     ax.plot(convos, mcp_annual, "o-", color=COLORS["mcp"], linewidth=2, markersize=5, label="MCP")
-    ax.plot(convos, skills_annual, "o-", color=COLORS["skills"], linewidth=2, markersize=5, label="Skills")
-    ax.fill_between(convos, skills_annual, mcp_annual, alpha=0.1, color=COLORS["skills"])
+    ax.plot(convos, eight_skills_annual, "s-", color=COLORS["8skills"], linewidth=2, markersize=5, label="8 Skills")
+    ax.plot(convos, skills_annual, "^-", color=COLORS["skills"], linewidth=2, markersize=5, label="1 Skill")
+    ax.fill_between(convos, skills_annual, mcp_annual, alpha=0.08, color=COLORS["skills"])
 
     idx = 5  # 500 convos
     savings = mcp_annual[idx] - skills_annual[idx]
     ax.annotate(
-        f"${savings:.0f}/yr saved",
+        f"${savings:.0f}/yr saved\n(1 Skill vs MCP)",
         xy=(convos[idx], (mcp_annual[idx] + skills_annual[idx]) / 2),
-        fontsize=10, fontweight="bold", color=COLORS["combined"], ha="center",
+        fontsize=9, fontweight="bold", color=COLORS["combined"], ha="center",
     )
 
     ax.set_xlabel("Conversations per Month")
@@ -584,63 +590,51 @@ def chart_cost_projection(mcp_per_convo: int, skills_per_convo: int, output: Pat
 
 
 def chart_head_to_head(mcp_fixed: int, mcp_response_avg: int, avg_skill_md: int, output: Path):
-    """Grouped bar chart: MCP vs Skills across conversation scenarios."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    """Grouped bar chart: MCP vs 8 Skills vs 1 Skill across conversation scenarios."""
+    fig, ax = plt.subplots(figsize=(11, 6))
 
     scenarios = [
         "Before any\ntool call",
-        "1 tool call /\n1 skill activation",
-        "Typical session\n(10 calls / 1 skill + 2 refs)",
-        "Heavy session\n(25 calls / 2 skills + 5 refs)",
+        "1 tool call /\nskill activation",
+        "Typical session\n(10 calls / 1 domain)",
+        "Cross-domain\n(2-3 domains)",
+        "Heavy session\n(25 calls / 5 refs)",
     ]
 
+    call_cost = 150 + mcp_response_avg
     mcp_tokens = [
         mcp_fixed,
-        mcp_fixed + 150 + mcp_response_avg,
-        mcp_fixed + 10 * (150 + mcp_response_avg),
-        mcp_fixed + 25 * (150 + mcp_response_avg),
+        mcp_fixed + call_cost,
+        mcp_fixed + 10 * call_cost,
+        mcp_fixed + 10 * call_cost,
+        mcp_fixed + 25 * call_cost,
     ]
-
-    skills_tokens = [
-        0,
-        avg_skill_md,
-        avg_skill_md + 2 * 500,
-        avg_skill_md * 2 + 5 * 500,
-    ]
+    # 1 Skill: consolidated SKILL.md (4506) + domain guides on demand
+    one_skill_tokens = [0, avg_skill_md, avg_skill_md + 2 * 1500, avg_skill_md + 3 * 1500 + 500, avg_skill_md + 5 * 2000]
+    # 8 Skills: avg individual SKILL.md (~3608) + refs; cross-domain loads 2-3 SKILL.md
+    avg_8skill_md = 3608
+    eight_skills_tokens = [0, avg_8skill_md, avg_8skill_md + 2 * 1500, avg_8skill_md * 3 + 2 * 1500, avg_8skill_md * 2 + 5 * 2000]
 
     x = np.arange(len(scenarios))
-    width = 0.35
+    width = 0.25
 
-    bars_mcp = ax.bar(x - width/2, mcp_tokens, width, label="MCP", color=COLORS["mcp"], edgecolor="white")
-    bars_skills = ax.bar(x + width/2, skills_tokens, width, label="Skills", color=COLORS["skills"], edgecolor="white")
+    bars_mcp = ax.bar(x - width, mcp_tokens, width, label="MCP", color=COLORS["mcp"], edgecolor="white")
+    bars_8s = ax.bar(x, eight_skills_tokens, width, label="8 Skills", color=COLORS["8skills"], edgecolor="white")
+    bars_1s = ax.bar(x + width, one_skill_tokens, width, label="1 Skill", color=COLORS["skills"], edgecolor="white")
 
-    # Add value labels on bars
-    for bar in bars_mcp:
-        h = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2, h + 300, f"{int(h):,}",
-                ha="center", va="bottom", fontsize=9, fontweight="bold", color=COLORS["mcp"])
-
-    for bar in bars_skills:
-        h = bar.get_height()
-        if h > 0:
-            ax.text(bar.get_x() + bar.get_width()/2, h + 300, f"{int(h):,}",
-                    ha="center", va="bottom", fontsize=9, fontweight="bold", color="#1a8a4a")
-
-    # Add ratio labels
-    for i in range(1, len(scenarios)):
-        if skills_tokens[i] > 0:
-            ratio = mcp_tokens[i] / skills_tokens[i]
-            mid_y = max(mcp_tokens[i], skills_tokens[i]) + 1800
-            ax.text(x[i], mid_y, f"{ratio:.1f}x", ha="center", fontsize=11,
-                    fontweight="bold", color=COLORS["combined"],
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=COLORS["combined"], alpha=0.8))
+    for bars, color in [(bars_mcp, COLORS["mcp"]), (bars_8s, COLORS["8skills"]), (bars_1s, COLORS["skills"])]:
+        for bar in bars:
+            h = bar.get_height()
+            if h > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, h + 200, f"{int(h):,}",
+                        ha="center", va="bottom", fontsize=7, fontweight="bold", color=color)
 
     ax.set_xlabel("Conversation Scenario")
     ax.set_ylabel("Total Tokens Consumed")
-    ax.set_title("MCP vs Skills: Per-Conversation Token Cost (Claude Native Tokenizer)")
+    ax.set_title("Per-Conversation Token Cost: MCP vs 8 Skills vs 1 Skill")
     ax.set_xticks(x)
     ax.set_xticklabels(scenarios, fontsize=9)
-    ax.legend(fontsize=11)
+    ax.legend(fontsize=10)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
 
     plt.tight_layout()
@@ -650,34 +644,39 @@ def chart_head_to_head(mcp_fixed: int, mcp_response_avg: int, avg_skill_md: int,
 
 
 def chart_radar_comparison(mcp_per_convo: int, skills_per_convo: int, output: Path):
-    """Radar chart comparing MCP vs Skills across dimensions."""
+    """Radar chart comparing MCP vs 8 Skills vs 1 Skill across dimensions."""
     categories = [
-        "Token\nEfficiency", "Query\nAccuracy", "Live Data\nAccess",
-        "Setup\nFriction", "Platform\nReach", "Offline\nGuidance",
-        "Latency", "Security\nPosture", "Cost\nEfficiency",
+        "Token\nEfficiency", "Cross-Domain\nEfficiency", "Query\nAccuracy",
+        "Live Data\nAccess", "Setup\nFriction", "Platform\nReach",
+        "Offline\nGuidance", "Latency", "Security\nPosture",
+        "Maintenance\nBurden", "Cost\nEfficiency",
     ]
-    mcp_scores = [3, 10, 10, 4, 5, 0, 5, 6, 4]
-    skills_scores = [9, 9, 0, 10, 10, 8, 10, 9, 9]
+    mcp_scores = [3, 3, 10, 10, 4, 5, 0, 5, 6, 7, 4]
+    eight_skills_scores = [7, 4, 9, 0, 8, 10, 8, 10, 9, 4, 7]
+    one_skill_scores = [9, 9, 9, 0, 10, 10, 8, 10, 9, 9, 9]
 
     N = len(categories)
     angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
     angles += angles[:1]
     mcp_scores += mcp_scores[:1]
-    skills_scores += skills_scores[:1]
+    eight_skills_scores += eight_skills_scores[:1]
+    one_skill_scores += one_skill_scores[:1]
 
-    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+    fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
     ax.plot(angles, mcp_scores, "o-", color=COLORS["mcp"], linewidth=2, label="MCP", markersize=5)
-    ax.fill(angles, mcp_scores, alpha=0.1, color=COLORS["mcp"])
-    ax.plot(angles, skills_scores, "o-", color=COLORS["skills"], linewidth=2, label="Skills", markersize=5)
-    ax.fill(angles, skills_scores, alpha=0.1, color=COLORS["skills"])
+    ax.fill(angles, mcp_scores, alpha=0.08, color=COLORS["mcp"])
+    ax.plot(angles, eight_skills_scores, "s-", color=COLORS["8skills"], linewidth=2, label="8 Skills", markersize=5)
+    ax.fill(angles, eight_skills_scores, alpha=0.08, color=COLORS["8skills"])
+    ax.plot(angles, one_skill_scores, "^-", color=COLORS["skills"], linewidth=2, label="1 Skill", markersize=5)
+    ax.fill(angles, one_skill_scores, alpha=0.08, color=COLORS["skills"])
 
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories, fontsize=9)
+    ax.set_xticklabels(categories, fontsize=8)
     ax.set_ylim(0, 11)
     ax.set_yticks([2, 4, 6, 8, 10])
     ax.set_yticklabels(["2", "4", "6", "8", "10"], fontsize=8)
-    ax.set_title("MCP vs Skills — Multi-Dimensional Comparison", pad=20, fontsize=14, fontweight="bold")
-    ax.legend(loc="upper right", bbox_to_anchor=(1.15, 1.1), fontsize=10)
+    ax.set_title("MCP vs 8 Skills vs 1 Skill — Multi-Dimensional Comparison", pad=20, fontsize=13, fontweight="bold")
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1), fontsize=10)
 
     plt.tight_layout()
     fig.savefig(str(output), dpi=150, bbox_inches="tight")
