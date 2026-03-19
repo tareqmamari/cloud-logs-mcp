@@ -257,7 +257,7 @@ than this per-conversation model.
 
 | Dimension | MCP | 8 Skills | 1 Skill | Notes |
 |-----------|:---:|:--------:|:-------:|-------|
-| Token efficiency | 3/10 | 7/10 | 9/10 | MCP: ~26K; 8 Skills: ~7K (single) / ~15K (cross); 1 Skill: ~7.5K |
+| Token efficiency | 3/10 | 7/10 | 9/10 | MCP: ~25K; 8 Skills: ~7K (single) / ~15K (cross); 1 Skill: ~7.9K |
 | Cross-domain efficiency | 3/10 | 4/10 | 9/10 | 1 Skill loads one SKILL.md; 8 Skills loads 2-3 |
 | Query accuracy | 10/10 | 9/10 | 9/10 | MCP has programmatic auto-correction engine |
 | Live data access | 10/10 | 0/10 | 0/10 | Only MCP can execute queries; Skills provide guidance only |
