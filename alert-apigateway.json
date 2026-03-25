@@ -1,0 +1,31 @@
+{
+  "name": "apigateway-error-rate",
+  "description": "Alert when apigateway error rate exceeds threshold (RED methodology - Errors signal)",
+  "enabled": true,
+  "type": "logs_threshold",
+  "logs_threshold": {
+    "condition_type": "more_than_or_unspecified",
+    "logs_filter": {
+      "simple_filter": {
+        "lucene_query": "applicationname:apigateway AND severity:error"
+      }
+    },
+    "rules": [
+      {
+        "condition": {
+          "threshold": 100,
+          "time_window": {
+            "logs_time_window_specific_value": "minutes_10"
+          }
+        },
+        "override": {
+          "priority": "p2"
+        }
+      }
+    ]
+  },
+  "incidents_settings": {
+    "minutes": 10,
+    "notify_on": "triggered_only_unspecified"
+  }
+}

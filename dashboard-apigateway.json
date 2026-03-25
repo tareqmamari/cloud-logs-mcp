@@ -1,0 +1,78 @@
+{
+  "name": "API Gateway Monitoring",
+  "description": "RED monitoring dashboard for apigateway service",
+  "layout": {
+    "sections": [
+      {
+        "id": { "value": "section-1" },
+        "rows": [
+          {
+            "id": { "value": "row-1" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "error-rate" },
+                "title": "Error Rate Over Time",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "line_chart": {
+                    "query_definitions": [
+                      {
+                        "id": "errors",
+                        "query": {
+                          "logs": {
+                            "lucene_query": {
+                              "value": "applicationname:apigateway AND severity:error"
+                            },
+                            "group_by": [],
+                            "aggregations": [
+                              {
+                                "type": "count"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": { "value": "row-2" },
+            "appearance": { "height": 19 },
+            "widgets": [
+              {
+                "id": { "value": "top-errors" },
+                "title": "Top Error Messages",
+                "appearance": { "width": 0 },
+                "definition": {
+                  "data_table": {
+                    "query": {
+                      "logs": {
+                        "lucene_query": {
+                          "value": "applicationname:apigateway AND severity:error"
+                        },
+                        "group_by": [],
+                        "aggregations": []
+                      },
+                      "data_mode_type": "raw",
+                      "columns": []
+                    },
+                    "row_style": "one_line"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "variables": [],
+  "filters": [],
+  "time_frame": {
+    "relative": "last_1_hour"
+  }
+}
