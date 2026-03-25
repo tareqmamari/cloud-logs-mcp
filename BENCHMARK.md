@@ -875,6 +875,33 @@ multiple runs (5 for `skills list`, 3 for `skills install` to temp directory).
 Based on Claude Sonnet 4 input token pricing ($3/1M tokens) as of March 2026.
 Assumptions: 10 tool calls per MCP conversation, 1 skill + 2 references per Skills conversation.
 
+### Multi-Model Considerations
+
+This benchmark measures a single path: **Claude tokenizer, Claude pricing, Claude behavior**.
+Multi-model environments like IBM Bob route between Granite, Claude, Llama, and Mistral,
+where every variable changes simultaneously:
+
+| Factor | Impact | Why it matters |
+|--------|--------|----------------|
+| **Tokenizer** | Same content produces different token counts per model | SKILL.md is 4,506 Claude tokens — could be ±15% on another tokenizer |
+| **Input pricing** | Ranges from $0.017/1M (Granite Micro) to $3.00/1M (Claude Sonnet) | 175x price difference between cheapest and most expensive |
+| **Output pricing** | Typically 3-5x input price; varies per model | Not measured in this benchmark but affects total cost |
+| **Chattiness** | Weaker models make more tool calls and read more files | A model needing 15 MCP calls vs 5 triples the variable cost |
+| **Iteration tax** | Models with weaker DataPrime knowledge retry more often | Current 0.5% tax could be 5-10x higher on smaller models |
+| **Context window** | Smaller windows (8K-16K) may not fit MCP's 18,229-token overhead | MCP becomes impractical for models with small context windows |
+
+**What holds across models:** The *relative* advantage of Skills over MCP is likely
+model-independent — MCP's fixed overhead penalizes all models equally, and Skills'
+on-demand loading benefits all models. The *absolute* token counts and dollar costs
+in this report are Claude-specific.
+
+**Bob's blended pricing:** IBM Bob uses a credit system ("bobcoins") that abstracts
+per-model costs. The effective blended rate (~$0.38–0.75/1M tokens) is significantly
+cheaper than direct Claude pricing because Bob routes most tasks to cheaper models
+(Granite at $0.017–0.06/1M). Per-model benchmarking would require running the same
+9 scenarios through each model's tokenizer and measuring its specific behavior
+(tool call count, retry rate, output length).
+
 ---
 
 *This benchmark was generated using real API calls against live IBM Cloud Logs instances,
