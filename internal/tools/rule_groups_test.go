@@ -291,5 +291,3 @@ func TestRuleGroupTools_UniqueNames(t *testing.T) {
 		names[name] = true
 	}
 }
-
-// Made with Bob

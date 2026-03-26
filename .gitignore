@@ -6,6 +6,9 @@ bin/
 *.so
 *.dylib
 
+# Bob settings folder
+.bob/
+
 # Test binary
 *.test
 integration_test_*

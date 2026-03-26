@@ -371,5 +371,3 @@ Once you're satisfied with the pattern, use it in create_rule_group:
 		},
 	}, nil
 }
-
-// Made with Bob

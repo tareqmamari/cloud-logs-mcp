@@ -502,5 +502,3 @@ func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	}
 	return t.FormatResponseWithSuggestions(res, "delete_rule_group")
 }
-
-// Made with Bob
