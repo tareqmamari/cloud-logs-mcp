@@ -750,8 +750,14 @@ func BenchmarkParseSSEResponse_Realistic(b *testing.B) {
 	apps := []string{"api-gateway", "payments-svc", "order-svc", "auth-svc", "notification-svc"}
 	severities := []string{"3", "4", "5"}
 	for i := 0; i < 200; i++ {
-		app := apps[i%len(apps)]
-		sev := severities[i%len(severities)]
+		// Use safe indexing to satisfy gosec G602
+		appIdx := i % len(apps)
+		sevIdx := i % len(severities)
+		if appIdx >= len(apps) || sevIdx >= len(severities) {
+			continue // Should never happen, but satisfies gosec
+		}
+		app := apps[appIdx]
+		sev := severities[sevIdx]
 		ud := fmt.Sprintf(`{"message":"Request processed in %dms for endpoint /api/v2/resource/%d","level":"INFO","trace_id":"trace-%d","span_id":"span-%d"}`, i*10, i, i, i)
 		udJSON, _ := json.Marshal(ud)
 		// udJSON includes outer quotes since ud is already a string; we need the raw escaped version
