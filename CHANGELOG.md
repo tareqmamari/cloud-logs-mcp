@@ -6,6 +6,38 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.11.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.10.0...v0.11.0) (2026-03-31)
+
+
+### Features
+
+* **benchmark:** add per-scenario measurement scripts ([5d8526c](https://github.com/tareqmamari/cloud-logs-mcp/commit/5d8526c36a96a8d0d7f1ccd3683f2f6576438fe2))
+* **benchmark:** add real-world scenario benchmark with live query data ([c82d9e1](https://github.com/tareqmamari/cloud-logs-mcp/commit/c82d9e1d9537fdf46017ef47bb4c333ef8b6d56c))
+* **benchmark:** unified cost model with per-turn context accounting ([75a6cc0](https://github.com/tareqmamari/cloud-logs-mcp/commit/75a6cc02d0c844c6622abeb237032e163b6d1910))
+* **scripts:** add investigation, query compactor, and demo ingestion scripts ([78337c0](https://github.com/tareqmamari/cloud-logs-mcp/commit/78337c0efdbd4c83ef1f119fccb319c1b854b256))
+* **skills:** add 8 portable agent skills for IBM Cloud Logs ([d55a180](https://github.com/tareqmamari/cloud-logs-mcp/commit/d55a1804d3654c0d3ce936aaa44c3448f1d9ee3c))
+* **skills:** embed skills in binary with install/list/remove CLI ([b6da26c](https://github.com/tareqmamari/cloud-logs-mcp/commit/b6da26cc21ff1aee461d8bb911abca5cd1a0e964))
+* **skills:** multi-tool install script with --ai routing support ([d04d761](https://github.com/tareqmamari/cloud-logs-mcp/commit/d04d7615febd78fca9549ebcad2a30655e292cbd))
+* **skills:** Update skills for ICL usecases ([315e344](https://github.com/tareqmamari/cloud-logs-mcp/commit/315e344b42d802bf30571cf2408f7038f9f05048))
+
+
+### Bug Fixes
+
+* **benchmark:** add realistic iteration costs to scenario comparison ([c1b1b37](https://github.com/tareqmamari/cloud-logs-mcp/commit/c1b1b376f7a6100a3c05c199fe88603654cd86ec))
+* **benchmarks:** correct per-conversation estimates and chart data ([2a96b2f](https://github.com/tareqmamari/cloud-logs-mcp/commit/2a96b2fb9f664072f4b4de0a95d4c8e3dcc6b7f1))
+* **benchmarks:** update token efficiency notes to match corrected estimates ([0e17f99](https://github.com/tareqmamari/cloud-logs-mcp/commit/0e17f99014f34922702980f56524def440bd411c))
+* **ci:** add benchmarks to allowed commitlint scopes ([b24ecf5](https://github.com/tareqmamari/cloud-logs-mcp/commit/b24ecf53e3b6d932228ac6aad3b4905c77d54ce8))
+* **ci:** handle missing skill subdirs with pipefail enabled ([d13ce31](https://github.com/tareqmamari/cloud-logs-mcp/commit/d13ce31ca922a688216f2ca31cb7324ce291221f))
+* **ci:** use POSIX-compatible grep in skills reference validation ([772303a](https://github.com/tareqmamari/cloud-logs-mcp/commit/772303a33f8639ce8c3b4b2cf334d10ef7306a30))
+* **ci:** use python3 for markdown link extraction in skills CI ([ab747cb](https://github.com/tareqmamari/cloud-logs-mcp/commit/ab747cb64dd58f8ccaec4b69abfc4062a6920c27))
+* **skills:** Fix lint issue ([d6538bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/d6538bb5272c1f15b0938632ba5125a7ba6cd817))
+* **skills:** Fix skills file limit i ([d030054](https://github.com/tareqmamari/cloud-logs-mcp/commit/d0300544d90b5c93acba8a115c75bcd076f22366))
+
+
+### Performance Improvements
+
+* **benchmarks:** re-measure all 9 scenarios with consolidated skill against au-syd ([c268fbf](https://github.com/tareqmamari/cloud-logs-mcp/commit/c268fbf45fdaf6a0d2e138c82bcb2e10b8f82045))
+
 ## [0.10.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.9.1...v0.10.0) (2026-03-10)
 
 
