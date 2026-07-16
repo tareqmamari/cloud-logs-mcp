@@ -575,6 +575,36 @@ func TestGenerateDynamicBaselineQuery(t *testing.T) {
 	}
 }
 
+// TestGenerateDynamicBaselineQuery_RejectsFieldNameInjection is a regression
+// test: metricField is interpolated unquoted into the DataPrime query
+// ($d.%s exists, avg($d.%s)), so a value like "x) || true || avg($d.y" would
+// inject arbitrary expression syntax. A metricField outside the DataPrime
+// field-name charset must be rejected (empty query), while a valid field
+// name still builds.
+func TestGenerateDynamicBaselineQuery_RejectsFieldNameInjection(t *testing.T) {
+	injectionPayloads := []string{
+		"x) || true || avg($d.y",
+		"field.contains('x')",
+		"a b",
+		"a'b",
+		"",
+	}
+	for _, payload := range injectionPayloads {
+		query := GenerateDynamicBaselineQuery(payload, "hourly", 7)
+		if query != "" {
+			t.Errorf("GenerateDynamicBaselineQuery(%q) = %q; expected empty, unsafe field name must not build a query", payload, query)
+		}
+	}
+
+	// Valid field names (letters, digits, underscore, dot) still build.
+	for _, field := range []string{"response_time_ms", "http.status_code", "latency99"} {
+		query := GenerateDynamicBaselineQuery(field, "hourly", 7)
+		if !strings.Contains(query, field) {
+			t.Errorf("GenerateDynamicBaselineQuery(%q) should build a query containing the field, got: %q", field, query)
+		}
+	}
+}
+
 // Helper function for alerting engine tests
 func alertingTestContains(s, substr string) bool {
 	return strings.Contains(s, substr)
