@@ -304,3 +304,39 @@ func TestContract_ToolCount_Minimum(t *testing.T) {
 			expectedMinimum, len(tools))
 	}
 }
+
+// TestContract_GetAllToolsMatchesDescriptors asserts that the list GetAllTools
+// returns is exactly the descriptor table — the same set the server registers
+// (see internal/server registerTools and the golden contract in
+// internal/server/testdata/registered_tools.golden.json). GetAllTools,
+// GetToolCount and the server registration must never disagree.
+func TestContract_GetAllToolsMatchesDescriptors(t *testing.T) {
+	descriptors := Descriptors()
+	all := GetAllTools(nil, nil)
+
+	if len(all) != len(descriptors) {
+		t.Fatalf("GetAllTools returned %d tools, descriptor table has %d", len(all), len(descriptors))
+	}
+	if GetToolCount() != len(descriptors) {
+		t.Fatalf("GetToolCount() = %d, want %d (len of descriptor table)", GetToolCount(), len(descriptors))
+	}
+
+	// Exact regression guard on the served-set size. If this changes, the
+	// server's exposed tool set changed — update the golden contract too.
+	const expectedRegisteredTools = 96
+	if len(all) != expectedRegisteredTools {
+		t.Errorf("registered tool count = %d, want %d. If this is intentional, update the golden contract in internal/server/testdata.",
+			len(all), expectedRegisteredTools)
+	}
+
+	// The descriptor-constructed names and the GetAllTools names must match.
+	descNames := make(map[string]bool, len(descriptors))
+	for _, d := range descriptors {
+		descNames[d.New(nil, nil).Name()] = true
+	}
+	for _, tool := range all {
+		if !descNames[tool.Name()] {
+			t.Errorf("GetAllTools produced tool %q absent from the descriptor table", tool.Name())
+		}
+	}
+}
