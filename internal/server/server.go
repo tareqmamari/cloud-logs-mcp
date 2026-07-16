@@ -147,7 +147,7 @@ func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer,
 	if err != nil {
 		// Fall back to API key hash if token retrieval fails
 		logger.Warn("Could not get user identity from token, using API key hash",
-			zap.Error(err),
+			zap.String("error", security.SanitizeError(err)),
 		)
 		tools.SetCurrentUser(cfg.APIKey, cfg.InstanceID)
 	} else {
@@ -183,7 +183,7 @@ func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer,
 	err = tools.FetchAndCacheTCOConfig(tcoCtx, apiClient, logger)
 	cancelTCO()
 	if err != nil {
-		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.Error(err))
+		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.String("error", security.SanitizeError(err)))
 	}
 
 	// Register all tools

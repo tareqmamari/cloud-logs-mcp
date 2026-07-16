@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 )
 
 // FetchAndCacheTCOConfig fetches TCO policies from the API and caches the configuration
@@ -35,7 +36,7 @@ func FetchAndCacheTCOConfig(ctx context.Context, c client.Doer, logger *zap.Logg
 	if err != nil {
 		if logger != nil {
 			logger.Warn("Failed to fetch TCO policies, using defaults",
-				zap.Error(err))
+				zap.String("error", security.SanitizeError(err)))
 		}
 		// Set default config on error - use frequent_search for faster queries
 		// When no policies exist, logs go to both tiers, so frequent_search is faster
