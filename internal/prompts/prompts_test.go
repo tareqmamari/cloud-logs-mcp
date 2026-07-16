@@ -871,7 +871,7 @@ func TestSmartSuggestPrompt(t *testing.T) {
 		{
 			name:         "learning goal",
 			goal:         "learn dataprime query syntax",
-			wantTools:    []string{"query_templates", "build_query"},
+			wantTools:    []string{"get_query_templates", "build_query"},
 			wantWorkflow: "query_learning",
 		},
 		{
