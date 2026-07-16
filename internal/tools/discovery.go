@@ -119,8 +119,50 @@ func NewToolRegistry() *ToolRegistry {
 	return r
 }
 
-// registerAllTools registers metadata for all tools
+// baselineKeywordStopwords are generic CRUD/action verbs stripped from
+// name-derived baseline keywords so baseline tools match on their resource
+// (e.g. "enrichment", "dashboard") rather than on ubiquitous verbs.
+var baselineKeywordStopwords = map[string]bool{
+	"get": true, "list": true, "create": true, "update": true,
+	"delete": true, "replace": true, "set": true, "move": true,
+	"pin": true, "unpin": true, "submit": true, "cancel": true,
+	"export": true, "to": true, "default": true,
+}
+
+// registerBaselineToolMetadata seeds a minimal ToolMetadata entry for every
+// tool in the descriptor table. Keywords are derived from the resource tokens
+// of the tool name; the category comes from the descriptor. Curated entries in
+// registerAllTools overwrite these for the tools that have richer metadata.
+func (r *ToolRegistry) registerBaselineToolMetadata() {
+	for _, d := range Descriptors() {
+		tool := d.New(nil, nil)
+		name := tool.Name()
+
+		var keywords []string
+		for _, tok := range strings.Split(name, "_") {
+			if tok == "" || baselineKeywordStopwords[tok] {
+				continue
+			}
+			keywords = append(keywords, tok)
+		}
+
+		r.tools[name] = &ToolMetadata{
+			Categories: []ToolCategory{d.Category},
+			Keywords:   keywords,
+			Complexity: ComplexitySimple,
+		}
+	}
+}
+
+// registerAllTools registers metadata for all tools.
+//
+// It first seeds a baseline metadata entry for EVERY tool in the descriptor
+// table (so discover_tools is not blind to the majority of tools), then the
+// hand-written blocks below overwrite the baseline for the ~24 tools that have
+// richer, curated metadata.
 func (r *ToolRegistry) registerAllTools() {
+	r.registerBaselineToolMetadata()
+
 	// Query tools
 	r.tools["query_logs"] = &ToolMetadata{
 		Categories:    []ToolCategory{CategoryQuery, CategoryObservability},

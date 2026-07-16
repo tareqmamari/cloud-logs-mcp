@@ -11,116 +11,39 @@ type ToolNamespace string
 
 // Tool namespaces for hierarchical organization
 const (
-	NamespaceQuery      ToolNamespace = "queries"
-	NamespaceAlert      ToolNamespace = "alerts"
-	NamespaceDashboard  ToolNamespace = "dashboards"
-	NamespacePolicy     ToolNamespace = "policies"
-	NamespaceWebhook    ToolNamespace = "webhooks"
-	NamespaceE2M        ToolNamespace = "e2m"
-	NamespaceStream     ToolNamespace = "streams"
-	NamespaceView       ToolNamespace = "views"
-	NamespaceRule       ToolNamespace = "rules"
-	NamespaceEnrichment ToolNamespace = "enrichments"
-	NamespaceDataAccess ToolNamespace = "data_access"
-	NamespaceWorkflow   ToolNamespace = "workflows"
-	NamespaceMeta       ToolNamespace = "meta"
+	NamespaceQuery       ToolNamespace = "queries"
+	NamespaceAlert       ToolNamespace = "alerts"
+	NamespaceDashboard   ToolNamespace = "dashboards"
+	NamespacePolicy      ToolNamespace = "policies"
+	NamespaceWebhook     ToolNamespace = "webhooks"
+	NamespaceE2M         ToolNamespace = "e2m"
+	NamespaceStream      ToolNamespace = "streams"
+	NamespaceView        ToolNamespace = "views"
+	NamespaceRule        ToolNamespace = "rules"
+	NamespaceEnrichment  ToolNamespace = "enrichments"
+	NamespaceDataAccess  ToolNamespace = "data_access"
+	NamespaceWorkflow    ToolNamespace = "workflows"
+	NamespaceMeta        ToolNamespace = "meta"
+	NamespaceIngestion   ToolNamespace = "ingestion"
+	NamespaceDataUsage   ToolNamespace = "data_usage"
+	NamespaceEventStream ToolNamespace = "event_streams"
 )
 
-// toolNamespaceMapping maps tool names to their namespaces
-var toolNamespaceMapping = map[string]ToolNamespace{
-	// Query tools
-	"query_logs":                  NamespaceQuery,
-	"build_query":                 NamespaceQuery,
-	"explain_query":               NamespaceQuery,
-	"validate_query":              NamespaceQuery,
-	"query_templates":             NamespaceQuery,
-	"submit_background_query":     NamespaceQuery,
-	"get_background_query_status": NamespaceQuery,
-	"get_background_query_data":   NamespaceQuery,
+// toolNamespaceMapping maps tool names to their namespaces. It is derived once
+// from the single descriptor table (see descriptors.go) so it can never drift
+// from the set of tools the server actually registers.
+var toolNamespaceMapping = buildToolNamespaceMapping()
 
-	// Alert tools
-	"list_alerts":   NamespaceAlert,
-	"get_alert":     NamespaceAlert,
-	"create_alert":  NamespaceAlert,
-	"update_alert":  NamespaceAlert,
-	"delete_alert":  NamespaceAlert,
-	"suggest_alert": NamespaceAlert,
-
-	// Dashboard tools
-	"list_dashboards":        NamespaceDashboard,
-	"get_dashboard":          NamespaceDashboard,
-	"create_dashboard":       NamespaceDashboard,
-	"update_dashboard":       NamespaceDashboard,
-	"delete_dashboard":       NamespaceDashboard,
-	"list_dashboard_folders": NamespaceDashboard,
-
-	// Policy tools (TCO)
-	"list_policies": NamespacePolicy,
-	"get_policy":    NamespacePolicy,
-	"create_policy": NamespacePolicy,
-	"update_policy": NamespacePolicy,
-	"delete_policy": NamespacePolicy,
-
-	// Webhook tools
-	"list_outgoing_webhooks":  NamespaceWebhook,
-	"get_outgoing_webhook":    NamespaceWebhook,
-	"create_outgoing_webhook": NamespaceWebhook,
-	"update_outgoing_webhook": NamespaceWebhook,
-	"delete_outgoing_webhook": NamespaceWebhook,
-
-	// E2M tools
-	"list_e2m":   NamespaceE2M,
-	"get_e2m":    NamespaceE2M,
-	"create_e2m": NamespaceE2M,
-	"update_e2m": NamespaceE2M,
-	"delete_e2m": NamespaceE2M,
-
-	// Stream tools
-	"list_streams":  NamespaceStream,
-	"get_stream":    NamespaceStream,
-	"create_stream": NamespaceStream,
-	"update_stream": NamespaceStream,
-	"delete_stream": NamespaceStream,
-
-	// View tools
-	"list_views":        NamespaceView,
-	"get_view":          NamespaceView,
-	"create_view":       NamespaceView,
-	"update_view":       NamespaceView,
-	"delete_view":       NamespaceView,
-	"list_view_folders": NamespaceView,
-
-	// Rule tools
-	"list_rule_groups":  NamespaceRule,
-	"get_rule_group":    NamespaceRule,
-	"create_rule_group": NamespaceRule,
-	"update_rule_group": NamespaceRule,
-	"delete_rule_group": NamespaceRule,
-
-	// Enrichment tools
-	"list_enrichments":  NamespaceEnrichment,
-	"get_enrichment":    NamespaceEnrichment,
-	"create_enrichment": NamespaceEnrichment,
-	"update_enrichment": NamespaceEnrichment,
-	"delete_enrichment": NamespaceEnrichment,
-
-	// Data access tools
-	"list_data_access_rules":  NamespaceDataAccess,
-	"get_data_access_rule":    NamespaceDataAccess,
-	"create_data_access_rule": NamespaceDataAccess,
-	"update_data_access_rule": NamespaceDataAccess,
-	"delete_data_access_rule": NamespaceDataAccess,
-
-	// Workflow tools
-	"investigate_incident": NamespaceWorkflow,
-	"health_check":         NamespaceWorkflow,
-
-	// Meta tools
-	"discover_tools":       NamespaceMeta,
-	"search_tools":         NamespaceMeta,
-	"describe_tools":       NamespaceMeta,
-	"list_tool_categories": NamespaceMeta,
-	"session_context":      NamespaceMeta,
+// buildToolNamespaceMapping constructs the name -> namespace map from the
+// canonical descriptor table. Constructors are invoked with nil dependencies
+// purely to read each tool's Name(); this is safe (constructors do no I/O).
+func buildToolNamespaceMapping() map[string]ToolNamespace {
+	descriptors := Descriptors()
+	m := make(map[string]ToolNamespace, len(descriptors))
+	for _, d := range descriptors {
+		m[d.New(nil, nil).Name()] = d.Namespace
+	}
+	return m
 }
 
 // GetToolNamespace returns the namespace for a tool
@@ -161,19 +84,22 @@ type NamespaceInfo struct {
 
 // namespaceDescriptions provides human-readable descriptions for namespaces
 var namespaceDescriptions = map[ToolNamespace]string{
-	NamespaceQuery:      "Log querying, search, and DataPrime query tools",
-	NamespaceAlert:      "Alert creation, management, and AI-powered suggestions",
-	NamespaceDashboard:  "Dashboard creation, visualization, and folder management",
-	NamespacePolicy:     "TCO policies for log retention and routing",
-	NamespaceWebhook:    "Outgoing webhooks for Slack, PagerDuty, and custom integrations",
-	NamespaceE2M:        "Events to Metrics - convert logs to aggregated metrics",
-	NamespaceStream:     "Log streaming to Kafka, Event Streams, and external systems",
-	NamespaceView:       "Saved views and search filters",
-	NamespaceRule:       "Rule groups for log parsing and enrichment",
-	NamespaceEnrichment: "Data enrichment configurations",
-	NamespaceDataAccess: "Data access rules and permissions",
-	NamespaceWorkflow:   "Automated workflows like incident investigation and health checks",
-	NamespaceMeta:       "Tool discovery, session management, and server metadata",
+	NamespaceQuery:       "Log querying, search, and DataPrime query tools",
+	NamespaceAlert:       "Alert creation, management, and AI-powered suggestions",
+	NamespaceDashboard:   "Dashboard creation, visualization, and folder management",
+	NamespacePolicy:      "TCO policies for log retention and routing",
+	NamespaceWebhook:     "Outgoing webhooks for Slack, PagerDuty, and custom integrations",
+	NamespaceE2M:         "Events to Metrics - convert logs to aggregated metrics",
+	NamespaceStream:      "Log streaming to Kafka, Event Streams, and external systems",
+	NamespaceView:        "Saved views and search filters",
+	NamespaceRule:        "Rule groups for log parsing and enrichment",
+	NamespaceEnrichment:  "Data enrichment configurations",
+	NamespaceDataAccess:  "Data access rules and permissions",
+	NamespaceWorkflow:    "Automated workflows like incident investigation and health checks",
+	NamespaceMeta:        "Tool discovery, session management, and server metadata",
+	NamespaceIngestion:   "Direct log ingestion into IBM Cloud Logs",
+	NamespaceDataUsage:   "Data usage export and metrics export configuration",
+	NamespaceEventStream: "Event stream targets for forwarding logs to external systems",
 }
 
 // GetNamespaceInfo returns detailed information about a namespace
@@ -196,7 +122,7 @@ func GetAllNamespaceInfo(includeTools bool) []*NamespaceInfo {
 		NamespaceQuery, NamespaceAlert, NamespaceDashboard, NamespacePolicy,
 		NamespaceWebhook, NamespaceE2M, NamespaceStream, NamespaceView,
 		NamespaceRule, NamespaceEnrichment, NamespaceDataAccess, NamespaceWorkflow,
-		NamespaceMeta,
+		NamespaceMeta, NamespaceIngestion, NamespaceDataUsage, NamespaceEventStream,
 	}
 
 	infos := make([]*NamespaceInfo, 0, len(namespaces))
