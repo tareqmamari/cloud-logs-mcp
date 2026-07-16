@@ -486,7 +486,7 @@ func (t *UpdateStreamTool) Execute(ctx context.Context, arguments map[string]int
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   "/v1/streams/" + streamID,
+		Path:   apiPath("/v1/streams", streamID),
 		Body:   body,
 	}
 
@@ -553,7 +553,7 @@ func (t *DeleteStreamTool) Execute(ctx context.Context, arguments map[string]int
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/streams/" + streamID,
+		Path:   apiPath("/v1/streams", streamID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

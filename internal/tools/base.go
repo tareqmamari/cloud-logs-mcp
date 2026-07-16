@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,6 +18,27 @@ import (
 	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
+
+// apiPath joins a base API path with one or more caller-supplied path
+// segments (resource IDs), URL-escaping each segment with url.PathEscape.
+//
+// Resource IDs frequently originate from MCP tool arguments and are
+// concatenated directly into request paths. Without escaping, a value like
+// "../other_resource", "id/with/slashes", or "id?evil=1" can change which
+// path (and therefore which resource) the request actually hits. PathEscape
+// percent-encodes '/', '?', '#', spaces, and other characters that would
+// otherwise be interpreted as path or query structure, so each segment is
+// always treated as a single opaque path component.
+func apiPath(base string, segments ...string) string {
+	if len(segments) == 0 {
+		return base
+	}
+	escaped := make([]string, len(segments))
+	for i, s := range segments {
+		escaped[i] = url.PathEscape(s)
+	}
+	return base + "/" + strings.Join(escaped, "/")
+}
 
 // Tool timeout constants for different operation types.
 // These provide sensible defaults based on expected execution times.

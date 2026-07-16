@@ -419,7 +419,7 @@ func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -1077,7 +1077,7 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 		Body:   body,
 	}
 
@@ -1157,7 +1157,7 @@ func (t *DeleteDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

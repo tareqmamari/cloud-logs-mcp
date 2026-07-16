@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -100,7 +99,7 @@ func (t *GetDashboardFolderTool) Execute(ctx context.Context, arguments map[stri
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   "/v1/folders/" + folderID,
+		Path:   apiPath("/v1/folders", folderID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -246,7 +245,7 @@ func (t *UpdateDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   "/v1/folders/" + folderID,
+		Path:   apiPath("/v1/folders", folderID),
 		Body:   body,
 	}
 
@@ -308,7 +307,7 @@ func (t *DeleteDashboardFolderTool) Execute(ctx context.Context, arguments map[s
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/folders/" + folderID,
+		Path:   apiPath("/v1/folders", folderID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -373,7 +372,7 @@ func (t *MoveDashboardToFolderTool) Execute(ctx context.Context, arguments map[s
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   fmt.Sprintf("/v1/dashboards/%s/folder/%s", dashboardID, folderID),
+		Path:   apiPath("/v1/dashboards", dashboardID, "folder", folderID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -429,7 +428,7 @@ func (t *PinDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   fmt.Sprintf("/v1/dashboards/%s/pinned", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID, "pinned"),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -485,7 +484,7 @@ func (t *UnpinDashboardTool) Execute(ctx context.Context, arguments map[string]i
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   fmt.Sprintf("/v1/dashboards/%s/pinned", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID, "pinned"),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -541,7 +540,7 @@ func (t *SetDefaultDashboardTool) Execute(ctx context.Context, arguments map[str
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   fmt.Sprintf("/v1/dashboards/%s/default", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID, "default"),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

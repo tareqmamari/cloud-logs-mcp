@@ -36,7 +36,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/outgoing_webhooks/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/outgoing_webhooks", id)})
 	if err != nil {
 		return HandleGetError(err, "Outgoing webhook", id, "list_outgoing_webhooks"), nil
 	}
@@ -255,7 +255,7 @@ func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/outgoing_webhooks/" + id, Body: wh})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/outgoing_webhooks", id), Body: wh})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -292,7 +292,7 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/outgoing_webhooks/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/outgoing_webhooks", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -324,7 +324,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/policies/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/policies", id)})
 	if err != nil {
 		return HandleGetError(err, "Policy", id, "list_policies"), nil
 	}
@@ -569,7 +569,7 @@ func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/policies/" + id, Body: pol})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/policies", id), Body: pol})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -606,7 +606,7 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/policies/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/policies", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -638,7 +638,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/events2metrics", id)})
 	if err != nil {
 		return HandleGetError(err, "Events-to-metrics configuration", id, "list_e2m"), nil
 	}
@@ -906,7 +906,7 @@ func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/events2metrics/" + id, Body: e2m})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/events2metrics", id), Body: e2m})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -943,7 +943,7 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/events2metrics/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/events2metrics", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1007,7 +1007,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/data_access_rules", id)})
 	if err != nil {
 		return HandleGetError(err, "Data access rule", id, "list_data_access_rules"), nil
 	}
@@ -1184,7 +1184,7 @@ func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/data_access_rules/" + id, Body: rule})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/data_access_rules", id), Body: rule})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1221,7 +1221,7 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/data_access_rules/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/data_access_rules", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1392,7 +1392,7 @@ func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/enrichments/" + id, Body: enr})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/enrichments", id), Body: enr})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1429,7 +1429,7 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/enrichments/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/enrichments", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1628,7 +1628,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/views/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/views", id)})
 	if err != nil {
 		return HandleGetError(err, "View", id, "list_views"), nil
 	}
@@ -1664,7 +1664,7 @@ func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/views/" + id, Body: view})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/views", id), Body: view})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1701,7 +1701,7 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/views/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/views", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1793,7 +1793,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/view_folders", id)})
 	if err != nil {
 		return HandleGetError(err, "View folder", id, "list_view_folders"), nil
 	}
@@ -1829,7 +1829,7 @@ func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/view_folders/" + id, Body: folder})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/view_folders", id), Body: folder})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1866,7 +1866,7 @@ func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/view_folders", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}

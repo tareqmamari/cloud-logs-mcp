@@ -84,7 +84,7 @@ func (t *GetAlertTool) Execute(ctx context.Context, arguments map[string]interfa
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   "/v1/alerts/" + id,
+		Path:   apiPath("/v1/alerts", id),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -514,7 +514,7 @@ func (t *UpdateAlertTool) Execute(ctx context.Context, arguments map[string]inte
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   "/v1/alerts/" + id,
+		Path:   apiPath("/v1/alerts", id),
 		Body:   alert,
 	}
 
@@ -599,7 +599,7 @@ func (t *DeleteAlertTool) Execute(ctx context.Context, arguments map[string]inte
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/alerts/" + id,
+		Path:   apiPath("/v1/alerts", id),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

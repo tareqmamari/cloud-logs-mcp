@@ -662,7 +662,7 @@ func (t *GetBackgroundQueryStatusTool) Execute(ctx context.Context, arguments ma
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   "/v1/background_query/" + queryID + "/status",
+		Path:   apiPath("/v1/background_query", queryID, "status"),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -723,7 +723,7 @@ func (t *GetBackgroundQueryDataTool) Execute(ctx context.Context, arguments map[
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   "/v1/background_query/" + queryID + "/data",
+		Path:   apiPath("/v1/background_query", queryID, "data"),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -784,7 +784,7 @@ func (t *CancelBackgroundQueryTool) Execute(ctx context.Context, arguments map[s
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   "/v1/background_query/" + queryID,
+		Path:   apiPath("/v1/background_query", queryID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
