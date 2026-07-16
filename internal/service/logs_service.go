@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
@@ -271,6 +272,9 @@ func (s *ibmCloudLogsService) Query(ctx context.Context, req *QueryRequest) (*Qu
 		Body:      body,
 		AcceptSSE: true,
 		Timeout:   s.config.QueryTimeout,
+		// Query is a read despite using HTTP POST, so it's safe to retry on
+		// transient failures.
+		Idempotent: true,
 	}
 
 	result, err := s.client.Do(ctx, clientReq)
@@ -534,6 +538,9 @@ func (s *ibmCloudLogsService) Create(ctx context.Context, resourceType ResourceT
 		Method: "POST",
 		Path:   cfg.basePath,
 		Body:   data,
+		// Generate a stable RequestID so this create is retryable via
+		// Idempotency-Key without risking duplicate resource creation.
+		RequestID: uuid.NewString(),
 	}
 
 	result, err := s.client.Do(ctx, clientReq)

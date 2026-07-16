@@ -21,8 +21,14 @@ import (
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/auth"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
+
+// maxErrorBodySnippet bounds how much of an error response body is folded
+// into a classified error's message, so a huge (or malicious) response body
+// can't bloat error messages/logs.
+const maxErrorBodySnippet = 2048
 
 // Authenticator is the interface for adding authentication to requests
 type Authenticator interface {
@@ -70,14 +76,19 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error
 
 	transport := &http.Transport{
 		MaxIdleConns:        cfg.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.MaxIdleConns,
 		IdleConnTimeout:     cfg.IdleConnTimeout,
 		TLSHandshakeTimeout: 10 * time.Second,
 		TLSClientConfig:     newTLSConfig(),
 	}
 
+	// No blanket client-wide timeout: deadlines are enforced exclusively via
+	// per-request contexts in doRequest, so operation-specific timeouts
+	// (e.g. QueryTimeout, BulkOperationTimeout) are not silently truncated
+	// by a shorter client-wide default.
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   cfg.Timeout,
+		Timeout:   0,
 	}
 
 	var rateLimiter *rate.Limiter
@@ -147,6 +158,7 @@ type Request struct {
 	Body           interface{}
 	Headers        map[string]string
 	RequestID      string        // Optional client-provided request ID for idempotency
+	Idempotent     bool          // Marks a POST/PATCH as safe to retry (e.g. read-only POSTs like Query). GET/HEAD/PUT/DELETE are always retryable.
 	UseIngressHost bool          // Use ingress endpoint instead of API endpoint for log ingestion
 	AcceptSSE      bool          // Use text/event-stream Accept header for streaming responses (e.g., sync queries)
 	Timeout        time.Duration // Optional per-request timeout (overrides client default)
@@ -163,6 +175,8 @@ type Response struct {
 func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	var lastErr error
 	var lastResp *Response
+
+	idempotent := isIdempotentRequest(req)
 
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
@@ -184,24 +198,69 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 		if err != nil {
 			lastErr = err
 			lastResp = nil
-			// Retry on network errors
-			if isRetryable(err) {
+			// Retry on network errors, but only for idempotency-safe requests.
+			if isRetryable(err) && idempotent {
 				continue
 			}
 			return nil, err
 		}
 
-		// Retry on specific HTTP status codes
-		if shouldRetry(resp.StatusCode) {
+		// Retry on specific HTTP status codes, but only for idempotency-safe
+		// requests: retrying a non-idempotent write (e.g. a plain POST)
+		// risks duplicating side effects on the server.
+		if shouldRetry(resp.StatusCode) && idempotent {
 			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(resp.Body))
 			lastResp = resp
 			continue
 		}
 
+		// Final response: surface non-2xx statuses as classified errors
+		// instead of silently returning them as success. The response is
+		// still returned alongside the error for callers that legitimately
+		// need the status code (e.g. health checks).
+		if resp.StatusCode >= 400 {
+			return resp, classifyResponseError(resp)
+		}
+
 		return resp, nil
 	}
 
+	if lastResp != nil {
+		return lastResp, fmt.Errorf("max retries exceeded: %w", classifyResponseError(lastResp))
+	}
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+// classifyResponseError converts a final non-2xx response into a classified,
+// errors.As-matchable error carrying the HTTP status code and a bounded
+// snippet of the response body.
+func classifyResponseError(resp *Response) error {
+	return mcperrors.FromHTTPStatus(resp.StatusCode, truncateBody(resp.Body))
+}
+
+// truncateBody returns body as a string, capped to maxErrorBodySnippet bytes
+// so classified errors never balloon in size from large response bodies.
+func truncateBody(body []byte) string {
+	if len(body) <= maxErrorBodySnippet {
+		return string(body)
+	}
+	return string(body[:maxErrorBodySnippet]) + "...(truncated)"
+}
+
+// isIdempotentRequest reports whether req is safe to retry. GET/HEAD/PUT/DELETE
+// are idempotent by HTTP semantics. POST/PATCH are only retryable if the
+// caller explicitly marked the request as idempotent (e.g. a read-only POST
+// like Query) or supplied a stable RequestID/Idempotency-Key so the server
+// can deduplicate retried attempts.
+func isIdempotentRequest(req *Request) bool {
+	switch req.Method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete:
+		return true
+	case http.MethodPost, http.MethodPatch:
+		return req.Idempotent || req.RequestID != ""
+	default:
+		return false
+	}
 }
 
 // calculateRetryWait determines the wait time before the next retry attempt.
@@ -233,15 +292,35 @@ func (c *Client) calculateRetryWait(attempt int, lastResp *Response) time.Durati
 	// Default: exponential backoff with jitter
 	// Cap shift value to prevent overflow (max 30 ensures we stay within reasonable time bounds)
 	shift := min(attempt-1, 30)
-	baseWait := c.config.RetryWaitMin * time.Duration(1<<shift)
-	if baseWait > c.config.RetryWaitMax {
-		baseWait = c.config.RetryWaitMax
-	}
+	baseWait := clampedBackoff(c.config.RetryWaitMin, c.config.RetryWaitMax, shift)
 
 	// Add jitter: random value between 0 and 25% of base wait time
 	// This spreads out retry attempts when multiple clients fail simultaneously
 	jitter := cryptoRandDuration(int64(baseWait) / 4)
 	return baseWait + jitter
+}
+
+// clampedBackoff computes minWait * 2^shift, clamped to maxWait. The check
+// against overflow happens BEFORE multiplying (via minWait > maxWait>>shift)
+// so a large minWait combined with a large shift can never wrap around to a
+// negative/garbage time.Duration.
+func clampedBackoff(minWait, maxWait time.Duration, shift int) time.Duration {
+	if minWait <= 0 {
+		return 0
+	}
+	if maxWait <= 0 {
+		return 0
+	}
+	if shift <= 0 {
+		if minWait > maxWait {
+			return maxWait
+		}
+		return minWait
+	}
+	if shift >= 63 || minWait > maxWait>>shift {
+		return maxWait
+	}
+	return minWait << shift
 }
 
 // parseRetryAfter parses the Retry-After header value.
@@ -301,9 +380,18 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 		return nil, err
 	}
 
-	if req.Timeout > 0 {
+	// Enforce a deadline exclusively via the per-request context: the
+	// underlying http.Client has no blanket Timeout (see New), so every
+	// request must get one here. Fall back to the client-wide default when
+	// the caller didn't set a per-request timeout, so no request is ever
+	// unbounded.
+	timeout := req.Timeout
+	if timeout <= 0 {
+		timeout = c.config.Timeout
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 
@@ -320,16 +408,28 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	}
 
 	c.setHeaders(ctx, httpReq, req)
+	c.applyCallerHeaders(httpReq, req)
 
+	// Authenticate LAST so caller-supplied headers (already applied above)
+	// can never clobber the credentials the authenticator sets.
 	if err := c.authenticator.Authenticate(httpReq); err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
 
+	return c.executeRequest(httpReq, req, requestURL)
+}
+
+// applyCallerHeaders sets caller-supplied headers on httpReq, applied before
+// authentication so they can be overridden by it. Authorization is skipped
+// entirely: a caller must never be able to supply its own credentials.
+func (c *Client) applyCallerHeaders(httpReq *http.Request, req *Request) {
 	for k, v := range req.Headers {
+		if strings.EqualFold(k, "Authorization") {
+			c.logger.Warn("Ignoring caller-supplied Authorization header", zap.String("header", k))
+			continue
+		}
 		httpReq.Header.Set(k, v)
 	}
-
-	return c.executeRequest(httpReq, req, requestURL)
 }
 
 func (c *Client) applyRateLimit(ctx context.Context) error {

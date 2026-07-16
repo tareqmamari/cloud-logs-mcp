@@ -1,10 +1,17 @@
 // Package service provides the business logic layer for IBM Cloud Logs operations.
+//
+// Note: HTTP status -> error classification (400/401/403/404/409/429/5xx) has
+// a single canonical mapping in internal/errors.FromHTTPStatus, applied by
+// the client layer (internal/client.Client.Do). This file previously had a
+// second, unused HTTP-status mapper (FromHTTPError); it was removed to avoid
+// two divergent mappings. AgentActionableError and its constructors below
+// remain in use for service-level validation errors (bad query syntax,
+// invalid date ranges, etc.) that aren't derived from an HTTP response.
 package service
 
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -374,67 +381,6 @@ func NewServerError(details string, retryable bool) *AgentActionableError {
 		action,
 		reason,
 	)
-}
-
-// FromHTTPError converts an HTTP status code to an agent-actionable error
-func FromHTTPError(statusCode int, body string, resourceType string) *AgentActionableError {
-	switch statusCode {
-	case http.StatusBadRequest:
-		return NewAgentError(
-			ErrInvalidParameter,
-			fmt.Sprintf("Invalid request: %s", body),
-			ActionChangeParams,
-			"Review and fix the request parameters",
-		)
-
-	case http.StatusUnauthorized:
-		return NewAuthError("API key invalid or expired")
-
-	case http.StatusForbidden:
-		return NewAgentError(
-			ErrForbidden,
-			"Access forbidden",
-			ActionEscalate,
-			"User lacks permission for this operation",
-		).WithElicitQuestions(
-			"You don't have permission for this operation. Please verify your access level with your administrator.",
-		)
-
-	case http.StatusNotFound:
-		return NewAgentError(
-			ErrResourceNotFound,
-			fmt.Sprintf("%s not found", resourceType),
-			ActionElicit,
-			"Resource doesn't exist - verify ID or list available resources",
-		)
-
-	case http.StatusConflict:
-		return NewAgentError(
-			ErrResourceConflict,
-			"Resource conflict",
-			ActionElicit,
-			"Resource already exists or is in a conflicting state",
-		).WithElicitQuestions(
-			"A resource conflict occurred. Would you like me to update the existing resource instead?",
-		)
-
-	case http.StatusTooManyRequests:
-		return NewRateLimitError(5000) // Default 5 second wait
-
-	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable:
-		return NewServerError(body, true)
-
-	case http.StatusGatewayTimeout:
-		return NewTimeoutError("API")
-
-	default:
-		return NewAgentError(
-			ErrServerError,
-			fmt.Sprintf("Unexpected error (HTTP %d): %s", statusCode, body),
-			ActionEscalate,
-			"Unexpected error requires investigation",
-		).WithHTTPStatus(statusCode)
-	}
 }
 
 // truncateString truncates a string to maxLen characters

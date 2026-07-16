@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 )
 
 // mockTokenValidator implements TokenValidator for testing.
@@ -357,6 +358,39 @@ func TestCheckAll_APIUnreachable(t *testing.T) {
 	}
 	if !strings.Contains(apiCheck.Message, "API unreachable") {
 		t.Errorf("api check message = %q, want to contain 'API unreachable'", apiCheck.Message)
+	}
+}
+
+// TestCheckAll_APIReturnsClassifiedHTTPError verifies that when the client
+// returns a non-nil response alongside a classified HTTP error (e.g. a 401
+// from the real client's status-code classification), the health check uses
+// the response to report the actual status code instead of a generic
+// "API unreachable" message that would misleadingly suggest the API itself
+// is down when in fact it responded (just with an error status).
+func TestCheckAll_APIReturnsClassifiedHTTPError(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.DoFunc = func(_ context.Context, _ *client.Request) (*client.Response, error) {
+		resp := &client.Response{StatusCode: 401, Body: []byte(`{"error":"invalid api key"}`)}
+		return resp, mcperrors.FromHTTPStatus(401, "invalid api key")
+	}
+	validator := &mockTokenValidator{err: nil}
+	checker := New(mock, validator, zap.NewNop())
+
+	status, checks := checker.CheckAll(context.Background())
+
+	if status != StatusUnhealthy {
+		t.Errorf("overall status = %q, want %q", status, StatusUnhealthy)
+	}
+
+	apiCheck := checks[1]
+	if apiCheck.Status != StatusUnhealthy {
+		t.Errorf("api check status = %q, want %q", apiCheck.Status, StatusUnhealthy)
+	}
+	if !strings.Contains(apiCheck.Message, "401") {
+		t.Errorf("api check message = %q, want to contain the HTTP status code 401", apiCheck.Message)
+	}
+	if strings.Contains(apiCheck.Message, "API unreachable") {
+		t.Errorf("api check message = %q, should not say 'API unreachable' when the API actually responded with a status code", apiCheck.Message)
 	}
 }
 
