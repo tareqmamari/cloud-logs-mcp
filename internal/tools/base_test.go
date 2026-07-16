@@ -1,8 +1,12 @@
 package tools
 
 import (
+	"net/http"
 	"sort"
+	"strings"
 	"testing"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func TestGetStringParam(t *testing.T) {
@@ -750,4 +754,48 @@ func TestApiPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNewAPIErrorFromResponse_CapsNonJSONBody guards against an unbounded
+// non-JSON error body ballooning APIError.Message. The JSON branch already
+// works off a parsed map, but a huge plain-text/HTML error page (e.g. from a
+// misconfigured proxy) must be capped the same way client.truncateBody caps
+// the classified error snippet, for parity.
+func TestNewAPIErrorFromResponse_CapsNonJSONBody(t *testing.T) {
+	t.Run("huge non-JSON body is capped", func(t *testing.T) {
+		huge := strings.Repeat("x", maxNonJSONErrorBodySnippet*2)
+		resp := &client.Response{
+			StatusCode: 500,
+			Body:       []byte(huge),
+			Headers:    http.Header{},
+		}
+
+		apiErr := newAPIErrorFromResponse(500, resp)
+
+		if len(apiErr.Message) >= len(huge) {
+			t.Fatalf("expected message to be capped, got length %d (body length %d)", len(apiErr.Message), len(huge))
+		}
+		if !strings.Contains(apiErr.Message, "...(truncated)") {
+			t.Errorf("expected truncated message to be marked, got: %q", truncateUTF8Safe(apiErr.Message, 100))
+		}
+		if !strings.HasPrefix(apiErr.Message, "API error (HTTP 500): "+strings.Repeat("x", 50)) {
+			t.Errorf("expected message to start with capped body content")
+		}
+	})
+
+	t.Run("small non-JSON body is not truncated", func(t *testing.T) {
+		small := "plain text error"
+		resp := &client.Response{
+			StatusCode: 500,
+			Body:       []byte(small),
+			Headers:    http.Header{},
+		}
+
+		apiErr := newAPIErrorFromResponse(500, resp)
+
+		want := "API error (HTTP 500): " + small
+		if apiErr.Message != want {
+			t.Errorf("newAPIErrorFromResponse().Message = %q, want %q", apiErr.Message, want)
+		}
+	})
 }
