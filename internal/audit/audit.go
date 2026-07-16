@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
 
@@ -114,8 +115,16 @@ func (l *Logger) Log(ctx context.Context, entry Entry) {
 	l.entries = append(l.entries, entry)
 }
 
-// LogToolExecution is a convenience method for logging tool executions
-func (l *Logger) LogToolExecution(ctx context.Context, toolName string, operation string, resource string, resourceID string, success bool, duration time.Duration, err error) {
+// LogToolExecution is a convenience method for logging tool executions.
+//
+// err is masked via security.SanitizeError before being stored in
+// Entry.ErrorMsg — callers may pass the raw tool error directly; audit
+// logging is a hard boundary and never persists (in-memory buffer or the
+// zap "audit" logger) an unmasked credential/secret. inputHash should be a
+// SHA-256 hex digest of the tool's (marshaled) arguments, letting audit
+// entries be correlated to a specific input without recording the raw
+// (potentially sensitive) argument values themselves.
+func (l *Logger) LogToolExecution(ctx context.Context, toolName string, operation string, resource string, resourceID string, success bool, duration time.Duration, err error, inputHash string) {
 	entry := Entry{
 		Tool:       toolName,
 		Operation:  operation,
@@ -123,10 +132,11 @@ func (l *Logger) LogToolExecution(ctx context.Context, toolName string, operatio
 		ResourceID: resourceID,
 		Success:    success,
 		Duration:   duration,
+		InputHash:  inputHash,
 	}
 
 	if err != nil {
-		entry.ErrorMsg = err.Error()
+		entry.ErrorMsg = security.SanitizeError(err)
 	}
 
 	l.Log(ctx, entry)

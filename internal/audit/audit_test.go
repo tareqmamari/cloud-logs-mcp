@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func TestLogToolExecution(t *testing.T) {
 	ctx := context.Background()
 	dur := 100 * time.Millisecond
 
-	l.LogToolExecution(ctx, "search_logs", "query", "logs", "log-123", true, dur, nil)
+	l.LogToolExecution(ctx, "search_logs", "query", "logs", "log-123", true, dur, nil, "")
 
 	entries := l.GetRecentEntries(0)
 	if len(entries) != 1 {
@@ -160,7 +161,7 @@ func TestLogToolExecution_WithError(t *testing.T) {
 	ctx := context.Background()
 	testErr := errors.New("connection refused")
 
-	l.LogToolExecution(ctx, "search_logs", "query", "logs", "", false, 10*time.Millisecond, testErr)
+	l.LogToolExecution(ctx, "search_logs", "query", "logs", "", false, 10*time.Millisecond, testErr, "")
 
 	entries := l.GetRecentEntries(0)
 	if len(entries) != 1 {
@@ -171,6 +172,40 @@ func TestLogToolExecution_WithError(t *testing.T) {
 	}
 	if entries[0].Success {
 		t.Error("expected success=false")
+	}
+}
+
+func TestLogToolExecution_WithInputHash(t *testing.T) {
+	l := newTestLogger(true)
+	ctx := context.Background()
+
+	l.LogToolExecution(ctx, "search_logs", "query", "logs", "", true, 5*time.Millisecond, nil, "deadbeef")
+
+	entries := l.GetRecentEntries(0)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].InputHash != "deadbeef" {
+		t.Errorf("input_hash: got %q, want %q", entries[0].InputHash, "deadbeef")
+	}
+}
+
+func TestLogToolExecution_MasksErrorMessage(t *testing.T) {
+	l := newTestLogger(true)
+	ctx := context.Background()
+	testErr := errors.New("authentication failed with api_key=abcdefghijklmnopqrstuvwxyz1234") // pragma: allowlist secret
+
+	l.LogToolExecution(ctx, "list_alerts", "query", "", "", false, time.Millisecond, testErr, "")
+
+	entries := l.GetRecentEntries(0)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if strings.Contains(entries[0].ErrorMsg, "abcdefghijklmnopqrstuvwxyz1234") { // pragma: allowlist secret
+		t.Errorf("audit entry leaked API key: %q", entries[0].ErrorMsg)
+	}
+	if !strings.Contains(entries[0].ErrorMsg, "***REDACTED***") {
+		t.Errorf("expected masked error_msg to contain REDACTED marker, got %q", entries[0].ErrorMsg)
 	}
 }
 
