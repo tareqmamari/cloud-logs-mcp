@@ -123,26 +123,40 @@ func (c *Checker) checkAPIConnectivity(ctx context.Context) Check {
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := c.client.Do(checkCtx, req)
+	resp, err := c.client.Do(checkCtx, req)
 	check.Duration = time.Since(start)
 
-	if err != nil {
-		// Degraded if we can't reach the API, but auth works
-		if check.Duration > 3*time.Second {
-			check.Status = StatusDegraded
-			check.Message = "API responding slowly"
-		} else {
-			check.Status = StatusUnhealthy
-			check.Message = fmt.Sprintf("API unreachable: %v", err)
-		}
+	switch {
+	case err == nil:
+		check.Status = StatusHealthy
+		check.Message = "API reachable"
+		c.logger.Debug("Health check passed: API connectivity",
+			zap.Duration("duration", check.Duration),
+		)
+	case resp != nil:
+		// The client returned a response alongside the error: the API is
+		// reachable, it just responded with an error status (e.g. 401/404).
+		// Report the actual status instead of a misleading "unreachable".
+		check.Status = StatusUnhealthy
+		check.Message = fmt.Sprintf("API returned HTTP %d: %v", resp.StatusCode, err)
+		c.logger.Warn("Health check failed: API returned error status",
+			zap.Int("status", resp.StatusCode),
+			zap.Error(err),
+			zap.Duration("duration", check.Duration),
+		)
+	case check.Duration > 3*time.Second:
+		// Degraded if we can't reach the API in time, but auth works
+		check.Status = StatusDegraded
+		check.Message = "API responding slowly"
 		c.logger.Warn("Health check failed: API connectivity",
 			zap.Error(err),
 			zap.Duration("duration", check.Duration),
 		)
-	} else {
-		check.Status = StatusHealthy
-		check.Message = "API reachable"
-		c.logger.Debug("Health check passed: API connectivity",
+	default:
+		check.Status = StatusUnhealthy
+		check.Message = fmt.Sprintf("API unreachable: %v", err)
+		c.logger.Warn("Health check failed: API connectivity",
+			zap.Error(err),
 			zap.Duration("duration", check.Duration),
 		)
 	}

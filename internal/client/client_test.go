@@ -29,8 +29,10 @@ func newTestClient(serverURL string, version string) *Client {
 	cfg := newTestConfig(serverURL)
 	logger := newTestLogger()
 
+	// Match production (New()): no blanket client-wide timeout, deadlines
+	// enforced exclusively via per-request contexts in doRequest.
 	httpClient := &http.Client{
-		Timeout: cfg.Timeout,
+		Timeout: 0,
 	}
 
 	return &Client{
@@ -580,6 +582,83 @@ func TestCustomHeaders(t *testing.T) {
 
 	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
 	assert.Equal(t, "another-value", capturedHeaders.Get("X-Another"))
+}
+
+// TestCallerAuthorizationHeaderCannotClobberAuthentication verifies that a
+// caller-supplied Authorization header is rejected/ignored so it cannot
+// override the authenticator's own credentials. Caller headers are applied
+// before Authenticate runs, so authentication always has the final say.
+func TestCallerAuthorizationHeaderCannotClobberAuthentication(t *testing.T) {
+	var capturedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method: "GET",
+		Path:   "/v1/test",
+		Headers: map[string]string{
+			"Authorization": "Bearer attacker-supplied-token",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	// mockAuthenticator always sets "Bearer test-token" — the caller-supplied
+	// value must never win.
+	assert.Equal(t, "Bearer test-token", capturedAuth)
+}
+
+// TestCustomHeadersAppliedBeforeAuthentication verifies that non-Authorization
+// caller headers are still applied (ordering change should not drop them).
+func TestCustomHeadersAppliedBeforeAuthentication(t *testing.T) {
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method: "GET",
+		Path:   "/v1/test",
+		Headers: map[string]string{
+			"X-Custom-Header": "custom-value",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
+	assert.Equal(t, "Bearer test-token", capturedHeaders.Get("Authorization"))
+}
+
+// TestTransportTuning_MaxIdleConnsPerHost verifies the transport sets
+// MaxIdleConnsPerHost to match MaxIdleConns, avoiding needless connection
+// churn against a single host (the common case for this client).
+func TestTransportTuning_MaxIdleConnsPerHost(t *testing.T) {
+	cfg := newTestConfig("http://example.invalid")
+	logger := newTestLogger()
+
+	c, err := New(cfg, logger, "test")
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	transport, ok := c.httpClient.Transport.(*http.Transport)
+	require.True(t, ok, "expected *http.Transport")
+	assert.Equal(t, cfg.MaxIdleConns, transport.MaxIdleConnsPerHost)
 }
 
 func TestContextCancellation(t *testing.T) {
