@@ -177,6 +177,12 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 	return result, nil
 }
 
+// maxNonJSONErrorBodySnippet bounds how much of a non-JSON error response
+// body is folded into APIError.Message. Mirrors client.maxErrorBodySnippet
+// (unexported there, so duplicated here) so a huge error body can't balloon
+// the message the same way it can't balloon a classified client error.
+const maxNonJSONErrorBodySnippet = 2048
+
 // newAPIErrorFromResponse builds a *tools.APIError for a non-2xx status,
 // pulling the message/details from the response body and the request ID from
 // the response headers when a response is available.
@@ -204,7 +210,13 @@ func newAPIErrorFromResponse(statusCode int, resp *client.Response) *APIError {
 		apiErr.Message = fmt.Sprintf("API error (HTTP %d): %v", statusCode, apiError)
 		apiErr.Details = apiError
 	} else {
-		apiErr.Message = fmt.Sprintf("API error (HTTP %d): %s", statusCode, string(resp.Body))
+		body := resp.Body
+		suffix := ""
+		if len(body) > maxNonJSONErrorBodySnippet {
+			body = truncateBytesUTF8Safe(body, maxNonJSONErrorBodySnippet)
+			suffix = "...(truncated)"
+		}
+		apiErr.Message = fmt.Sprintf("API error (HTTP %d): %s%s", statusCode, string(body), suffix)
 	}
 	return apiErr
 }
