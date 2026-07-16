@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/audit"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
@@ -18,6 +19,8 @@ const (
 	sessionContextKey contextKey = "session"
 	// sessionProviderContextKey is the context key for the session provider.
 	sessionProviderContextKey contextKey = "session_provider"
+	// auditLoggerContextKey is the context key for the audit logger.
+	auditLoggerContextKey contextKey = "audit_logger"
 )
 
 // ErrNoClientInContext is returned when no API client is found in the context.
@@ -77,4 +80,22 @@ func GetSessionProviderFromContext(ctx context.Context) SessionProvider {
 		return provider
 	}
 	return GetSessionManager()
+}
+
+// WithAuditLogger adds the server's audit logger to the context. This lets
+// tools (e.g. GetAuditLogTool) read recent audit entries without the
+// server->tools constructor wiring that every other tool uses, and without
+// changing any tool's registered name or input schema.
+func WithAuditLogger(ctx context.Context, logger *audit.Logger) context.Context {
+	return context.WithValue(ctx, auditLoggerContextKey, logger)
+}
+
+// GetAuditLoggerFromContext retrieves the audit logger from the context.
+// Returns nil, false if none is present (or audit logging is disabled).
+func GetAuditLoggerFromContext(ctx context.Context) (*audit.Logger, bool) {
+	logger, ok := ctx.Value(auditLoggerContextKey).(*audit.Logger)
+	if !ok || logger == nil {
+		return nil, false
+	}
+	return logger, true
 }
