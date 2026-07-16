@@ -164,6 +164,13 @@ func runSkillsCommand(args []string) {
 		return
 	}
 
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			printSkillsUsage()
+			return
+		}
+	}
+
 	switch args[0] {
 	case "install":
 		projectLevel := false
