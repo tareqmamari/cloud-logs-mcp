@@ -485,6 +485,14 @@ func severityToInt(severity string) int {
 
 // fieldToLucene converts a field filter to Lucene syntax
 func fieldToLucene(f fieldFilter) string {
+	// f.Field is interpolated unquoted into the Lucene expression in every
+	// branch below, so a caller-supplied field name containing Lucene syntax
+	// (spaces, ':', '*', boolean operators, ...) would inject into the query.
+	// Drop the filter unless the field name is a safe reference.
+	if !isSafeDataPrimeFieldRef(f.Field) {
+		return ""
+	}
+
 	switch f.Operator {
 	case "equals":
 		return fmt.Sprintf("%s:%s", f.Field, f.Value)
@@ -520,6 +528,16 @@ func fieldToLucene(f fieldFilter) string {
 func fieldToDataPrime(f fieldFilter) string {
 	// Convert field name to DataPrime reference
 	dpField := toDataPrimeField(f.Field)
+
+	// The resolved field name is interpolated UNQUOTED in every branch below,
+	// and toDataPrimeField passes $d./$l./$m.-prefixed inputs through
+	// verbatim. Since f.Field is caller-supplied, an unsafe field name would
+	// inject raw DataPrime expression syntax through the field position (which
+	// value-escaping can't prevent). Drop the filter unless the field name is
+	// a safe reference.
+	if !isSafeDataPrimeFieldRef(dpField) {
+		return ""
+	}
 
 	switch f.Operator {
 	case "equals":
@@ -597,6 +615,21 @@ func isSafeDataPrimeFieldName(s string) bool {
 		}
 	}
 	return true
+}
+
+// isSafeDataPrimeFieldRef reports whether s is a safe field reference to
+// interpolate unquoted into a query. It is like isSafeDataPrimeFieldName but
+// additionally permits a single leading DataPrime scope prefix ($d./$l./$m.),
+// which toDataPrimeField produces for resolved field references. Everything
+// after the optional prefix must still be a bare field-name token, so a
+// caller-supplied field like "$d.x=='a'||$d.secret.contains('y'" (which
+// toDataPrimeField would pass through verbatim) is rejected instead of
+// injecting raw expression syntax through the field position.
+func isSafeDataPrimeFieldRef(s string) bool {
+	if len(s) >= 3 && s[0] == '$' && (s[1] == 'd' || s[1] == 'l' || s[1] == 'm') && s[2] == '.' {
+		s = s[3:]
+	}
+	return isSafeDataPrimeFieldName(s)
 }
 
 // toDataPrimeField converts a field name to DataPrime reference format
