@@ -83,13 +83,18 @@ const (
 	DefaultMaxCostMillicents = 10000 // $0.10 default budget
 )
 
-// Global budget context (per-session)
+// globalBudget is process-global, not per-session: this server currently
+// tracks one budget for the whole process (matching the single-user/stdio
+// assumption documented on currentUserID in session.go), not one budget per
+// user/session. All access to globalBudget must go through GetBudgetContext/
+// ResetBudgetContext below, both of which hold budgetMu for the read-check-
+// write.
 var (
 	globalBudget *BudgetContext
 	budgetMu     sync.RWMutex
 )
 
-// GetBudgetContext returns the current session's budget context
+// GetBudgetContext returns the process-wide budget context
 func GetBudgetContext() *BudgetContext {
 	budgetMu.RLock()
 	if globalBudget != nil {

@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -34,9 +36,9 @@ func TestGenerateUserID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			userID := GenerateUserID(tt.apiKey, tt.instanceID)
 
-			// Should be 16 characters (hex encoded first 8 bytes of SHA256)
-			if len(userID) != 16 {
-				t.Errorf("Expected userID length 16, got %d", len(userID))
+			// Should be 32 characters (hex encoded first 16 bytes of SHA256)
+			if len(userID) != 32 {
+				t.Errorf("Expected userID length 32, got %d", len(userID))
 			}
 
 			// Should be deterministic
@@ -54,9 +56,9 @@ func TestGenerateUserIDFromSubject(t *testing.T) {
 
 	userID := GenerateUserIDFromSubject(subject, instanceID)
 
-	// Should be 16 characters
-	if len(userID) != 16 {
-		t.Errorf("Expected userID length 16, got %d", len(userID))
+	// Should be 32 characters
+	if len(userID) != 32 {
+		t.Errorf("Expected userID length 32, got %d", len(userID))
 	}
 
 	// Should be deterministic
@@ -561,5 +563,65 @@ func TestBuildBudgetStatus_UnexpectedShape(t *testing.T) {
 				t.Error("expected an error for malformed summary, got nil")
 			}
 		})
+	}
+}
+
+// TestCurrentUserID_ConcurrentAccess exercises SetCurrentUser/SetCurrentUserFromJWT
+// and readers of the current user (GetSession, SaveCurrentSession) concurrently.
+// Before making currentUserID race-safe via accessor functions, this test fails
+// under `go test -race` because the package-global currentUserID variable was
+// written and read from multiple goroutines without synchronization.
+func TestCurrentUserID_ConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use an isolated session manager so this test doesn't depend on / pollute
+	// the process-wide singleton used by other tests.
+	manager := NewSessionManager(tmpDir)
+	prevManager := globalSessionManager
+	globalSessionManager = manager
+	t.Cleanup(func() { globalSessionManager = prevManager })
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		i := i
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			SetCurrentUser(fmt.Sprintf("api-key-%d", i), "instance")
+		}()
+		go func() {
+			defer wg.Done()
+			SetCurrentUserFromJWT(fmt.Sprintf("subject-%d", i), "instance")
+		}()
+		go func() {
+			defer wg.Done()
+			_ = GetSession()
+			_ = SaveCurrentSession()
+		}()
+	}
+	wg.Wait()
+}
+
+// TestCacheResult_EvictsOldestOnOverflow verifies CacheResult's "keeps last 5"
+// contract: when a 6th result is cached, the first-inserted (and never
+// subsequently touched) entry is evicted, and the remaining 5 survive.
+func TestCacheResult_EvictsOldestOnOverflow(t *testing.T) {
+	session := NewSessionContext("test-user", "test-instance")
+
+	for i := 0; i < 6; i++ {
+		session.CacheResult(fmt.Sprintf("tool-%d", i), map[string]interface{}{"i": i})
+	}
+
+	if session.GetCachedResult("tool-0") != nil {
+		t.Error("expected first-inserted, untouched entry tool-0 to be evicted")
+	}
+	for i := 1; i < 6; i++ {
+		name := fmt.Sprintf("tool-%d", i)
+		if session.GetCachedResult(name) == nil {
+			t.Errorf("expected %s to remain cached", name)
+		}
+	}
+
+	if len(session.LastResults) != 5 {
+		t.Errorf("expected cache size 5, got %d", len(session.LastResults))
 	}
 }
