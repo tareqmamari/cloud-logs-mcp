@@ -1,9 +1,77 @@
 package tools
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
+
+// failingDoer is a client.Doer whose Do always fails with an error carrying
+// a classified snippet (as a real classifyResponseError from a non-2xx API
+// response would), so tests can assert the failure never reaches a log sink
+// unmasked.
+type failingDoer struct {
+	err error
+}
+
+func (f *failingDoer) Do(_ context.Context, _ *client.Request) (*client.Response, error) {
+	return nil, f.err
+}
+func (f *failingDoer) GetInstanceInfo() client.InstanceInfo { return client.InstanceInfo{} }
+func (f *failingDoer) Close() error                         { return nil }
+
+// TestFetchAndCacheTCOConfig_SanitizesStartupLogError guards against startup
+// logs bypassing masking: a TCO policy-fetch failure can carry a classified
+// response-body snippet (e.g. an echoed api_key), and FetchAndCacheTCOConfig
+// must run that error through security.SanitizeError before it reaches the
+// zap sink, exactly like the tool-execution chokepoint does.
+func TestFetchAndCacheTCOConfig_SanitizesStartupLogError(t *testing.T) {
+	const secret = "api_key=abcdefghij1234567890secretvalue" // pragma: allowlist secret
+	failingClient := &failingDoer{err: &testAPIError{msg: "policies fetch failed: " + secret}}
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	logger := zap.New(core)
+
+	session := NewSessionContext("test-user", "test-instance")
+	ctx := WithSession(context.Background(), session)
+
+	if err := FetchAndCacheTCOConfig(ctx, failingClient, logger); err != nil {
+		t.Fatalf("FetchAndCacheTCOConfig returned unexpected error: %v", err)
+	}
+
+	entries := logs.All()
+	found := false
+	for _, entry := range entries {
+		for _, field := range entry.Context {
+			if field.Key != "error" {
+				continue
+			}
+			found = true
+			if strings.Contains(field.String, "abcdefghij1234567890secretvalue") { // pragma: allowlist secret
+				t.Errorf("logged error field leaks the raw secret: %q", field.String)
+			}
+			if !strings.Contains(field.String, "REDACTED") {
+				t.Errorf("logged error field does not look sanitized: %q", field.String)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a log entry with an \"error\" string field, found none")
+	}
+}
+
+// testAPIError is a minimal error type used to simulate a classified
+// response error without depending on internal/errors' constructors.
+type testAPIError struct{ msg string }
+
+func (e *testAPIError) Error() string { return e.msg }
 
 // TestDetermineTier pins the IBM Cloud Logs TCO priority-to-tier mapping.
 // type_high fans out to both frequent_search and archive; type_medium and
