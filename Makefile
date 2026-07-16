@@ -463,9 +463,9 @@ compare-api: ## Compare old and new API definitions
 
 backup-api: ## Backup current API definition
 	@echo "Backing up API definition..."
-	@cp logs-service-api.json logs-service-api.json.backup.$(shell date +%Y%m%d-%H%M%S)
+	@cp api/logs-service-api.json api/logs-service-api.json.backup.$(shell date +%Y%m%d-%H%M%S)
 	@echo "Backup created"
 
 list-operations: ## List all operations in current API
 	@echo "Operations in current API:"
-	@grep -o '"operationId": "[^"]*"' logs-service-api.json | sed 's/"operationId": "\([^"]*\)"/\1/' | sort
+	@grep -o '"operationId": "[^"]*"' api/logs-service-api.json | sed 's/"operationId": "\([^"]*\)"/\1/' | sort
