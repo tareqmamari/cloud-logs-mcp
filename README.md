@@ -61,7 +61,7 @@ make deps && make build
 
 1. **Get IBM Cloud credentials**:
    - API Key: https://cloud.ibm.com/iam/apikeys
-   - Service URL: `https://[instance-id].api.[region].logs.cloud.ibm.com`
+   - Service URL: `https://your-instance-id.api.your-region.logs.cloud.ibm.com`
    - Region: `us-south`, `eu-de`, `au-syd`, etc.
 
 #### For Claude Desktop
@@ -74,7 +74,7 @@ make deps && make build
     "ibm-cloud-logs": {
       "command": "logs-mcp-server",
       "env": {
-        "LOGS_SERVICE_URL": "https://[your-instance-id].api.[region].logs.cloud.ibm.com",
+        "LOGS_SERVICE_URL": "https://your-instance-id.api.your-region.logs.cloud.ibm.com",
         "LOGS_API_KEY": "your-ibm-cloud-api-key"
       }
     }
@@ -97,7 +97,7 @@ make deps && make build
 
 ```powershell
 # PowerShell (Windows)
-$env:LOGS_SERVICE_URL = "https://[your-instance-id].api.[region].logs.cloud.ibm.com"
+$env:LOGS_SERVICE_URL = "https://your-instance-id.api.your-region.logs.cloud.ibm.com"
 $env:LOGS_API_KEY = "your-ibm-cloud-api-key"
 
 # Run the server
