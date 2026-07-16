@@ -248,6 +248,10 @@ func (s *Server) registerTool(t tools.Tool) {
 		ctx = tools.WithSession(ctx, tools.GetSession())
 		ctx = tools.WithSessionProvider(ctx, tools.GetSessionManager())
 
+		// Add the audit logger to context so GetAuditLogTool can read
+		// recent entries without a constructor-level dependency change.
+		ctx = tools.WithAuditLogger(ctx, s.auditLogger)
+
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
 			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
