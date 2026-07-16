@@ -68,6 +68,16 @@ func TestViewsCRUD(t *testing.T) {
 		require.NotEmpty(t, viewID, "View ID should not be empty")
 	})
 
+	// Register cleanup immediately after creation as a safety net, in case a
+	// later subtest fails or panics before the explicit DeleteView subtest runs.
+	if viewID != "" {
+		id := viewID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/views/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
+
 	// Test: Get View
 	t.Run("GetView", func(t *testing.T) {
 		require.NotEmpty(t, viewID, "View ID should be set from create test")
@@ -206,6 +216,16 @@ func TestViewFoldersCRUD(t *testing.T) {
 		AssertValidUUID(t, folderID, "Folder ID should be a valid UUID")
 	})
 
+	// Register cleanup immediately after creation as a safety net, in case a
+	// later subtest fails or panics before the explicit DeleteViewFolder subtest runs.
+	if folderID != "" {
+		id := folderID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
+
 	// Test: Get View Folder
 	t.Run("GetViewFolder", func(t *testing.T) {
 		require.NotEmpty(t, folderID, "Folder ID should be set from create test")
@@ -330,6 +350,17 @@ func TestViewInFolder(t *testing.T) {
 		}
 	})
 
+	// Register cleanup immediately after creation, rather than in a single
+	// defer at the end of the function, so the folder is removed even if a
+	// panic (not just a t.Fatal) occurs before that point is reached.
+	if folderID != "" {
+		id := folderID
+		defer func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id}
+			tc.DoRequest(req) // Ignore errors during cleanup
+		}()
+	}
+
 	// Create view in folder
 	t.Run("CreateViewInFolder", func(t *testing.T) {
 		require.NotEmpty(t, folderID, "Folder ID should be set")
@@ -370,23 +401,18 @@ func TestViewInFolder(t *testing.T) {
 		assert.Equal(t, folderID, result["folder_id"], "View should be in the specified folder")
 	})
 
-	// Cleanup
-	defer func() {
-		if viewID != "" {
-			req := &client.Request{
-				Method: "DELETE",
-				Path:   "/v1/views/" + viewID,
-			}
-			tc.DoRequest(req)
-		}
-		if folderID != "" {
-			req := &client.Request{
-				Method: "DELETE",
-				Path:   "/v1/view_folders/" + folderID,
-			}
-			tc.DoRequest(req)
-		}
-	}()
+	// Register cleanup immediately after creation, rather than in a single
+	// defer at the end of the function, so the view is removed even if a
+	// panic (not just a t.Fatal) occurs before that point is reached.
+	// Deferred here (after the folder cleanup defer above), so it runs first
+	// (LIFO) and the view is deleted before its parent folder.
+	if viewID != "" {
+		id := viewID
+		defer func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/views/" + id}
+			tc.DoRequest(req) // Ignore errors during cleanup
+		}()
+	}
 }
 
 // TestViewsWithCustomTimeSelection tests views with different time selections
@@ -547,16 +573,26 @@ func TestViewsPagination(t *testing.T) {
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create view")
 
+		var id string
 		if idStr, ok := result["id"].(string); ok {
-			createdViews = append(createdViews, idStr)
+			id = idStr
 		} else if idFloat, ok := result["id"].(float64); ok {
-			createdViews = append(createdViews, fmt.Sprintf("%.0f", idFloat))
+			id = fmt.Sprintf("%.0f", idFloat)
 		} else {
 			t.Fatalf("Unexpected ID type: %T", result["id"])
 		}
+		createdViews = append(createdViews, id)
 
-		// Small delay to avoid rate limiting
-		time.Sleep(100 * time.Millisecond)
+		// Wait for the view to become individually retrievable before creating
+		// the next one, instead of a flat sleep. This paces requests (avoiding
+		// rate limiting) and avoids racing the ListAllViews check below on
+		// write-then-read consistency.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/views/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "view %s did not become visible in time", id)
 	}
 
 	t.Run("ListAllViews", func(t *testing.T) {
