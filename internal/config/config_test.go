@@ -941,3 +941,40 @@ func TestValidateServiceURLScheme(t *testing.T) {
 		})
 	}
 }
+
+// TestExampleConfigServiceURLIsCopyPasteable guards against config.example.json's
+// service_url placeholder using a bracketed form like "[your-instance-id]",
+// which url.Parse interprets as an IPv6 host literal and rejects outright.
+// A user who copies the example verbatim (only swapping in their own values)
+// would otherwise hit a confusing "not a valid URL" error before ever
+// reaching the strict-https validation this test also exercises.
+//
+// This reads the raw service_url field directly (rather than going through
+// Load()) because config.example.json's duration fields (e.g. "30s") are
+// documentation-oriented and not accepted by encoding/json's default
+// time.Duration unmarshaling - a separate, pre-existing concern unrelated to
+// the URL placeholder this test guards against.
+func TestExampleConfigServiceURLIsCopyPasteable(t *testing.T) {
+	data, err := os.ReadFile("../../config.example.json")
+	if err != nil {
+		t.Fatalf("failed to read config.example.json: %v", err)
+	}
+
+	var raw struct {
+		ServiceURL string `json:"service_url"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to parse config.example.json: %v", err)
+	}
+	if raw.ServiceURL == "" {
+		t.Fatal("config.example.json has no service_url set")
+	}
+
+	if err := validateServiceURL(raw.ServiceURL); err != nil {
+		t.Errorf("config.example.json's service_url %q fails strict https validation: %v", raw.ServiceURL, err)
+	}
+
+	if strings.ContainsAny(raw.ServiceURL, "[]") {
+		t.Errorf("config.example.json's service_url %q still contains bracketed placeholder characters", raw.ServiceURL)
+	}
+}
