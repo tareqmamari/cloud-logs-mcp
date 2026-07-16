@@ -381,6 +381,83 @@ func TestBuildDataPrimeQuery_NumericInjectionDoesNotReachQuery(t *testing.T) {
 	}
 }
 
+// TestFieldToDataPrime_FieldNameRejectsInjection is a regression test for
+// injection via the field-NAME position. toDataPrimeField returns any
+// $d./$l./$m.-prefixed field verbatim, and fieldToDataPrime interpolates that
+// resolved name UNQUOTED in every branch (%s == '...', %s.contains(...), etc).
+// Since f.Field is caller-supplied, a value like
+// "$d.x=='a'||$d.secret.contains('y'" injects raw DataPrime through the field
+// position - escaping the value doesn't help. Unsafe field names must drop
+// the filter; legitimate fields must still build.
+func TestFieldToDataPrime_FieldNameRejectsInjection(t *testing.T) {
+	injectionFields := []string{
+		"$d.x=='a'||$d.secret.contains('y'",
+		"$d.x || true",
+		"foo bar",
+		"foo'bar",
+		"foo)||true",
+		"foo == 'x'",
+		"$d.a|$d.b",
+		"",
+	}
+
+	for _, op := range []string{"equals", "not_equals", "contains", "starts_with", "ends_with", "exists", "not_exists"} {
+		for _, field := range injectionFields {
+			f := fieldFilter{Field: field, Operator: op, Value: "z"}
+			got := fieldToDataPrime(f)
+			if got != "" {
+				t.Errorf("fieldToDataPrime(field=%q, op=%s) = %q; expected empty (dropped), field-name payload must not reach the query", field, op, got)
+			}
+		}
+	}
+
+	// Legitimate field references must still build correctly.
+	legit := []struct {
+		field string
+		want  string
+	}{
+		{"json.status_code", "$d.status_code == 'z'"},
+		{"$d.foo.bar", "$d.foo.bar == 'z'"},
+		{"namespace", "$l.applicationname == 'z'"},
+		{"severity", "$m.severity == 'z'"},
+	}
+	for _, tt := range legit {
+		got := fieldToDataPrime(fieldFilter{Field: tt.field, Operator: "equals", Value: "z"})
+		if got != tt.want {
+			t.Errorf("fieldToDataPrime(field=%q) = %q, want %q", tt.field, got, tt.want)
+		}
+	}
+}
+
+// TestFieldToLucene_FieldNameRejectsInjection covers the Lucene sibling,
+// which interpolates the raw f.Field unquoted (%s:%s etc).
+func TestFieldToLucene_FieldNameRejectsInjection(t *testing.T) {
+	for _, op := range []string{"equals", "not_equals", "contains", "starts_with", "ends_with", "exists", "not_exists"} {
+		f := fieldFilter{Field: "foo OR bar:*", Operator: op, Value: "z"}
+		got := fieldToLucene(f)
+		if got != "" {
+			t.Errorf("fieldToLucene(field=%q, op=%s) = %q; expected empty (dropped)", f.Field, op, got)
+		}
+	}
+	// Legitimate field still builds.
+	if got := fieldToLucene(fieldFilter{Field: "json.status_code", Operator: "equals", Value: "500"}); got != "json.status_code:500" {
+		t.Errorf("fieldToLucene legit = %q, want %q", got, "json.status_code:500")
+	}
+}
+
+// TestBuildDataPrimeQuery_FieldNameInjectionDoesNotReachQuery is the
+// end-to-end counterpart through BuildQueryTool.
+func TestBuildDataPrimeQuery_FieldNameInjectionDoesNotReachQuery(t *testing.T) {
+	tool := NewBuildQueryTool(nil, zap.NewNop())
+	fields := []fieldFilter{
+		{Field: "$d.x=='a'||$d.secret.contains('y'", Operator: "equals", Value: "z"},
+	}
+	query := tool.buildDataPrimeQuery("", "", nil, nil, nil, "", fields)
+	if strings.Contains(query, "$d.secret") || strings.Contains(query, "||") {
+		t.Errorf("field-name injection leaked into built query: %q", query)
+	}
+}
+
 func TestToDataPrimeField(t *testing.T) {
 	tests := []struct {
 		input    string
