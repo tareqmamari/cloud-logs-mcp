@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
@@ -113,7 +114,7 @@ func (t *IngestLogsTool) InputSchema() interface{} {
 						},
 						"timestamp": map[string]interface{}{
 							"type":        "number",
-							"description": "Unix timestamp with nanoseconds (e.g., 1699564800.123456789). If not provided, current time will be used.",
+							"description": "Unix timestamp in milliseconds since the epoch (e.g., 1699564800123). If not provided, current time will be used.",
 						},
 						"json": map[string]interface{}{
 							"type":        "object",
@@ -197,18 +198,31 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 			return NewToolResultError("log entry missing required field: text"), nil
 		}
 
-		// Add current timestamp if not provided
+		// applicationName/subsystemName must be strings: JSON numbers decode
+		// as float64, and a raw type assertion below (used only for the debug
+		// log) would panic on a non-string value instead of failing cleanly.
+		appName, ok := logEntry["applicationName"].(string)
+		if !ok {
+			return NewToolResultError(fmt.Sprintf("log entry %d: applicationName must be a string", i)), nil
+		}
+		if _, ok := logEntry["subsystemName"].(string); !ok {
+			return NewToolResultError(fmt.Sprintf("log entry %d: subsystemName must be a string", i)), nil
+		}
+
+		// Add current timestamp if not provided, as an integer number of
+		// milliseconds since the epoch (IBM Cloud Logs ingestion accepts
+		// epoch millis). The previous float64(seconds)+nanoseconds/1e9
+		// encoding lost sub-millisecond precision to float64 rounding anyway
+		// and didn't match the documented "nanoseconds" schema, so integer
+		// millis is both more precise where it matters and unambiguous.
 		if _, exists := logEntry["timestamp"]; !exists {
-			// Unix timestamp with nanoseconds
-			now := time.Now()
-			timestamp := float64(now.Unix()) + float64(now.Nanosecond())/1e9
-			logEntry["timestamp"] = timestamp
+			logEntry["timestamp"] = time.Now().UnixMilli()
 		}
 
 		logs = append(logs, logEntry)
 		t.logger.Debug("Processing log entry",
 			zap.Int("index", i),
-			zap.String("application", logEntry["applicationName"].(string)),
+			zap.String("application", appName),
 		)
 	}
 
@@ -220,6 +234,10 @@ func (t *IngestLogsTool) Execute(ctx context.Context, arguments map[string]inter
 		Path:           "/logs/v1/singles",
 		Body:           logs,
 		UseIngressHost: true, // Flag to use ingress endpoint instead of API endpoint
+		// Generate a stable RequestID so this ingestion POST is retryable via
+		// Idempotency-Key (see client.isIdempotentRequest) without risking
+		// duplicate log entries on a blind retry.
+		RequestID: uuid.NewString(),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
