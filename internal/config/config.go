@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -93,7 +94,9 @@ func Load() (*Config, error) {
 	}
 
 	// Override with environment variables (these take precedence)
-	loadFromEnv(cfg)
+	if err := loadFromEnv(cfg); err != nil {
+		return nil, err
+	}
 
 	// If ServiceURL is provided, extract region and instance ID from it
 	if cfg.ServiceURL != "" {
@@ -114,30 +117,54 @@ func Load() (*Config, error) {
 }
 
 func loadFromFile(cfg *Config, path string) error {
-	// Validate and clean the file path to prevent path traversal attacks
-	// This eliminates the G304 gosec finding by validating paths before access
-
+	// The path is operator-supplied (via the CONFIG_FILE env var), so an
+	// absolute path or one containing ".." is legitimate; rejecting on ".."
+	// after Clean is a no-op check that gives a false sense of safety.
+	// Instead, verify the resolved path actually points at a regular file
+	// before reading it, which is the check that matters for G304.
 	cleanPath := filepath.Clean(path)
 
-	// Prevent path traversal by checking for ".." components
-	if strings.Contains(cleanPath, "..") {
-		return fmt.Errorf("invalid file path: path traversal detected")
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to access config file %q: %w", cleanPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("config file path %q is not a regular file", cleanPath)
 	}
 
 	// Read the file
-	data, err := os.ReadFile(cleanPath) // #nosec G304 G703 -- path is validated and sanitized above
+	data, err := os.ReadFile(cleanPath) // #nosec G304 -- path is operator-supplied and verified to be a regular file above
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	return json.Unmarshal(data, cfg)
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// api_key must never come from a config file (it's sourced from the
+	// LOGS_API_KEY env var only, to avoid the key ending up in a file on
+	// disk or in version control). Reject the file outright if it set one.
+	if cfg.APIKey != "" {
+		cfg.APIKey = ""
+		return fmt.Errorf("config file %q must not set api_key; use the LOGS_API_KEY environment variable instead", cleanPath)
+	}
+
+	return nil
 }
 
-func loadFromEnv(cfg *Config) {
+func loadFromEnv(cfg *Config) error {
 	loadStringEnvs(cfg)
-	loadDurationEnvs(cfg)
-	loadIntEnvs(cfg)
-	loadBoolEnvs(cfg)
+	if err := loadDurationEnvs(cfg); err != nil {
+		return err
+	}
+	if err := loadIntEnvs(cfg); err != nil {
+		return err
+	}
+	if err := loadBoolEnvs(cfg); err != nil {
+		return err
+	}
+	return nil
 }
 
 func loadStringEnvs(cfg *Config) {
@@ -170,80 +197,117 @@ func loadStringEnvs(cfg *Config) {
 	}
 }
 
-func loadDurationEnvs(cfg *Config) {
-	if v := os.Getenv("LOGS_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.Timeout = d
-		}
-	}
-	if v := os.Getenv("LOGS_QUERY_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.QueryTimeout = d
-		}
-	}
-	if v := os.Getenv("LOGS_BACKGROUND_POLL_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.BackgroundPollTimeout = d
-		}
-	}
-	if v := os.Getenv("LOGS_BULK_OPERATION_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.BulkOperationTimeout = d
-		}
-	}
-	if v := os.Getenv("LOGS_SHUTDOWN_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.ShutdownTimeout = d
-		}
+// durationEnvVars lists the env vars parsed as time.Duration, in load order.
+func durationEnvVars(cfg *Config) []struct {
+	name string
+	dst  *time.Duration
+} {
+	return []struct {
+		name string
+		dst  *time.Duration
+	}{
+		{"LOGS_TIMEOUT", &cfg.Timeout},
+		{"LOGS_QUERY_TIMEOUT", &cfg.QueryTimeout},
+		{"LOGS_BACKGROUND_POLL_TIMEOUT", &cfg.BackgroundPollTimeout},
+		{"LOGS_BULK_OPERATION_TIMEOUT", &cfg.BulkOperationTimeout},
+		{"LOGS_SHUTDOWN_TIMEOUT", &cfg.ShutdownTimeout},
 	}
 }
 
-func loadIntEnvs(cfg *Config) {
-	if v := os.Getenv("LOGS_MAX_RETRIES"); v != "" {
-		var retries int
-		if _, err := fmt.Sscanf(v, "%d", &retries); err == nil {
-			cfg.MaxRetries = retries
+// loadDurationEnvs parses duration env vars strictly: an invalid value fails
+// the load rather than silently keeping the default, naming the offending
+// variable and value in the returned error.
+func loadDurationEnvs(cfg *Config) error {
+	for _, f := range durationEnvVars(cfg) {
+		v := os.Getenv(f.name)
+		if v == "" {
+			continue
 		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("invalid duration for %s=%q: %w", f.name, v, err)
+		}
+		*f.dst = d
 	}
-	if v := os.Getenv("LOGS_RATE_LIMIT"); v != "" {
-		var limit int
-		if _, err := fmt.Sscanf(v, "%d", &limit); err == nil {
-			cfg.RateLimit = limit
-		}
-	}
-	if v := os.Getenv("LOGS_RATE_LIMIT_BURST"); v != "" {
-		var burst int
-		if _, err := fmt.Sscanf(v, "%d", &burst); err == nil {
-			cfg.RateLimitBurst = burst
-		}
-	}
-	if v := os.Getenv("LOGS_HEALTH_PORT"); v != "" {
-		var port int
-		if _, err := fmt.Sscanf(v, "%d", &port); err == nil {
-			cfg.HealthPort = port
-		}
+	return nil
+}
+
+// intEnvVars lists the env vars parsed as int, in load order.
+func intEnvVars(cfg *Config) []struct {
+	name string
+	dst  *int
+} {
+	return []struct {
+		name string
+		dst  *int
+	}{
+		{"LOGS_MAX_RETRIES", &cfg.MaxRetries},
+		{"LOGS_RATE_LIMIT", &cfg.RateLimit},
+		{"LOGS_RATE_LIMIT_BURST", &cfg.RateLimitBurst},
+		{"LOGS_HEALTH_PORT", &cfg.HealthPort},
 	}
 }
 
-func loadBoolEnvs(cfg *Config) {
-	if v := os.Getenv("LOGS_ENABLE_RATE_LIMIT"); v != "" {
-		cfg.EnableRateLimit = v == "true" || v == "1"
+// loadIntEnvs parses integer env vars strictly: an invalid value fails the
+// load rather than silently keeping the default, naming the offending
+// variable and value in the returned error.
+func loadIntEnvs(cfg *Config) error {
+	for _, f := range intEnvVars(cfg) {
+		v := os.Getenv(f.name)
+		if v == "" {
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid integer for %s=%q: %w", f.name, v, err)
+		}
+		*f.dst = n
 	}
-	if v := os.Getenv("LOGS_ENABLE_TRACING"); v != "" {
-		cfg.EnableTracing = v == "true" || v == "1"
+	return nil
+}
+
+// boolEnvVars lists the env vars parsed as bool, in load order.
+func boolEnvVars(cfg *Config) []struct {
+	name string
+	dst  *bool
+} {
+	return []struct {
+		name string
+		dst  *bool
+	}{
+		{"LOGS_ENABLE_RATE_LIMIT", &cfg.EnableRateLimit},
+		{"LOGS_ENABLE_TRACING", &cfg.EnableTracing},
+		{"LOGS_ENABLE_AUDIT_LOG", &cfg.EnableAuditLog},
+		{"LOGS_METRICS_ENDPOINT", &cfg.MetricsEndpoint},
 	}
-	if v := os.Getenv("LOGS_ENABLE_AUDIT_LOG"); v != "" {
-		cfg.EnableAuditLog = v == "true" || v == "1"
+}
+
+// loadBoolEnvs parses boolean env vars strictly via strconv.ParseBool
+// (accepts 1/t/T/TRUE/true/True/0/f/F/FALSE/false/False). An invalid value
+// (e.g. "yes", which was previously silently treated as false) fails the
+// load, naming the offending variable and value in the returned error.
+func loadBoolEnvs(cfg *Config) error {
+	for _, f := range boolEnvVars(cfg) {
+		v := os.Getenv(f.name)
+		if v == "" {
+			continue
+		}
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid boolean for %s=%q: %w", f.name, v, err)
+		}
+		*f.dst = b
 	}
-	if v := os.Getenv("LOGS_METRICS_ENDPOINT"); v != "" {
-		cfg.MetricsEndpoint = v == "true" || v == "1"
-	}
+	return nil
 }
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	if c.ServiceURL == "" {
 		return errors.New("LOGS_SERVICE_URL is required")
+	}
+	if err := validateServiceURL(c.ServiceURL); err != nil {
+		return err
 	}
 	if c.APIKey == "" {
 		return errors.New("LOGS_API_KEY is required")
@@ -257,6 +321,12 @@ func (c *Config) Validate() error {
 	if c.RateLimit <= 0 && c.EnableRateLimit {
 		return errors.New("rate_limit must be positive when rate limiting is enabled")
 	}
+	if err := validateHealthPort(c.HealthPort); err != nil {
+		return err
+	}
+	if c.ShutdownTimeout <= 0 {
+		return errors.New("shutdown_timeout must be positive")
+	}
 
 	validLogLevels := map[string]bool{
 		"debug": true, "info": true, "warn": true, "error": true,
@@ -266,6 +336,62 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// validateServiceURL requires ServiceURL to be a parseable URL with scheme
+// https. http is allowed only against localhost/127.0.0.1/::1 so local
+// development (e.g. against a local mock server) keeps working.
+func validateServiceURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("LOGS_SERVICE_URL is not a valid URL: %q: %w", raw, err)
+	}
+
+	switch parsed.Scheme {
+	case "https":
+		return nil
+	case "http":
+		host := parsed.Hostname()
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			return nil
+		}
+		return fmt.Errorf("LOGS_SERVICE_URL must use https (http is only allowed for localhost/127.0.0.1/::1): %q", raw)
+	default:
+		return fmt.Errorf("LOGS_SERVICE_URL must use https scheme: %q", raw)
+	}
+}
+
+// validateHealthPort requires the health port to be 0 (disabled) or a valid
+// TCP port number (1-65535).
+func validateHealthPort(port int) error {
+	if port == 0 {
+		return nil
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("health_port must be 0 (disabled) or between 1 and 65535, got %d", port)
+	}
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler, redacting APIKey so that any future
+// (or accidental) serialization of Config — e.g. logging, debug endpoints —
+// can't leak the raw API key. Use Redact() for a partially-masked copy
+// intended for human-readable debug output; MarshalJSON fully redacts.
+func (c *Config) MarshalJSON() ([]byte, error) {
+	type alias Config
+
+	redactedKey := ""
+	if c.APIKey != "" {
+		redactedKey = "***REDACTED***"
+	}
+
+	return json.Marshal(&struct { // #nosec G117 -- this is the redaction: APIKey is set to redactedKey (never the raw key) above
+		APIKey string `json:"api_key,omitempty"`
+		*alias
+	}{
+		APIKey: redactedKey,
+		alias:  (*alias)(c),
+	})
 }
 
 // Redact returns a copy of the config with sensitive data removed

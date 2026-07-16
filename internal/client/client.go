@@ -66,7 +66,9 @@ type RateLimitInfo struct {
 	Enabled   bool    `json:"enabled"`   // Whether rate limiting is enabled
 }
 
-// New creates a new API client
+// New creates a new API client, constructing its own IAM authenticator.
+// Prefer NewWithAuthenticator when a caller (e.g. server wiring) already has
+// an authenticator to share, so only one IAM token cache exists per process.
 func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error) {
 	// Create IBM Cloud authenticator
 	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
@@ -74,6 +76,14 @@ func New(cfg *config.Config, logger *zap.Logger, version string) (*Client, error
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
 
+	return NewWithAuthenticator(cfg, logger, version, authenticator)
+}
+
+// NewWithAuthenticator creates a new API client using the given
+// authenticator instead of constructing its own. This is the seam that lets
+// callers share a single authenticator (and its IAM token cache) across the
+// API client and other consumers (e.g. health checks).
+func NewWithAuthenticator(cfg *config.Config, logger *zap.Logger, version string, authenticator Authenticator) (*Client, error) {
 	transport := &http.Transport{
 		MaxIdleConns:        cfg.MaxIdleConns,
 		MaxIdleConnsPerHost: cfg.MaxIdleConns,
