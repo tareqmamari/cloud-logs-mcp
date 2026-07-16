@@ -38,6 +38,60 @@ func TestBudgetContext_RecordToolExecution(t *testing.T) {
 	}
 }
 
+// TestBudgetContext_RecordToolExecution_AccumulatesCostAcrossSmallCalls is a
+// regression test for integer-division underflow: (tokens*CostPer1K)/1000
+// computed per call rounds down to 0 for any call under ~334 tokens (at the
+// $0.003/1K input rate), so a high volume of small calls used to report zero
+// cost no matter how many tokens were actually used. Cost must be derived
+// from the cumulative token total, not accumulated from already-rounded
+// per-call amounts.
+func TestBudgetContext_RecordToolExecution_AccumulatesCostAcrossSmallCalls(t *testing.T) {
+	budget := NewBudgetContext(1000000, 1000000)
+
+	const calls = 100
+	const tokensPerCall = 50 // well under the ~334-token threshold where (tokens*3)/1000 rounds to 0
+	for i := 0; i < calls; i++ {
+		budget.RecordToolExecution(tokensPerCall, 0)
+	}
+
+	wantTotalTokens := calls * tokensPerCall // 5000
+	if budget.UsedTokens != wantTotalTokens {
+		t.Fatalf("UsedTokens = %d, want %d", budget.UsedTokens, wantTotalTokens)
+	}
+
+	// Cost must be derived from the cumulative token total: 5000 tokens *
+	// InputTokenCostPer1K(3) / 1000 = 15 millicents exactly.
+	wantCostMillicents := (wantTotalTokens * InputTokenCostPer1K) / 1000
+	if wantCostMillicents == 0 {
+		t.Fatal("test setup error: expected cost should be nonzero")
+	}
+	if budget.UsedCostMillicents != wantCostMillicents {
+		t.Errorf("UsedCostMillicents = %d, want %d (each of the %d calls used %d tokens, individually rounding to 0 cost under the old per-call integer division)",
+			budget.UsedCostMillicents, wantCostMillicents, calls, tokensPerCall)
+	}
+}
+
+// TestBudgetContext_RecordClientReportedTokens_AccumulatesCostAcrossSmallCalls
+// is the RecordClientReportedTokens counterpart of the above.
+func TestBudgetContext_RecordClientReportedTokens_AccumulatesCostAcrossSmallCalls(t *testing.T) {
+	budget := NewBudgetContext(1000000, 1000000)
+
+	const calls = 100
+	const inputPerCall = 50
+	const outputPerCall = 20
+	for i := 0; i < calls; i++ {
+		budget.RecordClientReportedTokens(inputPerCall, outputPerCall)
+	}
+
+	wantCostMillicents := (calls*inputPerCall*InputTokenCostPer1K + calls*outputPerCall*OutputTokenCostPer1K) / 1000
+	if wantCostMillicents == 0 {
+		t.Fatal("test setup error: expected cost should be nonzero")
+	}
+	if budget.UsedCostMillicents != wantCostMillicents {
+		t.Errorf("UsedCostMillicents = %d, want %d", budget.UsedCostMillicents, wantCostMillicents)
+	}
+}
+
 func TestBudgetContext_CompressionLevelAdjustment(t *testing.T) {
 	tests := []struct {
 		name          string
