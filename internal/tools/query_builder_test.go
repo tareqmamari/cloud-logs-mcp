@@ -458,6 +458,91 @@ func TestBuildDataPrimeQuery_FieldNameInjectionDoesNotReachQuery(t *testing.T) {
 	}
 }
 
+// TestEscapeLuceneValue locks down the Lucene value escaper against the
+// reserved query-syntax characters (the standard Apache Lucene set) plus
+// whitespace. Each must be backslash-escaped so a caller value can't change
+// the query's structure (e.g. via ':' term-splitting or a whitespace-
+// separated boolean operator).
+func TestEscapeLuceneValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "plain value unchanged", input: "paymentservice", want: "paymentservice"},
+		{name: "hyphen escaped", input: "payment-service", want: `payment\-service`},
+		{name: "colon escaped", input: "a:b", want: `a\:b`},
+		{name: "doubled ampersand escaped", input: "a&&b", want: `a\&\&b`},
+		{name: "doubled pipe escaped", input: "a||b", want: `a\|\|b`},
+		{name: "parens escaped", input: "(a)", want: `\(a\)`},
+		{name: "wildcards escaped", input: "a*b?c", want: `a\*b\?c`},
+		{name: "backslash escaped first", input: `a\b`, want: `a\\b`},
+		{name: "quote brackets braces escaped", input: `"x"[y]{z}`, want: `\"x\"\[y\]\{z\}`},
+		{name: "plus bang caret tilde slash escaped", input: "+!^~/", want: `\+\!\^\~\/`},
+		{name: "whitespace escaped", input: "a b", want: `a\ b`},
+		{name: "boolean-via-space neutralized", input: "a OR b", want: `a\ OR\ b`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := escapeLuceneValue(tt.input); got != tt.want {
+				t.Errorf("escapeLuceneValue(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFieldToLucene_ValueEscaping is a regression test: the string operators
+// (equals/not_equals/contains/starts_with/ends_with) interpolate f.Value raw
+// into the Lucene expression, so a value like "a OR bar:*" used to inject live
+// query structure. The reserved characters AND whitespace in the value must be
+// escaped so it is treated as inert data, while the wildcards the builder
+// itself adds (for contains/starts_with/ends_with) stay live.
+func TestFieldToLucene_ValueEscaping(t *testing.T) {
+	tests := []struct {
+		name string
+		f    fieldFilter
+		want string
+	}{
+		{
+			name: "equals neutralizes colon, wildcard, and boolean-via-space",
+			f:    fieldFilter{Field: "json.x", Operator: "equals", Value: "a OR bar:*"},
+			want: `json.x:a\ OR\ bar\:\*`,
+		},
+		{
+			name: "not_equals escapes reserved chars and spaces",
+			f:    fieldFilter{Field: "json.x", Operator: "not_equals", Value: "a && b"},
+			want: `NOT json.x:a\ \&\&\ b`,
+		},
+		{
+			name: "contains keeps builder wildcards, escapes value wildcard",
+			f:    fieldFilter{Field: "json.x", Operator: "contains", Value: "a*b"},
+			want: `json.x:*a\*b*`,
+		},
+		{
+			name: "starts_with keeps trailing wildcard, escapes value paren",
+			f:    fieldFilter{Field: "json.x", Operator: "starts_with", Value: "(a"},
+			want: `json.x:\(a*`,
+		},
+		{
+			name: "ends_with keeps leading wildcard, escapes value colon",
+			f:    fieldFilter{Field: "json.x", Operator: "ends_with", Value: "a:b"},
+			want: `json.x:*a\:b`,
+		},
+		{
+			name: "plain value still builds",
+			f:    fieldFilter{Field: "json.x", Operator: "equals", Value: "500"},
+			want: `json.x:500`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := fieldToLucene(tt.f); got != tt.want {
+				t.Errorf("fieldToLucene(%+v) = %q, want %q", tt.f, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestToDataPrimeField(t *testing.T) {
 	tests := []struct {
 		input    string
