@@ -1,6 +1,6 @@
 # IBM Cloud Logs MCP Tools Reference
 
-This document provides comprehensive documentation for all 88 tools available in the IBM Cloud Logs MCP Server. Tools are organized by category with best practices and usage guidelines.
+This document provides comprehensive documentation for all 96 tools available in the IBM Cloud Logs MCP Server. Tools are organized by category with best practices and usage guidelines.
 
 ---
 
