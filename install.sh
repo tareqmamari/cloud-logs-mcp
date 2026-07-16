@@ -6,7 +6,7 @@
 #   OR
 #   ./install.sh
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -63,7 +63,7 @@ echo ""
 
 # Get latest release version
 echo "Fetching latest release..."
-LATEST_VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+LATEST_VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') || true
 
 if [ -z "$LATEST_VERSION" ]; then
     echo -e "${RED}Error: Could not fetch latest version${NC}"
@@ -84,6 +84,87 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
     echo "URL: ${DOWNLOAD_URL}"
     rm -rf "$TMP_DIR"
     exit 1
+fi
+
+# Download checksums.txt from the same release and verify the binary's integrity
+CHECKSUMS_FILE="${TMP_DIR}/checksums.txt"
+CHECKSUMS_URL="https://github.com/${REPO}/releases/download/v${LATEST_VERSION}/checksums.txt"
+
+echo ""
+echo "Downloading checksums..."
+if ! curl -fsSL "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
+    echo -e "${RED}Error: Failed to download checksums.txt${NC}"
+    echo "URL: ${CHECKSUMS_URL}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+echo "Verifying checksum..."
+CHECKSUM_LINE=$(grep -E "  ${BINARY_FILE}\$" "$CHECKSUMS_FILE" || true)
+if [ -z "$CHECKSUM_LINE" ]; then
+    echo -e "${RED}Error: No checksum entry for ${BINARY_FILE} found in checksums.txt${NC}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+# Rewrite the matched line so the filename field matches the local download,
+# then verify from within TMP_DIR so the check tools can find it by name.
+VERIFY_FILE="${TMP_DIR}/checksums.verify.txt"
+echo "$CHECKSUM_LINE" | awk -v f="$(basename "$TMP_FILE")" '{print $1"  "f}' > "$VERIFY_FILE"
+
+CHECKSUM_OK=0
+if command -v sha256sum > /dev/null 2>&1; then
+    if (cd "$TMP_DIR" && sha256sum -c "$(basename "$VERIFY_FILE")" --status); then
+        CHECKSUM_OK=1
+    fi
+elif command -v shasum > /dev/null 2>&1; then
+    if (cd "$TMP_DIR" && shasum -a 256 -c "$(basename "$VERIFY_FILE")" --status); then
+        CHECKSUM_OK=1
+    fi
+else
+    echo -e "${RED}Error: Neither sha256sum nor shasum found; cannot verify checksum${NC}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+if [ "$CHECKSUM_OK" -ne 1 ]; then
+    echo -e "${RED}Error: Checksum verification failed for ${BINARY_FILE}${NC}"
+    echo "The downloaded binary does not match the published checksum. Aborting."
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Checksum verified${NC}"
+
+# Optional: verify checksums.txt's cosign bundle (keyless OIDC signing) if
+# cosign is installed. This confirms checksums.txt itself was published by
+# the repo's release workflow, not just that the binary matches checksums.txt.
+if command -v cosign > /dev/null 2>&1; then
+    BUNDLE_FILE="${TMP_DIR}/checksums.txt.bundle"
+    BUNDLE_URL="https://github.com/${REPO}/releases/download/v${LATEST_VERSION}/checksums.txt.bundle"
+
+    echo ""
+    echo "Verifying checksums.txt signature with cosign..."
+    if ! curl -fsSL "$BUNDLE_URL" -o "$BUNDLE_FILE"; then
+        echo -e "${RED}Error: Failed to download checksums.txt.bundle${NC}"
+        echo "URL: ${BUNDLE_URL}"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    if ! cosign verify-blob \
+        --bundle "$BUNDLE_FILE" \
+        --certificate-identity-regexp "^https://github\\.com/${REPO}/\\.github/workflows/release\\.yaml@.+" \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        "$CHECKSUMS_FILE"; then
+        echo -e "${RED}Error: cosign verification of checksums.txt failed${NC}"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Cosign signature verified${NC}"
+else
+    echo -e "${YELLOW}Notice: cosign not found; skipping signature verification of checksums.txt${NC}"
+    echo "  Install cosign (https://docs.sigstore.dev/cosign/installation/) for full supply-chain verification."
 fi
 
 # Make binary executable
