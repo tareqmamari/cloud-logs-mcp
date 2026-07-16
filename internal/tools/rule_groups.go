@@ -45,7 +45,7 @@ func (t *GetRuleGroupTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/rule_groups/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/rule_groups", id)})
 	if err != nil {
 		return HandleGetError(err, "Rule group", id, "list_rule_groups"), nil
 	}
@@ -448,7 +448,7 @@ func (t *UpdateRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 		return NewToolResultError(fmt.Sprintf("Validation error: %v", err)), nil
 	}
 
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/rule_groups/" + id, Body: rg})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/rule_groups", id), Body: rg})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -496,7 +496,7 @@ func (t *DeleteRuleGroupTool) Execute(ctx context.Context, args map[string]inter
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/rule_groups/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/rule_groups", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}

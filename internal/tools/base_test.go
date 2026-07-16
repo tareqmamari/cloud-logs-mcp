@@ -687,3 +687,67 @@ func BenchmarkAnalyzeSeverityDistribution(b *testing.B) {
 		analyzeSeverityDistribution(events)
 	}
 }
+
+// TestApiPath verifies that apiPath escapes every caller-supplied segment,
+// so IDs containing path separators, traversal sequences, spaces, or query
+// metacharacters can't change which resource/path a request hits.
+func TestApiPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     string
+		segments []string
+		want     string
+	}{
+		{
+			name:     "no segments returns base unchanged",
+			base:     "/v1/alerts",
+			segments: nil,
+			want:     "/v1/alerts",
+		},
+		{
+			name:     "plain id",
+			base:     "/v1/alerts",
+			segments: []string{"alert-123"},
+			want:     "/v1/alerts/alert-123",
+		},
+		{
+			name:     "multiple segments",
+			base:     "/v1/background_query",
+			segments: []string{"q-1", "status"},
+			want:     "/v1/background_query/q-1/status",
+		},
+		{
+			name:     "id containing a slash is escaped, not treated as a path separator",
+			base:     "/v1/alerts",
+			segments: []string{"a/b"},
+			want:     "/v1/alerts/a%2Fb",
+		},
+		{
+			name:     "path traversal sequence is escaped",
+			base:     "/v1/alerts",
+			segments: []string{"../../secret"},
+			want:     "/v1/alerts/..%2F..%2Fsecret",
+		},
+		{
+			name:     "space is escaped",
+			base:     "/v1/alerts",
+			segments: []string{"my id"},
+			want:     "/v1/alerts/my%20id",
+		},
+		{
+			name:     "question mark (query injection) is escaped",
+			base:     "/v1/alerts",
+			segments: []string{"id?evil=1"},
+			want:     "/v1/alerts/id%3Fevil=1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := apiPath(tt.base, tt.segments...)
+			if got != tt.want {
+				t.Errorf("apiPath(%q, %v) = %q, want %q", tt.base, tt.segments, got, tt.want)
+			}
+		})
+	}
+}

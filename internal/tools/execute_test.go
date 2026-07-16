@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -47,6 +48,34 @@ func TestGetAlertTool_Execute_Success(t *testing.T) {
 	}
 	if req.Path != "/v1/alerts/alert-123" {
 		t.Errorf("Path = %q, want /v1/alerts/alert-123", req.Path)
+	}
+}
+
+// TestGetAlertTool_Execute_EscapesIDInPath is a regression test for path
+// injection via unescaped resource IDs: an ID containing "/", "..", a space,
+// or "?" must be percent-encoded into a single opaque path segment rather
+// than being able to redirect the request to a different path or attach
+// query parameters.
+func TestGetAlertTool_Execute_EscapesIDInPath(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.RespondWith(200, map[string]interface{}{"id": "whatever"})
+
+	tool := NewGetAlertTool(mock, zap.NewNop())
+	ctx := testCtx(mock)
+
+	maliciousID := "../secrets/../x y?evil=1"
+	_, err := tool.Execute(ctx, map[string]interface{}{"id": maliciousID})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+
+	req := mock.LastRequest()
+	wantPath := "/v1/alerts/" + url.PathEscape(maliciousID)
+	if req.Path != wantPath {
+		t.Errorf("Path = %q, want %q (raw ID must not be concatenated unescaped)", req.Path, wantPath)
+	}
+	if strings.Contains(req.Path, "/../") || strings.ContainsAny(req.Path, " ?") {
+		t.Errorf("Path %q still contains unescaped path/query metacharacters", req.Path)
 	}
 }
 

@@ -47,7 +47,7 @@ func (t *GetAlertDefinitionTool) Execute(ctx context.Context, arguments map[stri
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/alert_definitions/" + id})
+	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/alert_definitions", id)})
 	if err != nil {
 		return HandleGetError(err, "Alert definition", id, "list_alert_definitions"), nil
 	}
@@ -283,7 +283,7 @@ func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/alert_definitions/" + id, Body: def})
+	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/alert_definitions", id), Body: def})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -330,7 +330,7 @@ func (t *DeleteAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/alert_definitions/" + id})
+	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/alert_definitions", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
