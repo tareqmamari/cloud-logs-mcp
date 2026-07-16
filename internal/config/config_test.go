@@ -132,7 +132,7 @@ func TestMaskAPIKey(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"", ""},
+		{"", "***"}, // stricter edge case: consolidated onto security.MaskAPIKey, which always masks
 		{"short", "***"},
 		{"exactly8", "***"},
 		{"secret-key-12345", "secr...2345"}, // pragma: allowlist secret
