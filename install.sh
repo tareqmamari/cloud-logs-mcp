@@ -16,6 +16,9 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO="tareqmamari/cloud-logs-mcp"
+# GoReleaser project name — the prefix of every published archive
+# (see .goreleaser.yaml archives.name_template `{{ .ProjectName }}`).
+PROJECT_NAME="cloud-logs-mcp"
 BINARY_NAME="logs-mcp-server"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
@@ -53,9 +56,30 @@ case "$OS" in
         ;;
 esac
 
-BINARY_FILE="${BINARY_NAME}-${PLATFORM}-${ARCH}"
+# Build the release archive name to match goreleaser's name_template:
+#   {{ .ProjectName }}_{{ .Version }}_{{ title .Os }}_{{ arch }}.{{ ext }}
+# (see .goreleaser.yaml). Os is title-cased; arch maps amd64->x86_64,
+# 386->i386, arm64->arm64. No format_overrides are configured, so every
+# platform (including Windows) ships as tar.gz.
+case "$PLATFORM" in
+    linux)   OS_TITLE="Linux" ;;
+    darwin)  OS_TITLE="Darwin" ;;
+    windows) OS_TITLE="Windows" ;;
+esac
+
+case "$ARCH" in
+    amd64) ARCH_LABEL="x86_64" ;;
+    386)   ARCH_LABEL="i386" ;;
+    arm64) ARCH_LABEL="arm64" ;;
+    *)     ARCH_LABEL="$ARCH" ;;
+esac
+
+ARCHIVE_EXT="tar.gz"
+
+# The binary's name inside the archive (goreleaser builds.binary).
+BINARY_IN_ARCHIVE="${BINARY_NAME}"
 if [ "$OS" = "windows" ]; then
-    BINARY_FILE="${BINARY_FILE}.exe"
+    BINARY_IN_ARCHIVE="${BINARY_NAME}.exe"
 fi
 
 echo "Detected platform: ${PLATFORM}-${ARCH}"
@@ -73,20 +97,21 @@ fi
 echo "Latest version: v${LATEST_VERSION}"
 echo ""
 
-# Download binary
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${LATEST_VERSION}/${BINARY_FILE}"
+# Download release archive
+ARCHIVE_NAME="${PROJECT_NAME}_${LATEST_VERSION}_${OS_TITLE}_${ARCH_LABEL}.${ARCHIVE_EXT}"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${LATEST_VERSION}/${ARCHIVE_NAME}"
 TMP_DIR=$(mktemp -d)
-TMP_FILE="${TMP_DIR}/${BINARY_NAME}"
+ARCHIVE_PATH="${TMP_DIR}/${ARCHIVE_NAME}"
 
 echo "Downloading from: ${DOWNLOAD_URL}"
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE_PATH"; then
     echo -e "${RED}Error: Download failed${NC}"
     echo "URL: ${DOWNLOAD_URL}"
     rm -rf "$TMP_DIR"
     exit 1
 fi
 
-# Download checksums.txt from the same release and verify the binary's integrity
+# Download checksums.txt from the same release and verify the archive's integrity
 CHECKSUMS_FILE="${TMP_DIR}/checksums.txt"
 CHECKSUMS_URL="https://github.com/${REPO}/releases/download/v${LATEST_VERSION}/checksums.txt"
 
@@ -100,17 +125,19 @@ if ! curl -fsSL "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
 fi
 
 echo "Verifying checksum..."
-CHECKSUM_LINE=$(grep -E "  ${BINARY_FILE}\$" "$CHECKSUMS_FILE" || true)
+# checksums.txt lists archive filenames; keep only the entry for the archive
+# we downloaded so the check tools don't fail on the other (absent) files.
+CHECKSUM_LINE=$(grep -E "  ${ARCHIVE_NAME}\$" "$CHECKSUMS_FILE" || true)
 if [ -z "$CHECKSUM_LINE" ]; then
-    echo -e "${RED}Error: No checksum entry for ${BINARY_FILE} found in checksums.txt${NC}"
+    echo -e "${RED}Error: No checksum entry for ${ARCHIVE_NAME} found in checksums.txt${NC}"
     rm -rf "$TMP_DIR"
     exit 1
 fi
 
-# Rewrite the matched line so the filename field matches the local download,
-# then verify from within TMP_DIR so the check tools can find it by name.
+# The archive was saved under its real name in TMP_DIR, so the checksum line's
+# filename already matches; verify from within TMP_DIR so the tools find it.
 VERIFY_FILE="${TMP_DIR}/checksums.verify.txt"
-echo "$CHECKSUM_LINE" | awk -v f="$(basename "$TMP_FILE")" '{print $1"  "f}' > "$VERIFY_FILE"
+printf '%s\n' "$CHECKSUM_LINE" > "$VERIFY_FILE"
 
 CHECKSUM_OK=0
 if command -v sha256sum > /dev/null 2>&1; then
@@ -128,8 +155,8 @@ else
 fi
 
 if [ "$CHECKSUM_OK" -ne 1 ]; then
-    echo -e "${RED}Error: Checksum verification failed for ${BINARY_FILE}${NC}"
-    echo "The downloaded binary does not match the published checksum. Aborting."
+    echo -e "${RED}Error: Checksum verification failed for ${ARCHIVE_NAME}${NC}"
+    echo "The downloaded archive does not match the published checksum. Aborting."
     rm -rf "$TMP_DIR"
     exit 1
 fi
@@ -165,6 +192,43 @@ if command -v cosign > /dev/null 2>&1; then
 else
     echo -e "${YELLOW}Notice: cosign not found; skipping signature verification of checksums.txt${NC}"
     echo "  Install cosign (https://docs.sigstore.dev/cosign/installation/) for full supply-chain verification."
+fi
+
+# Extract the binary from the verified archive
+echo ""
+echo "Extracting binary..."
+TMP_FILE="${TMP_DIR}/${BINARY_IN_ARCHIVE}"
+case "$ARCHIVE_EXT" in
+    tar.gz|tgz)
+        if ! tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR" "$BINARY_IN_ARCHIVE"; then
+            echo -e "${RED}Error: Failed to extract ${BINARY_IN_ARCHIVE} from ${ARCHIVE_NAME}${NC}"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        ;;
+    zip)
+        if ! command -v unzip > /dev/null 2>&1; then
+            echo -e "${RED}Error: unzip is required to extract ${ARCHIVE_NAME} but was not found${NC}"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        if ! unzip -o -q "$ARCHIVE_PATH" "$BINARY_IN_ARCHIVE" -d "$TMP_DIR"; then
+            echo -e "${RED}Error: Failed to extract ${BINARY_IN_ARCHIVE} from ${ARCHIVE_NAME}${NC}"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        ;;
+    *)
+        echo -e "${RED}Error: Unsupported archive format: ${ARCHIVE_EXT}${NC}"
+        rm -rf "$TMP_DIR"
+        exit 1
+        ;;
+esac
+
+if [ ! -f "$TMP_FILE" ]; then
+    echo -e "${RED}Error: ${BINARY_IN_ARCHIVE} not found after extracting ${ARCHIVE_NAME}${NC}"
+    rm -rf "$TMP_DIR"
+    exit 1
 fi
 
 # Make binary executable
