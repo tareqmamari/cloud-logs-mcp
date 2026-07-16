@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -402,6 +403,7 @@ func newTestConfig() *config.Config {
 		HealthPort:      0, // disable health server for unit tests
 		Timeout:         5 * time.Second,
 		ShutdownTimeout: 5 * time.Second,
+		EnableAuditLog:  true,
 	}
 }
 
@@ -575,4 +577,107 @@ func TestNewWithDeps(t *testing.T) {
 			t.Error("MockClient received no requests")
 		}
 	})
+
+	// Headline security test: a tool execution whose error embeds a
+	// credential-shaped value (as happens when the API client folds a
+	// response-body snippet into a classified error's message, see
+	// client.go's classifyResponseError/FromHTTPStatus) must never leak that
+	// value — not to the MCP client's response, and not to the audit log.
+	// Both surfaces are fed by the single chokepoint in registerTool's
+	// handler, so this test exercises the whole path end-to-end rather than
+	// unit-testing the masking function in isolation. Factored into its own
+	// top-level helper (rather than inlined here) to keep TestNewWithDeps's
+	// cyclomatic complexity under the repo's gocyclo threshold.
+	t.Run("ToolCallErrorMasksAPIKeyInResponseAndAudit", func(t *testing.T) {
+		assertToolCallErrorMasksAPIKey(t, srv, mock)
+	})
+}
+
+// assertToolCallErrorMasksAPIKey drives a real get_alert call through srv's
+// MCP server against a mock 401 response whose body embeds a fake API key,
+// then asserts the key never reaches the MCP client's response or the
+// server's audit log — both are fed by the same finishToolExecution
+// chokepoint in server.go.
+func assertToolCallErrorMasksAPIKey(t *testing.T, srv *server.Server, mock *client.MockClient) {
+	t.Helper()
+
+	mock.Reset()
+	const fakeAPIKey = "AKIA1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ" // pragma: allowlist secret
+	mock.DefaultResponse = &client.Response{
+		StatusCode: 401,
+		Body:       []byte(`{"error":"invalid credential, api_key=` + fakeAPIKey + `"}`),
+	}
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	mcpSrv := srv.MCPServer()
+	_, err := mcpSrv.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server Connect failed: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{
+		Name:    "test-client",
+		Version: "1.0.0",
+	}, nil)
+
+	session, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client Connect failed: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("warning: failed to close session: %v", err)
+		}
+	}()
+
+	callResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_alert",
+		Arguments: map[string]interface{}{"id": "alert-1"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool transport-level error: %v", err)
+	}
+	if !callResult.IsError {
+		t.Fatal("expected an IsError result for the mocked 401 response")
+	}
+
+	var responseText string
+	for _, c := range callResult.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			responseText += tc.Text
+		}
+	}
+	if responseText == "" {
+		t.Fatal("expected non-empty error text content")
+	}
+	if strings.Contains(responseText, fakeAPIKey) {
+		t.Errorf("MCP client response leaked the fake API key: %q", responseText)
+	}
+	if !strings.Contains(responseText, "REDACTED") {
+		t.Errorf("expected a REDACTED marker in the masked response, got %q", responseText)
+	}
+
+	// The same execution must also be recorded in the audit log, with the
+	// error masked and InputHash populated.
+	entries := srv.AuditLogger().GetEntriesByTool("get_alert", 1)
+	if len(entries) == 0 {
+		t.Fatal("expected an audit entry for get_alert")
+	}
+	entry := entries[0]
+	if entry.Success {
+		t.Error("expected Success=false for a 401 error")
+	}
+	if strings.Contains(entry.ErrorMsg, fakeAPIKey) {
+		t.Errorf("audit entry leaked the fake API key: %q", entry.ErrorMsg)
+	}
+	if !strings.Contains(entry.ErrorMsg, "REDACTED") {
+		t.Errorf("expected a REDACTED marker in the masked audit ErrorMsg, got %q", entry.ErrorMsg)
+	}
+	if entry.InputHash == "" {
+		t.Error("expected a populated InputHash (sha256 of the marshaled args)")
+	}
 }

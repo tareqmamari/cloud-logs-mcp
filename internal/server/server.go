@@ -3,13 +3,18 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/audit"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/auth"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
@@ -17,6 +22,7 @@ import (
 	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/prompts"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/resources"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tools"
 )
 
@@ -92,6 +98,7 @@ type Server struct {
 	version       string
 	healthServer  *health.Server
 	authenticator Authenticator
+	auditLogger   *audit.Logger
 }
 
 // New creates a new MCP server instance using real IBM Cloud credentials.
@@ -159,6 +166,7 @@ func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer,
 		metrics:       metricsTracker,
 		version:       version,
 		authenticator: authenticator,
+		auditLogger:   audit.NewLogger(logger, cfg.EnableAuditLog),
 	}
 
 	// Create health server if port is configured (port > 0)
@@ -221,7 +229,13 @@ func (s *Server) registerTool(t tools.Tool) {
 		Annotations: t.Annotations(),
 	}
 
-	// Create handler that calls the tool's Execute method with metrics tracking
+	// Create handler that calls the tool's Execute method with metrics
+	// tracking. Every exit path funnels through s.finishToolExecution — the
+	// single chokepoint (shared by all 96 registered tools, since this
+	// function body is written once and reused per registration) that
+	// sanitizes credentials out of errors/results and records the audit
+	// entry. Do not bypass it with a direct return of a tool's raw error or
+	// result.
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
 
@@ -237,8 +251,7 @@ func (s *Server) registerTool(t tools.Tool) {
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
 			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
-				s.metrics.RecordToolExecution(toolName, false, time.Since(start))
-				return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
+				return s.finishToolExecution(ctx, toolName, args, start, nil, fmt.Errorf("failed to unmarshal arguments: %w", err))
 			}
 		}
 
@@ -246,8 +259,7 @@ func (s *Server) registerTool(t tools.Tool) {
 		inputTokens := tools.EstimateJSONTokens(args)
 
 		result, err := t.Execute(ctx, args)
-		success := err == nil && (result == nil || !result.IsError)
-		s.metrics.RecordToolExecution(toolName, success, time.Since(start))
+		result, err = s.finishToolExecution(ctx, toolName, args, start, result, err)
 
 		// Estimate output tokens from result and record budget usage
 		outputTokens := 0
@@ -266,6 +278,109 @@ func (s *Server) registerTool(t tools.Tool) {
 	// Register tool with MCP server
 	s.mcpServer.AddTool(mcpTool, handler)
 	s.logger.Debug("Registered tool", zap.String("tool", mcpTool.Name))
+}
+
+// finishToolExecution is the single chokepoint every tool call passes
+// through on its way out, regardless of which registered tool ran or how it
+// failed. It is responsible for everything that must happen exactly once,
+// for every tool, on every call:
+//
+//  1. Sanitizing credentials/secrets out of both possible error shapes a
+//     tool can produce: a Go error returned directly (rare — most tools
+//     convert failures into a result with IsError=true before returning,
+//     but a few, plus the arguments-unmarshal failure below, return a raw
+//     error), and an IsError result's text content (the common case — see
+//     tools.NewToolResultError / HandleGetError / HandleQueryError, which
+//     embed err.Error() as the result text). Both paths can carry a
+//     response-body snippet folded in by the API client's classified
+//     errors (client.go's classifyResponseError / internal/errors'
+//     FromHTTPStatus), which is attacker/API-controlled and must never
+//     reach the MCP client or a log line unmasked.
+//  2. Recording an audit.Entry for the call (tool, duration, success, the
+//     masked error message, and a SHA-256 hash of the arguments) via the
+//     server's audit.Logger, which itself both keeps an in-memory ring
+//     buffer and emits a structured zap log line — the "errors logged via
+//     zap" sink required alongside the MCP response.
+//  3. Recording tool-execution metrics.
+//
+// Do not sanitize or audit-log per-tool; add new failure modes here instead.
+func (s *Server) finishToolExecution(ctx context.Context, toolName string, args map[string]interface{}, start time.Time, result *mcp.CallToolResult, err error) (*mcp.CallToolResult, error) {
+	duration := time.Since(start)
+	success := err == nil && (result == nil || !result.IsError)
+
+	// Sanitize the Go error, if any: this is what a raw (non-IsError-result)
+	// tool failure returns, and the MCP SDK serializes it directly into the
+	// error surfaced to the client (see mcp.Server.callTool) — never masking
+	// it here would leak whatever the error message embeds.
+	if err != nil {
+		err = errors.New(security.SanitizeError(err))
+	}
+
+	// Sanitize an IsError result's text content in place: this is the
+	// common path (tools convert failures into text before returning), and
+	// that text is returned to the MCP client verbatim.
+	maskErrorResultContent(result)
+
+	s.metrics.RecordToolExecution(toolName, success, duration)
+
+	if s.auditLogger != nil {
+		auditErr := err
+		if auditErr == nil && result != nil && result.IsError {
+			// The failure lives in the (already-masked) result content, not
+			// in err. Synthesize an error carrying that text so the audit
+			// entry still records what went wrong. LogToolExecution masks
+			// again via security.SanitizeError, which is idempotent on
+			// already-masked text.
+			auditErr = errors.New(resultErrorText(result))
+		}
+		s.auditLogger.LogToolExecution(ctx, toolName, "execute", "", "", success, duration, auditErr, hashArgs(args))
+	}
+
+	return result, err
+}
+
+// maskErrorResultContent masks the text content of an IsError tool result
+// in place. No-op for a nil result or a successful (non-error) one, so
+// ordinary tool output is never mangled by pattern matching.
+func maskErrorResultContent(result *mcp.CallToolResult) {
+	if result == nil || !result.IsError {
+		return
+	}
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			tc.Text = security.MaskSensitiveData(tc.Text)
+		}
+	}
+}
+
+// resultErrorText concatenates the text content of a tool result, used to
+// recover an error-shaped string from a result whose failure was reported
+// as IsError content rather than a Go error.
+func resultErrorText(result *mcp.CallToolResult) string {
+	var parts []string
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+			parts = append(parts, tc.Text)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// hashArgs returns a SHA-256 hex digest of the JSON-marshaled tool
+// arguments, for audit.Entry.InputHash. This lets audit entries be
+// correlated to a specific input without the audit log ever recording the
+// raw (potentially sensitive) argument values. Returns "" if args is empty
+// or unmarshalable (never fails the call over this).
+func hashArgs(args map[string]interface{}) string {
+	if len(args) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // registerPrompts registers all available MCP prompts
@@ -363,4 +478,11 @@ func (s *Server) GetMetrics() *metrics.Metrics {
 // MCPServer returns the underlying MCP server for testing.
 func (s *Server) MCPServer() *mcp.Server {
 	return s.mcpServer
+}
+
+// AuditLogger returns the server's audit logger, primarily for testing and
+// for tools (e.g. a future get_audit_log implementation) that need to read
+// back recent audit entries.
+func (s *Server) AuditLogger() *audit.Logger {
+	return s.auditLogger
 }
