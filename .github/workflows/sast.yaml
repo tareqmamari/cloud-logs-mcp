@@ -34,6 +34,8 @@ jobs:
         uses: securego/gosec@b6eea26df883bbf98351d68bf92fa247a232ac20 # master
         with:
           args: '-fmt sarif -out gosec.sarif ./...'
+        # Deliberately non-blocking: findings are uploaded as SARIF to the code
+        # scanning dashboard for triage rather than failing the workflow.
         continue-on-error: true
 
       - name: Ensure SARIF file exists
@@ -71,7 +73,6 @@ jobs:
           go-version-file: go.mod
           output-format: sarif
           output-file: govulncheck.sarif
-        continue-on-error: true
 
       - name: Check if SARIF file exists
         id: sarif-check
@@ -108,6 +109,8 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
+        # Deliberately non-blocking: findings are uploaded as SARIF to the code
+        # scanning dashboard for triage rather than failing the workflow.
         continue-on-error: true
 
       - name: Ensure SARIF file exists
@@ -144,6 +147,8 @@ jobs:
             --severity=WARNING
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        # Deliberately non-blocking: findings are uploaded as SARIF to the code
+        # scanning dashboard for triage rather than failing the workflow.
         continue-on-error: true
 
       - name: Ensure SARIF file exists
