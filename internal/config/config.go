@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 )
 
 // Config holds all configuration for the MCP server
@@ -408,15 +410,12 @@ func (c *Config) Redact() *Config {
 	return &redacted
 }
 
-// MaskAPIKey returns a masked version of an API key for safe logging
+// MaskAPIKey returns a masked version of an API key for safe logging.
+// Delegates to security.MaskAPIKey, the single source of truth for this
+// logic; that implementation's edge-case behavior is stricter (an empty key
+// still yields a masked placeholder instead of an empty string).
 func MaskAPIKey(apiKey string) string {
-	if apiKey == "" {
-		return ""
-	}
-	if len(apiKey) <= 8 {
-		return "***"
-	}
-	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
+	return security.MaskAPIKey(apiKey)
 }
 
 // ExtractRegionFromURL extracts the IBM Cloud region from a service URL.
