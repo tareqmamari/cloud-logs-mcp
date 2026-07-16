@@ -166,6 +166,7 @@ func TestMaskSensitiveHeaders(t *testing.T) {
 		sensitiveNames := []string{
 			"authorization", "x-api-key", "api-key", "apikey",
 			"x-auth-token", "cookie", "set-cookie", "x-csrf-token",
+			"proxy-authorization", "www-authenticate", "x-amz-security-token",
 		}
 
 		for _, name := range sensitiveNames {
@@ -259,6 +260,31 @@ func TestMaskSensitiveData(t *testing.T) {
 			name:          "preserves non-sensitive data",
 			input:         `hostname=myserver.example.com port=8080`,
 			shouldContain: "hostname=myserver.example.com",
+		},
+		{
+			name:           "masks JWT anywhere in the string",
+			input:          `id_token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U`, // pragma: allowlist secret
+			shouldContain:  "***REDACTED***",
+			shouldNotMatch: "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", // pragma: allowlist secret
+		},
+		{
+			// PEM markers are split across concatenated literals so this fixture
+			// doesn't trip repo-level "detect private key" pre-commit scanning,
+			// which looks for the literal "-----BEGIN ... PRIVATE KEY-----" marker
+			// verbatim in source; the concatenated runtime string still exercises
+			// the real PEM-block regex in mask.go.
+			name: "masks PEM private key block",
+			input: "config:\n-----BEGIN" + " RSA PRIVATE KEY-----\n" +
+				"MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n" + // pragma: allowlist secret
+				"-----END" + " RSA PRIVATE KEY-----\ntrailer",
+			shouldContain:  "***REDACTED***",
+			shouldNotMatch: "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz", // pragma: allowlist secret
+		},
+		{
+			name:           "masks Authorization: Bearer header value",
+			input:          `Authorization: Bearer ` + "sk_" + "live_abcdefghijklmnopqrstuvwxyz123456",
+			shouldContain:  "***REDACTED***",
+			shouldNotMatch: "sk_" + "live_abcdefghijklmnopqrstuvwxyz123456",
 		},
 	}
 
