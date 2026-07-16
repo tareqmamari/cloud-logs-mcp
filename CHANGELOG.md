@@ -6,6 +6,14 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.11.1](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.11.0...v0.11.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* **main:** make skills subcommands honor --help/-h instead of executing ([776b4c9](https://github.com/tareqmamari/cloud-logs-mcp/commit/776b4c9b89f52da1c2f0d6ad0b95f2d44fe4b75a))
+* **tools:** replace deprecated reflect.Ptr with reflect.Pointer ([ab9ad4f](https://github.com/tareqmamari/cloud-logs-mcp/commit/ab9ad4fa50a7c8d0e3758880b124103fcbc395ce))
+
 ## [0.11.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.10.0...v0.11.0) (2026-03-31)
 
 
