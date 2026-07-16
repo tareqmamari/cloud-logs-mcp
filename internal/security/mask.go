@@ -26,17 +26,20 @@ func MaskBearerToken(token string) string {
 func MaskSensitiveHeaders(headers map[string][]string) map[string]string {
 	masked := make(map[string]string)
 	sensitiveHeaders := map[string]bool{ // pragma: allowlist secret
-		"authorization":    true,
-		"x-api-key":        true,
-		"api-key":          true,
-		"apikey":           true, // pragma: allowlist secret
-		"x-auth-token":     true,
-		"cookie":           true,
-		"set-cookie":       true,
-		"x-csrf-token":     true,
-		"x-request-id":     false, // Not sensitive, don't mask
-		"x-trace-id":       false,
-		"x-correlation-id": false,
+		"authorization":        true,
+		"x-api-key":            true,
+		"api-key":              true,
+		"apikey":               true, // pragma: allowlist secret
+		"x-auth-token":         true,
+		"cookie":               true,
+		"set-cookie":           true,
+		"x-csrf-token":         true,
+		"proxy-authorization":  true,
+		"www-authenticate":     true,
+		"x-amz-security-token": true,  // pragma: allowlist secret
+		"x-request-id":         false, // Not sensitive, don't mask
+		"x-trace-id":           false,
+		"x-correlation-id":     false,
 	}
 
 	for key, values := range headers {
@@ -54,17 +57,32 @@ func MaskSensitiveHeaders(headers map[string][]string) map[string]string {
 	return masked
 }
 
-// SensitivePatterns contains regex patterns for sensitive data
+// SensitivePatterns contains regex patterns for sensitive data.
+//
+// NOTE: a previous version of this list included a naive
+// `(?i)([a-zA-Z0-9]{44})` rule intended to catch IBM Cloud API keys by
+// length alone. It was removed: any 44-character alphanumeric run (a base64
+// hash, a git SHA-ish identifier, part of a UUID string, etc.) matched it,
+// producing false positives that mangled ordinary log/error text. Prefer
+// context-anchored patterns (a preceding key name, header, or known token
+// format) over bare length/charset heuristics.
 var SensitivePatterns = []*regexp.Regexp{
-	// API keys (various formats)
+	// API keys (various formats): api_key=..., apikey: "...", etc.
 	regexp.MustCompile(`(?i)(api[_-]?key|apikey)[=:]["']?([a-zA-Z0-9_-]{20,})["']?`),
-	// Bearer tokens
+	// Authorization: Bearer <token> headers, rendered as plain text (e.g. in
+	// a logged/dumped request).
+	regexp.MustCompile(`(?i)(authorization:\s*bearer\s+)([a-zA-Z0-9_.\-=]+)`),
+	// Bare "Bearer <token>" occurrences outside of a header line.
 	regexp.MustCompile(`(?i)(bearer\s+)([a-zA-Z0-9_.-]{20,})`),
-	// IBM Cloud API keys (specific format)
-	regexp.MustCompile(`(?i)([a-zA-Z0-9]{44})`),
+	// JSON Web Tokens (header.payload.signature, base64url segments),
+	// wherever they appear (bearer tokens, ID tokens, etc.).
+	regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`),
+	// PEM-encoded private key blocks (RSA/EC/DSA/OPENSSH/plain), including
+	// their body, so an accidentally-logged key never survives masking.
+	regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`),
 	// Passwords in URLs or config
 	regexp.MustCompile(`(?i)(password|passwd|pwd)[=:]["']?([^"'\s&]+)["']?`),
-	// Secrets
+	// Secrets and generic tokens
 	regexp.MustCompile(`(?i)(secret|token)[=:]["']?([a-zA-Z0-9_-]{16,})["']?`),
 }
 
