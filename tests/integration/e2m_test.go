@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -70,6 +72,16 @@ func TestE2MCRUD(t *testing.T) {
 		e2mID = result["id"].(string)
 		AssertValidUUID(t, e2mID, "E2M ID should be a valid UUID")
 	})
+
+	// Register cleanup immediately after creation as a safety net, in case a
+	// later subtest fails or panics before the explicit DeleteE2M subtest runs.
+	if e2mID != "" {
+		id := e2mID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/events2metrics/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
 
 	// Test: Get E2M
 	t.Run("GetE2M", func(t *testing.T) {
@@ -568,34 +580,52 @@ func TestE2MPagination(t *testing.T) {
 
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create E2M")
-		createdE2Ms = append(createdE2Ms, result["id"].(string))
+		id := result["id"].(string)
+		createdE2Ms = append(createdE2Ms, id)
 
-		// Small delay to avoid rate limiting
-		time.Sleep(100 * time.Millisecond)
+		// Wait for the E2M to become individually retrievable before creating
+		// the next one, instead of a flat sleep. This paces requests (avoiding
+		// rate limiting) and avoids racing the list check below on
+		// write-then-read consistency.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/events2metrics/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "E2M %s did not become visible in time", id)
 	}
 
 	t.Run("ListAllE2M", func(t *testing.T) {
-		req := &client.Request{
-			Method: "GET",
-			Path:   "/v1/events2metrics",
-		}
+		var foundCount int
+		waitErr := WaitForCondition(context.Background(), 500*time.Millisecond, 10*time.Second, func() (bool, error) {
+			req := &client.Request{
+				Method: "GET",
+				Path:   "/v1/events2metrics",
+			}
 
-		result, err := tc.DoRequest(req)
-		require.NoError(t, err, "Failed to list E2M")
+			result, err := tc.DoRequest(req)
+			if err != nil {
+				return false, err
+			}
 
-		e2ms, ok := result["events2metrics"].([]interface{})
-		require.True(t, ok, "E2M should be an array")
+			e2ms, ok := result["events2metrics"].([]interface{})
+			if !ok {
+				return false, fmt.Errorf("events2metrics should be an array")
+			}
 
-		// Verify our created E2Ms are in the list
-		foundCount := 0
-		for _, e2m := range e2ms {
-			e2mMap := e2m.(map[string]interface{})
-			for _, createdID := range createdE2Ms {
-				if e2mMap["id"] == createdID {
-					foundCount++
+			// Verify our created E2Ms are in the list
+			foundCount = 0
+			for _, e2m := range e2ms {
+				e2mMap := e2m.(map[string]interface{})
+				for _, createdID := range createdE2Ms {
+					if e2mMap["id"] == createdID {
+						foundCount++
+					}
 				}
 			}
-		}
+			return foundCount >= 1, nil
+		})
+		require.NoError(t, waitErr, "Failed to find created E2Ms in list after retries")
 		assert.GreaterOrEqual(t, foundCount, 1, "At least one created E2M should be in the list")
 	})
 }

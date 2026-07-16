@@ -63,6 +63,19 @@ func TestAlertsCRUD(t *testing.T) {
 		AssertValidUUID(t, alertID, "Alert ID should be a valid UUID")
 	})
 
+	// Register cleanup immediately after creation (rather than relying solely
+	// on the DeleteAlert subtest below) so the alert is removed even if a
+	// later subtest in this suite fails or panics before DeleteAlert runs.
+	// DeleteAlert still exercises the delete API directly; this is a
+	// best-effort safety net and ignores "already deleted" errors.
+	if alertID != "" {
+		id := alertID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/alerts/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
+
 	// Test: Get Alert
 	t.Run("GetAlert", func(t *testing.T) {
 		require.NotEmpty(t, alertID, "Alert ID should be set from create test")
@@ -218,10 +231,19 @@ func TestAlertsPagination(t *testing.T) {
 
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create alert")
-		createdAlerts = append(createdAlerts, result["id"].(string))
+		id := result["id"].(string)
+		createdAlerts = append(createdAlerts, id)
 
-		// Small delay to avoid rate limiting
-		time.Sleep(100 * time.Millisecond)
+		// Wait for the alert to become individually retrievable before creating
+		// the next one. This both paces requests (avoiding rate limiting) and
+		// avoids racing the eventual-consistency of the alerts list used below,
+		// which a flat sleep can't guarantee.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/alerts/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "alert %s did not become visible in time", id)
 	}
 
 	t.Run("PaginateWithLimit", func(t *testing.T) {

@@ -222,14 +222,12 @@ func TestMain(m *testing.M) {
 	// and we want to support setting env vars directly
 	_ = godotenv.Load("../../.env")
 
-	// Check if running integration tests
+	// Skip the whole suite up front if credentials aren't configured — these
+	// tests hit real IBM Cloud APIs and NewTestContext would otherwise fail
+	// loudly (and repetitively) in every test.
 	if os.Getenv("LOGS_API_KEY") == "" {
-		fmt.Println("Skipping integration tests: LOGS_API_KEY not set")
-		fmt.Println("To run integration tests, set the following environment variables:")
-		fmt.Println("  export LOGS_API_KEY=your-api-key") // pragma: allowlist secret
-		fmt.Println("  export LOGS_INSTANCE_ID=your-instance-id")
-		fmt.Println("  export LOGS_REGION=your-region")
-		fmt.Println("  Or create a .env file in the project root")
+		fmt.Println("Skipping integration tests: set LOGS_API_KEY, LOGS_INSTANCE_ID, and LOGS_REGION " +
+			"(directly or via a .env file in the project root) to run them.") // pragma: allowlist secret
 		os.Exit(0)
 	}
 

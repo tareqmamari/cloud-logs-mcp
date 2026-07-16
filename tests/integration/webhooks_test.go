@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -57,6 +59,16 @@ func TestWebhooksCRUD(t *testing.T) {
 		webhookID = result["id"].(string)
 		AssertValidUUID(t, webhookID, "Webhook ID should be a valid UUID")
 	})
+
+	// Register cleanup immediately after creation as a safety net, in case a
+	// later subtest fails or panics before the explicit DeleteWebhook subtest runs.
+	if webhookID != "" {
+		id := webhookID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/outgoing_webhooks/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
 
 	// Test: Get Webhook
 	t.Run("GetWebhook", func(t *testing.T) {
@@ -416,34 +428,52 @@ func TestWebhooksPagination(t *testing.T) {
 
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create webhook")
-		createdWebhooks = append(createdWebhooks, result["id"].(string))
+		id := result["id"].(string)
+		createdWebhooks = append(createdWebhooks, id)
 
-		// Small delay to avoid rate limiting
-		time.Sleep(100 * time.Millisecond)
+		// Wait for the webhook to become individually retrievable before
+		// creating the next one, instead of a flat sleep. This paces requests
+		// (avoiding rate limiting) and avoids racing the list check below on
+		// write-then-read consistency.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/outgoing_webhooks/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "webhook %s did not become visible in time", id)
 	}
 
 	t.Run("ListAllWebhooks", func(t *testing.T) {
-		req := &client.Request{
-			Method: "GET",
-			Path:   "/v1/outgoing_webhooks",
-		}
+		var foundCount int
+		waitErr := WaitForCondition(context.Background(), 500*time.Millisecond, 10*time.Second, func() (bool, error) {
+			req := &client.Request{
+				Method: "GET",
+				Path:   "/v1/outgoing_webhooks",
+			}
 
-		result, err := tc.DoRequest(req)
-		require.NoError(t, err, "Failed to list webhooks")
+			result, err := tc.DoRequest(req)
+			if err != nil {
+				return false, err
+			}
 
-		webhooks, ok := result["outgoing_webhooks"].([]interface{})
-		require.True(t, ok, "Webhooks should be an array")
+			webhooks, ok := result["outgoing_webhooks"].([]interface{})
+			if !ok {
+				return false, fmt.Errorf("outgoing_webhooks should be an array")
+			}
 
-		// Verify our created webhooks are in the list
-		foundCount := 0
-		for _, webhook := range webhooks {
-			webhookMap := webhook.(map[string]interface{})
-			for _, createdID := range createdWebhooks {
-				if webhookMap["id"] == createdID {
-					foundCount++
+			// Verify our created webhooks are in the list
+			foundCount = 0
+			for _, webhook := range webhooks {
+				webhookMap := webhook.(map[string]interface{})
+				for _, createdID := range createdWebhooks {
+					if webhookMap["id"] == createdID {
+						foundCount++
+					}
 				}
 			}
-		}
+			return foundCount >= 1, nil
+		})
+		require.NoError(t, waitErr, "Failed to find created webhooks in list after retries")
 		assert.GreaterOrEqual(t, foundCount, 1, "At least one created webhook should be in the list")
 	})
 }
