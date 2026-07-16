@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -495,15 +496,17 @@ func fieldToLucene(f fieldFilter) string {
 
 	switch f.Operator {
 	case "equals":
-		return fmt.Sprintf("%s:%s", f.Field, f.Value)
+		return fmt.Sprintf("%s:%s", f.Field, escapeLuceneValue(f.Value))
 	case "not_equals":
-		return fmt.Sprintf("NOT %s:%s", f.Field, f.Value)
+		return fmt.Sprintf("NOT %s:%s", f.Field, escapeLuceneValue(f.Value))
 	case "contains":
-		return fmt.Sprintf("%s:*%s*", f.Field, f.Value)
+		// Wrapping '*' wildcards are added by us and stay live; the user's own
+		// value is escaped (including any '*'/'?' it contains).
+		return fmt.Sprintf("%s:*%s*", f.Field, escapeLuceneValue(f.Value))
 	case "starts_with":
-		return fmt.Sprintf("%s:%s*", f.Field, f.Value)
+		return fmt.Sprintf("%s:%s*", f.Field, escapeLuceneValue(f.Value))
 	case "ends_with":
-		return fmt.Sprintf("%s:*%s", f.Field, f.Value)
+		return fmt.Sprintf("%s:*%s", f.Field, escapeLuceneValue(f.Value))
 	case "greater_than":
 		if !isNumericFilterValue(f.Value) {
 			return ""
@@ -630,6 +633,40 @@ func isSafeDataPrimeFieldRef(s string) bool {
 		s = s[3:]
 	}
 	return isSafeDataPrimeFieldName(s)
+}
+
+// escapeLuceneValue backslash-escapes the characters that are reserved in
+// Lucene query syntax so a caller-supplied value is treated as inert data
+// rather than query structure. Without this, a value like "a OR bar:*" placed
+// after "field:" would split into a new clause (via ':' and the
+// whitespace-separated OR operator).
+//
+// It escapes the standard Apache Lucene reserved set
+// (\ + - ! ( ) : ^ [ ] " { } ~ * ? | & /) — escaping '&'/'|' individually
+// also covers the two-char '&&'/'||' operators — plus whitespace, so a
+// value spanning multiple tokens collapses into a single escaped term and
+// boolean keywords (AND/OR/NOT) inside it can no longer act as operators.
+//
+// Callers that add their own wildcards (contains/starts_with/ends_with wrap
+// the value in '*') must call this on the value BEFORE adding the wrapping
+// '*', so the user's own '*'/'?' are escaped while the builder's wildcards
+// stay live.
+func escapeLuceneValue(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) * 2)
+	for _, r := range s {
+		switch r {
+		case '\\', '+', '-', '!', '(', ')', ':', '^', '[', ']', '"', '{', '}', '~', '*', '?', '|', '&', '/':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			if unicode.IsSpace(r) {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // toDataPrimeField converts a field name to DataPrime reference format
