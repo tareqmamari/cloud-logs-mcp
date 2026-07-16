@@ -5,6 +5,40 @@ import (
 	"time"
 )
 
+// TestDetermineTier pins the IBM Cloud Logs TCO priority-to-tier mapping.
+// type_high fans out to both frequent_search and archive; type_medium and
+// type_low both land in archive only (type_low is IBM's low-priority
+// store-and-search tier, not a "blocked/dropped" pipeline outcome - that
+// used to be documented incorrectly on determineTier even though the code
+// itself was already correct).
+func TestDetermineTier(t *testing.T) {
+	tests := []struct {
+		priority         string
+		wantTier         string
+		wantFrequentFlag bool
+	}{
+		{priority: "type_high", wantTier: "frequent_search", wantFrequentFlag: true},
+		{priority: "type_medium", wantTier: "archive", wantFrequentFlag: false},
+		{priority: "type_low", wantTier: "archive", wantFrequentFlag: false},
+		{priority: "type_unspecified", wantTier: "archive", wantFrequentFlag: false},
+		{priority: "", wantTier: "archive", wantFrequentFlag: false},
+		{priority: "some_unknown_future_priority", wantTier: "archive", wantFrequentFlag: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.priority, func(t *testing.T) {
+			config := &TCOConfig{}
+			got := determineTier(config, tt.priority)
+			if got != tt.wantTier {
+				t.Errorf("determineTier(%q) = %q, want %q", tt.priority, got, tt.wantTier)
+			}
+			if config.HasFrequentSearch != tt.wantFrequentFlag {
+				t.Errorf("determineTier(%q): HasFrequentSearch = %v, want %v", tt.priority, config.HasFrequentSearch, tt.wantFrequentFlag)
+			}
+		})
+	}
+}
+
 func TestTCOConfig_Defaults(t *testing.T) {
 	session := NewSessionContext("test-user", "test-instance")
 
