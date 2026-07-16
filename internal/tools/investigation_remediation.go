@@ -106,7 +106,7 @@ func (g *RemediationGenerator) buildAlertCondition(ctx *IncidentContext) string 
 	conditions := []string{}
 
 	for _, svc := range ctx.AffectedServices {
-		conditions = append(conditions, fmt.Sprintf("$l.applicationname == '%s'", svc))
+		conditions = append(conditions, fmt.Sprintf("$l.applicationname == '%s'", escapeDataPrimeString(svc)))
 	}
 
 	if len(conditions) > 0 {
@@ -243,7 +243,7 @@ func (g *RemediationGenerator) generateWidgets(ctx *IncidentContext) []Dashboard
 	if len(ctx.AffectedServices) > 0 {
 		filters := []string{}
 		for _, svc := range ctx.AffectedServices {
-			filters = append(filters, fmt.Sprintf("$l.applicationname == '%s'", svc))
+			filters = append(filters, fmt.Sprintf("$l.applicationname == '%s'", escapeDataPrimeString(svc)))
 		}
 		serviceFilter = fmt.Sprintf(" && (%s)", strings.Join(filters, " || "))
 	}

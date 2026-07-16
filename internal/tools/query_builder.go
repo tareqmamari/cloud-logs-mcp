@@ -352,11 +352,11 @@ func (t *BuildQueryTool) buildDataPrimeQuery(textSearch, excludeText string, app
 	// Applications filter
 	if len(applications) > 0 {
 		if len(applications) == 1 {
-			filters = append(filters, fmt.Sprintf(`$l.applicationname == '%s'`, applications[0]))
+			filters = append(filters, fmt.Sprintf(`$l.applicationname == '%s'`, escapeDataPrimeString(applications[0])))
 		} else {
 			appParts := make([]string, len(applications))
 			for i, app := range applications {
-				appParts[i] = fmt.Sprintf(`$l.applicationname == '%s'`, app)
+				appParts[i] = fmt.Sprintf(`$l.applicationname == '%s'`, escapeDataPrimeString(app))
 			}
 			filters = append(filters, fmt.Sprintf("(%s)", strings.Join(appParts, " || ")))
 		}
@@ -365,11 +365,11 @@ func (t *BuildQueryTool) buildDataPrimeQuery(textSearch, excludeText string, app
 	// Subsystems filter
 	if len(subsystems) > 0 {
 		if len(subsystems) == 1 {
-			filters = append(filters, fmt.Sprintf(`$l.subsystemname == '%s'`, subsystems[0]))
+			filters = append(filters, fmt.Sprintf(`$l.subsystemname == '%s'`, escapeDataPrimeString(subsystems[0])))
 		} else {
 			subParts := make([]string, len(subsystems))
 			for i, sub := range subsystems {
-				subParts[i] = fmt.Sprintf(`$l.subsystemname == '%s'`, sub)
+				subParts[i] = fmt.Sprintf(`$l.subsystemname == '%s'`, escapeDataPrimeString(sub))
 			}
 			filters = append(filters, fmt.Sprintf("(%s)", strings.Join(subParts, " || ")))
 		}
@@ -516,18 +516,18 @@ func fieldToDataPrime(f fieldFilter) string {
 
 	switch f.Operator {
 	case "equals":
-		return fmt.Sprintf("%s == '%s'", dpField, f.Value)
+		return fmt.Sprintf("%s == '%s'", dpField, escapeDataPrimeString(f.Value))
 	case "not_equals":
-		return fmt.Sprintf("%s != '%s'", dpField, f.Value)
+		return fmt.Sprintf("%s != '%s'", dpField, escapeDataPrimeString(f.Value))
 	case "contains":
 		// Use contains() function - works on all field types
-		return fmt.Sprintf("%s.contains('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.contains('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "starts_with":
 		// Use startsWith() function - works on all field types
-		return fmt.Sprintf("%s.startsWith('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.startsWith('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "ends_with":
 		// Use endsWith() function - works on all field types
-		return fmt.Sprintf("%s.endsWith('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.endsWith('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "greater_than":
 		return fmt.Sprintf("%s > %s", dpField, f.Value)
 	case "less_than":
@@ -601,10 +601,43 @@ func toDataPrimeField(field string) string {
 	return "$d." + field
 }
 
-// escapeDataPrimeString escapes special characters in DataPrime strings
+// escapeDataPrimeString escapes special characters in DataPrime single-quoted
+// string literals so caller-supplied values cannot break out of the literal
+// or inject additional query syntax.
+//
+// Backslashes are escaped first (conceptually) by processing the input one
+// rune at a time rather than doing sequential strings.ReplaceAll passes: a
+// naive "escape ' then escape \" (or vice versa via two ReplaceAll calls)
+// either mangles existing backslashes or re-escapes backslashes it just
+// inserted. Scanning once and classifying each rune avoids both problems.
+//
+// A trailing backslash (e.g. `foo\`) is a real-world regression case: with
+// only "'" escaped, the lone backslash would sit directly before the closing
+// quote and, depending on parser behavior, could be read as escaping (i.e.
+// consuming) that quote — leaving the literal unterminated and the rest of
+// the crafted input parsed as query syntax.
+//
+// ASCII control characters (including newlines) are stripped rather than
+// escaped: DataPrime has no defined escape for them, and a raw newline could
+// otherwise be used to smuggle what looks like a second statement into the
+// query.
 func escapeDataPrimeString(s string) string {
-	s = strings.ReplaceAll(s, "'", "\\'")
-	return s
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\'':
+			b.WriteString(`\'`)
+		case r < 0x20 || r == 0x7f:
+			// Strip ASCII control characters (including \n, \r, \t, NUL).
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // escapeJSON escapes special characters for JSON string

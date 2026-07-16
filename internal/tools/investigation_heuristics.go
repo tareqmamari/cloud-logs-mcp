@@ -128,7 +128,7 @@ func (h *TimeoutHeuristic) SuggestAction(finding InvestigationFinding) Heuristic
 				avg($d.duration_ms) as avg_latency,
 				percentile($d.duration_ms, 95) as p95_latency,
 				percentile($d.duration_ms, 99) as p99_latency
-			| limit 1`, finding.Service)
+			| limit 1`, escapeDataPrimeString(finding.Service))
 	}
 
 	return HeuristicAction{
@@ -242,7 +242,7 @@ func (h *DatabaseHeuristic) SuggestAction(finding InvestigationFinding) Heuristi
 				max($d.exec_ms) as max_time,
 				count() as query_count
 			| sortby -avg_time
-			| limit 10`, finding.Service)
+			| limit 10`, escapeDataPrimeString(finding.Service))
 	}
 
 	return HeuristicAction{
@@ -304,7 +304,7 @@ func (h *AuthHeuristic) SuggestAction(finding InvestigationFinding) HeuristicAct
 			| groupby $d.user_id, $d.endpoint
 			| calculate count() as failures
 			| sortby -failures
-			| limit 20`, finding.Service)
+			| limit 20`, escapeDataPrimeString(finding.Service))
 	}
 
 	return HeuristicAction{

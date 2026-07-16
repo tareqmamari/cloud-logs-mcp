@@ -217,7 +217,7 @@ func (s *GlobalModeStrategy) SuggestNextActions(ctx *SmartInvestigationContext) 
 				Description: fmt.Sprintf("Drill down into %s errors", finding.Service),
 				Query: fmt.Sprintf(`source logs
 					| filter $l.applicationname == '%s' && $m.severity >= ERROR
-					| limit 100`, finding.Service),
+					| limit 100`, escapeDataPrimeString(finding.Service)),
 				Rationale: "High error volume warrants detailed investigation",
 			})
 		}
@@ -293,7 +293,7 @@ func (s *ComponentModeStrategy) InitialQueries(ctx *SmartInvestigationContext) [
 			Purpose:  fmt.Sprintf("All errors from %s", svc),
 			Query: fmt.Sprintf(`source logs
 				| filter $l.applicationname == '%s' && $m.severity >= ERROR
-				| limit 200`, svc),
+				| limit 200`, escapeDataPrimeString(svc)),
 			Tier: "archive",
 		},
 		{
@@ -304,7 +304,7 @@ func (s *ComponentModeStrategy) InitialQueries(ctx *SmartInvestigationContext) [
 				| filter $l.applicationname == '%s' && $m.severity >= ERROR
 				| groupby $d.message aggregate count() as occurrences
 				| sortby -occurrences
-				| limit 20`, svc),
+				| limit 20`, escapeDataPrimeString(svc)),
 			Tier: "archive",
 		},
 		{
@@ -314,7 +314,7 @@ func (s *ComponentModeStrategy) InitialQueries(ctx *SmartInvestigationContext) [
 			Query: fmt.Sprintf(`source logs
 				| filter $l.applicationname == '%s' && $m.severity >= WARNING
 				| groupby $l.subsystemname aggregate count() as errors
-				| sortby -errors`, svc),
+				| sortby -errors`, escapeDataPrimeString(svc)),
 			Tier: "archive",
 		},
 		{
@@ -327,7 +327,7 @@ func (s *ComponentModeStrategy) InitialQueries(ctx *SmartInvestigationContext) [
 				  && ($d.message.contains('connection')
 					  || $d.message.contains('timeout')
 					  || $d.message.contains('refused'))
-				| limit 100`, svc),
+				| limit 100`, escapeDataPrimeString(svc)),
 			Tier: "archive",
 		},
 	}
@@ -527,7 +527,7 @@ func (s *FlowModeStrategy) InitialQueries(ctx *SmartInvestigationContext) []Quer
 			Query: fmt.Sprintf(`source logs
 				| filter $d.trace_id == '%s'
 				| sortby $m.timestamp asc
-				| limit 500`, ctx.TraceID),
+				| limit 500`, escapeDataPrimeString(ctx.TraceID)),
 			Tier: "archive",
 		})
 	}
@@ -541,7 +541,7 @@ func (s *FlowModeStrategy) InitialQueries(ctx *SmartInvestigationContext) []Quer
 			Query: fmt.Sprintf(`source logs
 				| filter $d.correlation_id == '%s'
 				| sortby $m.timestamp asc
-				| limit 500`, ctx.CorrelationID),
+				| limit 500`, escapeDataPrimeString(ctx.CorrelationID)),
 			Tier: "archive",
 		})
 	}
@@ -638,7 +638,7 @@ func (s *FlowModeStrategy) SuggestNextActions(ctx *SmartInvestigationContext) []
 				Description: fmt.Sprintf("Investigate %s service in detail", finding.Service),
 				Query: fmt.Sprintf(`source logs
 					| filter $l.applicationname == '%s' && $m.severity >= ERROR
-					| limit 100`, finding.Service),
+					| limit 100`, escapeDataPrimeString(finding.Service)),
 				Rationale: "Request failed at this service",
 			})
 		}
