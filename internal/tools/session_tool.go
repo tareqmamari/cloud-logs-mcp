@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -242,37 +243,69 @@ func (t *SessionContextTool) showBudget() (*mcp.CallToolResult, error) {
 	budget := GetBudgetContext()
 	summary := budget.GetSummary()
 
-	// Extract nested maps
-	tokens := summary["tokens"].(map[string]interface{})
-	cost := summary["cost"].(map[string]interface{})
-	execution := summary["execution"].(map[string]interface{})
-
-	// Convert millicents to USD for display
-	usedMillicents := cost["used_millicents"].(int)
-	maxMillicents := cost["max_millicents"].(int)
+	status, err := buildBudgetStatus(summary)
+	if err != nil {
+		// GetSummary()'s shape is entirely internal to this package, so this
+		// should never happen today - but fail cleanly instead of panicking
+		// if that ever changes.
+		return NewToolResultError(fmt.Sprintf("failed to build budget status: %v", err)), nil
+	}
+	status["compression_level"] = budget.GetCompressionLevel()
 
 	result := map[string]interface{}{
-		"budget_status": map[string]interface{}{
-			"tokens": map[string]interface{}{
-				"used":            tokens["used"],
-				"remaining":       tokens["remaining"],
-				"max":             tokens["max"],
-				"usage_percent":   tokens["usage_pct"],
-				"counting_method": tokens["counting_method"],
-				"accuracy":        tokens["accuracy"],
-			},
-			"cost": map[string]interface{}{
-				"used_usd":      float64(usedMillicents) / 100000,
-				"max_usd":       float64(maxMillicents) / 100000,
-				"remaining_pct": cost["remaining_pct"],
-			},
-			"execution":         execution,
-			"compression_level": budget.GetCompressionLevel(),
-		},
+		"budget_status":   status,
 		"recommendations": t.getBudgetRecommendations(budget),
 	}
 
 	return t.formatResult(result)
+}
+
+// buildBudgetStatus converts a BudgetContext.GetSummary() result into the
+// "budget_status" shape returned by showBudget, using comma-ok type
+// assertions throughout. GetSummary always returns the expected shape today
+// (it's constructed by this same package), but extracting nested maps and
+// ints via raw `.(type)` assertions used to panic on any unexpected shape;
+// this instead returns an error so callers can fail cleanly.
+func buildBudgetStatus(summary map[string]interface{}) (map[string]interface{}, error) {
+	tokens, ok := summary["tokens"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf(`summary["tokens"] has unexpected type %T`, summary["tokens"])
+	}
+	cost, ok := summary["cost"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf(`summary["cost"] has unexpected type %T`, summary["cost"])
+	}
+	execution, ok := summary["execution"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf(`summary["execution"] has unexpected type %T`, summary["execution"])
+	}
+
+	// Convert millicents to USD for display
+	usedMillicents, ok := cost["used_millicents"].(int)
+	if !ok {
+		return nil, fmt.Errorf(`cost["used_millicents"] has unexpected type %T`, cost["used_millicents"])
+	}
+	maxMillicents, ok := cost["max_millicents"].(int)
+	if !ok {
+		return nil, fmt.Errorf(`cost["max_millicents"] has unexpected type %T`, cost["max_millicents"])
+	}
+
+	return map[string]interface{}{
+		"tokens": map[string]interface{}{
+			"used":            tokens["used"],
+			"remaining":       tokens["remaining"],
+			"max":             tokens["max"],
+			"usage_percent":   tokens["usage_pct"],
+			"counting_method": tokens["counting_method"],
+			"accuracy":        tokens["accuracy"],
+		},
+		"cost": map[string]interface{}{
+			"used_usd":      float64(usedMillicents) / 100000,
+			"max_usd":       float64(maxMillicents) / 100000,
+			"remaining_pct": cost["remaining_pct"],
+		},
+		"execution": execution,
+	}, nil
 }
 
 // getBudgetRecommendations provides actionable recommendations based on budget state

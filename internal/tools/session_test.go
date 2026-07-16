@@ -490,3 +490,76 @@ func TestListSessions(t *testing.T) {
 		t.Errorf("Expected 3 sessions, got %d", len(sessions))
 	}
 }
+
+// TestBuildBudgetStatus_WellFormedSummary verifies the happy path: a summary
+// shaped like BudgetContext.GetSummary()'s real output is converted without
+// error.
+func TestBuildBudgetStatus_WellFormedSummary(t *testing.T) {
+	summary := map[string]interface{}{
+		"tokens": map[string]interface{}{
+			"used": 100, "remaining": 900, "max": 1000,
+			"usage_pct": 10.0, "counting_method": "approximate (chars/4)", "accuracy": "approximate",
+		},
+		"cost": map[string]interface{}{
+			"used_millicents": 5, "remaining_millicents": 995, "max_millicents": 1000,
+			"remaining_pct": 99.5,
+		},
+		"execution": map[string]interface{}{
+			"tool_calls": 1, "session_duration": "1s", "compression_level": "none",
+		},
+	}
+
+	status, err := buildBudgetStatus(summary)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cost, ok := status["cost"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cost map in status, got %T", status["cost"])
+	}
+	if cost["used_usd"] != float64(5)/100000 {
+		t.Errorf("used_usd = %v, want %v", cost["used_usd"], float64(5)/100000)
+	}
+}
+
+// TestBuildBudgetStatus_UnexpectedShape is a regression test: showBudget used
+// to build this same status via unchecked type assertions
+// (summary["tokens"].(map[string]interface{}), cost["used_millicents"].(int))
+// which panic on an unexpected shape instead of failing cleanly. Since
+// GetSummary() is entirely internal, this can't currently be triggered
+// through the public API, but buildBudgetStatus must degrade to an error
+// rather than crash the process if that ever changes.
+func TestBuildBudgetStatus_UnexpectedShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		summary map[string]interface{}
+	}{
+		{
+			name:    "missing tokens key",
+			summary: map[string]interface{}{"cost": map[string]interface{}{}, "execution": map[string]interface{}{}},
+		},
+		{
+			name: "cost is not a map",
+			summary: map[string]interface{}{
+				"tokens": map[string]interface{}{}, "cost": "not-a-map", "execution": map[string]interface{}{},
+			},
+		},
+		{
+			name: "used_millicents is not an int",
+			summary: map[string]interface{}{
+				"tokens":    map[string]interface{}{},
+				"cost":      map[string]interface{}{"used_millicents": 5.0, "max_millicents": 1000},
+				"execution": map[string]interface{}{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := buildBudgetStatus(tt.summary)
+			if err == nil {
+				t.Error("expected an error for malformed summary, got nil")
+			}
+		})
+	}
+}
