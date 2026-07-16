@@ -329,6 +329,58 @@ func TestBuildDataPrimeQuery_InjectionPayloadsStayInsideLiteral(t *testing.T) {
 	}
 }
 
+// TestFieldToDataPrime_NumericOperandRejectsInjection is a regression test
+// for expression injection via the numeric comparison operators. For
+// greater_than/less_than, f.Value is interpolated UNQUOTED (e.g. "field > 5"),
+// so escaping (which only protects inside '...') doesn't help. A caller
+// sending value "0 || $d.secret.contains('x')" could otherwise inject
+// arbitrary DataPrime expression syntax. Non-numeric operands must be
+// neutralized (the filter is dropped), while valid numbers still build.
+func TestFieldToDataPrime_NumericOperandRejectsInjection(t *testing.T) {
+	injectionPayloads := []string{
+		"0 || $d.secret.contains('x')",
+		"5) || true || (1",
+		"1; drop",
+		"", // empty is not a valid number either
+		"0x1f",
+	}
+
+	for _, op := range []string{"greater_than", "less_than"} {
+		for _, payload := range injectionPayloads {
+			f := fieldFilter{Field: "json.status_code", Operator: op, Value: payload}
+			got := fieldToDataPrime(f)
+			if got != "" {
+				t.Errorf("fieldToDataPrime(%s, %q) = %q; expected empty (dropped), payload must not reach the query", op, payload, got)
+			}
+		}
+	}
+
+	// Valid numeric operands must still build correctly.
+	if got := fieldToDataPrime(fieldFilter{Field: "json.status_code", Operator: "greater_than", Value: "5"}); got != "$d.status_code > 5" {
+		t.Errorf("valid greater_than = %q, want %q", got, "$d.status_code > 5")
+	}
+	if got := fieldToDataPrime(fieldFilter{Field: "json.latency", Operator: "less_than", Value: "1.5"}); got != "$d.latency < 1.5" {
+		t.Errorf("valid less_than = %q, want %q", got, "$d.latency < 1.5")
+	}
+	if got := fieldToDataPrime(fieldFilter{Field: "json.delta", Operator: "greater_than", Value: "-3"}); got != "$d.delta > -3" {
+		t.Errorf("valid negative greater_than = %q, want %q", got, "$d.delta > -3")
+	}
+}
+
+// TestBuildDataPrimeQuery_NumericInjectionDoesNotReachQuery is the
+// end-to-end counterpart: an injection payload routed through BuildQueryTool
+// must not appear as raw expression in the built DataPrime query.
+func TestBuildDataPrimeQuery_NumericInjectionDoesNotReachQuery(t *testing.T) {
+	tool := NewBuildQueryTool(nil, zap.NewNop())
+	fields := []fieldFilter{
+		{Field: "json.status_code", Operator: "greater_than", Value: "0 || $d.secret.contains('x')"},
+	}
+	query := tool.buildDataPrimeQuery("", "", nil, nil, nil, "", fields)
+	if strings.Contains(query, "$d.secret") || strings.Contains(query, "||") {
+		t.Errorf("injection payload leaked into built query: %q", query)
+	}
+}
+
 func TestToDataPrimeField(t *testing.T) {
 	tests := []struct {
 		input    string

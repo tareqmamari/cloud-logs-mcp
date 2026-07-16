@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -496,8 +497,14 @@ func fieldToLucene(f fieldFilter) string {
 	case "ends_with":
 		return fmt.Sprintf("%s:*%s", f.Field, f.Value)
 	case "greater_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s:>%s", f.Field, f.Value)
 	case "less_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s:<%s", f.Field, f.Value)
 	case "exists":
 		return fmt.Sprintf("%s:*", f.Field)
@@ -529,8 +536,18 @@ func fieldToDataPrime(f fieldFilter) string {
 		// Use endsWith() function - works on all field types
 		return fmt.Sprintf("%s.endsWith('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "greater_than":
+		// Numeric comparison operands are interpolated UNQUOTED, so a
+		// non-numeric value would inject raw DataPrime expression syntax
+		// (escaping only protects inside '...'). Drop the filter unless the
+		// value is a valid number.
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s > %s", dpField, f.Value)
 	case "less_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s < %s", dpField, f.Value)
 	case "exists":
 		return fmt.Sprintf("%s != null", dpField)
@@ -539,6 +556,47 @@ func fieldToDataPrime(f fieldFilter) string {
 	default:
 		return ""
 	}
+}
+
+// isNumericFilterValue reports whether s is a valid numeric literal that is
+// safe to interpolate unquoted into a numeric comparison. DataPrime/Lucene
+// numeric operators (>, <) place the operand into the query without quotes,
+// so anything that isn't a plain number (e.g. "0 || $d.secret.contains('x')")
+// would be parsed as query syntax rather than data. Requiring a parseable
+// float64 neutralizes that injection vector. Values like "0x1f" or "1e999"
+// that ParseFloat rejects (or that aren't finite) are treated as unsafe.
+func isNumericFilterValue(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Reject hex/other prefixes and anything ParseFloat's base-10 grammar
+	// wouldn't accept as a bare number.
+	if strings.ContainsAny(s, "xXpP") {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
+// isSafeDataPrimeFieldName reports whether s consists solely of DataPrime
+// field-name characters (ASCII letters, digits, underscore, dot). Field names
+// are interpolated unquoted into queries, so any character outside this set
+// could inject query syntax. Empty strings are unsafe.
+func isSafeDataPrimeFieldName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // toDataPrimeField converts a field name to DataPrime reference format
