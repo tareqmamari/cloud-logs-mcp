@@ -628,12 +628,20 @@ func TestClarificationGeneration(t *testing.T) {
 	registry := NewToolRegistry()
 
 	// Test that clarifications are generated for ambiguous intents
-	// "error" could mean investigate errors or set up error alerting
+	// "error" could mean investigate errors or set up error alerting.
+	//
+	// "error monitoring" is guaranteed to match: it fuzzy-matches the
+	// registered "monitoring" intent (fuzzyMatch("error monitoring",
+	// "monitoring") = 0.85, since the query contains the target), which is
+	// well above DiscoverTools' 0.6 fuzzy-match threshold and maps to
+	// list_alerts/create_alert/create_outgoing_webhook. It additionally
+	// keyword-matches list_alerts/create_alert/investigate_incident/query_logs
+	// directly. So requiring a non-empty match here is a hard assertion, not
+	// an escape hatch.
 	result := registry.DiscoverTools("error monitoring", "", "")
 
-	// Should have some matched tools
 	if len(result.MatchedTools) == 0 {
-		t.Skip("No matched tools for test intent")
+		t.Fatalf(`expected "error monitoring" to match at least one tool, got none (confidence=%+v)`, result.Confidence)
 	}
 
 	// For medium/low confidence, clarifications should be present
@@ -647,30 +655,25 @@ func TestClarificationGeneration(t *testing.T) {
 func TestAlternativeIntents(t *testing.T) {
 	registry := NewToolRegistry()
 
-	// Test with a partial match that should generate alternatives or fuzzy matches
-	result := registry.DiscoverTools("errr", "", "") // Typo of "error"
-
-	// For any confidence level, we should have some result (matches OR alternatives)
-	hasMatches := len(result.MatchedTools) > 0
-	hasAlternatives := len(result.Confidence.Alternatives) > 0
-
-	// At minimum, we should get *something* back for a partial match
-	// Either fuzzy matching finds tools, or alternatives are suggested
-	if !hasMatches && !hasAlternatives && result.Confidence.Level == ConfidenceLow {
-		// This is acceptable - very short/unusual input might not match anything
-		// Just verify confidence reflects this
-		if result.Confidence.Score != 0 {
-			t.Error("Expected zero score when no matches and no alternatives")
-		}
+	// "err" is a guaranteed match, not a "might find nothing" case: it
+	// fuzzy-matches several registered multi-word intents containing "error"
+	// (e.g. "http error", "query error") above DiscoverTools' 0.6 threshold,
+	// so it always returns matched tools. (A longer typo like "errr" doesn't
+	// share a 3-char prefix or exact substring with any registered intent and
+	// genuinely can return nothing - that's not a useful thing to hard-assert
+	// on, so we don't test it here.)
+	result := registry.DiscoverTools("err", "", "")
+	if len(result.MatchedTools) == 0 {
+		t.Fatalf(`expected "err" to match at least one tool via fuzzy intent matching, got none (confidence=%+v)`, result.Confidence)
 	}
 
-	// Test that a real partial match provides alternatives
-	result = registry.DiscoverTools("serach logs", "", "") // Typo of "search logs"
-
-	// Should have either matches from fuzzy matching or alternatives
+	// Test that a real partial match/typo provides matches or alternatives.
+	// "serach logs" is a typo of the registered "search logs" intent; the
+	// "logs" word alone keyword-matches query_logs/ingest_logs directly, so
+	// this is guaranteed to produce at least one match.
+	result = registry.DiscoverTools("serach logs", "", "")
 	if len(result.MatchedTools) == 0 && len(result.Confidence.Alternatives) == 0 {
-		// Log what we got for debugging
-		t.Logf("Score: %.2f, Level: %s", result.Confidence.Score, result.Confidence.Level)
+		t.Fatalf(`expected "serach logs" to produce matches or alternatives, got neither (confidence=%+v)`, result.Confidence)
 	}
 }
 
