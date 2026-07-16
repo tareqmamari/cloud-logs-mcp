@@ -110,6 +110,34 @@ func TestUserCacheEviction(t *testing.T) {
 	}
 }
 
+func TestUserCacheEvictionIsTrueLRU(t *testing.T) {
+	cache := NewUserCache(2) // capacity 2
+
+	cache.Set("A", "valueA", 5*time.Minute)
+	time.Sleep(2 * time.Millisecond)
+	cache.Set("B", "valueB", 5*time.Minute)
+	time.Sleep(2 * time.Millisecond)
+
+	// Touch A so it becomes the most recently used entry.
+	if _, ok := cache.Get("A"); !ok {
+		t.Fatal("expected to find A")
+	}
+	time.Sleep(2 * time.Millisecond)
+
+	// Inserting C at capacity should evict B (least recently used), not A.
+	cache.Set("C", "valueC", 5*time.Minute)
+
+	if _, ok := cache.Get("A"); !ok {
+		t.Error("expected A to survive eviction (it was recently accessed)")
+	}
+	if _, ok := cache.Get("B"); ok {
+		t.Error("expected B to be evicted as the least recently used entry")
+	}
+	if _, ok := cache.Get("C"); !ok {
+		t.Error("expected C to be present")
+	}
+}
+
 func TestUserCacheStats(t *testing.T) {
 	cache := NewUserCache(10)
 
@@ -126,6 +154,23 @@ func TestUserCacheStats(t *testing.T) {
 	}
 	if stats["total_hits"].(int) != 2 {
 		t.Errorf("Expected 2 hits, got %d", stats["total_hits"])
+	}
+}
+
+func TestUserCacheSweepsExpiredEntriesOnSetWithoutReads(t *testing.T) {
+	cache := NewUserCache(10) // capacity well above the entries we insert
+
+	cache.Set("expiring1", "v1", 1*time.Millisecond)
+	cache.Set("expiring2", "v2", 1*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	// Trigger a sweep purely by writing a new, unrelated key. No Get call
+	// is made on the expired keys, so lazy-on-read eviction can't be what
+	// removes them.
+	cache.Set("fresh", "v3", 5*time.Minute)
+
+	if size := cache.Size(); size != 1 {
+		t.Errorf("expected expired entries to be swept opportunistically on Set, got size %d", size)
 	}
 }
 
@@ -366,6 +411,46 @@ func TestCacheManagerConcurrency(t *testing.T) {
 	if stats["user_cache_count"].(int) != 2 {
 		t.Errorf("Expected 2 user caches, got %d", stats["user_cache_count"])
 	}
+}
+
+func TestManagerSetEnabledConcurrentAccess(_ *testing.T) {
+	config := DefaultConfig()
+	manager := NewManager(config)
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// Writer: continuously flips Enabled while readers read it via Get/Set/IsEnabled.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		enabled := true
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				manager.SetEnabled(enabled)
+				enabled = !enabled
+			}
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				manager.Set("user1", "instance1", "list_alerts", "all", "alerts")
+				manager.Get("user1", "instance1", "list_alerts", "all")
+				manager.IsEnabled()
+			}
+		}()
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	close(stop)
+	wg.Wait()
 }
 
 func TestGetManager(t *testing.T) {
