@@ -546,9 +546,17 @@ type LogCluster struct {
 }
 
 // ClusterLogs groups log events by their message content.
-// Events with the same message are placed in the same cluster.
+// Events with the same message are placed in the same cluster. A cluster's
+// reported Severity is the highest severity seen among its member events
+// (see extractSeverityLevel/severityLevelName) rather than an arbitrary
+// member's severity - events sharing a message can legitimately carry
+// different severities (e.g. the same log line logged as both INFO and
+// WARNING depending on context), and picking "whichever event happened to
+// be first" would make the reported severity depend on input order instead
+// of being a property of the cluster itself.
 func ClusterLogs(events []interface{}) []LogCluster {
 	clusterMap := make(map[string]*LogCluster)
+	maxSeverityLevel := make(map[string]int)
 	var order []string
 
 	for _, event := range events {
@@ -562,15 +570,22 @@ func ClusterLogs(events []interface{}) []LogCluster {
 			message = "(empty)"
 		}
 
+		level := extractSeverityLevel(eventMap)
+
 		if cluster, exists := clusterMap[message]; exists {
 			cluster.Count++
 			cluster.Events = append(cluster.Events, event)
+			if level > maxSeverityLevel[message] {
+				maxSeverityLevel[message] = level
+				cluster.Severity = severityLevelName(level)
+			}
 		} else {
 			order = append(order, message)
+			maxSeverityLevel[message] = level
 			clusterMap[message] = &LogCluster{
 				Pattern:  message,
 				Count:    1,
-				Severity: extractSeverityName(eventMap),
+				Severity: severityLevelName(level),
 				Events:   []interface{}{event},
 			}
 		}
@@ -581,9 +596,19 @@ func ClusterLogs(events []interface{}) []LogCluster {
 		clusters = append(clusters, *clusterMap[msg])
 	}
 
-	// Sort by count descending
+	// Sort by count descending, breaking ties by Pattern. Without a tiebreaker,
+	// sort.Slice is not stable and clusters with equal counts fall back to
+	// their position in `order` (i.e. first-encounter order in the input
+	// slice) - so the same set of events in a different order could produce a
+	// different result slice even though the clusters themselves are
+	// identical. Breaking ties on Pattern (a property of the cluster, not of
+	// input order) makes the output fully deterministic for a given set of
+	// events regardless of the order they arrived in.
 	sort.Slice(clusters, func(i, j int) bool {
-		return clusters[i].Count > clusters[j].Count
+		if clusters[i].Count != clusters[j].Count {
+			return clusters[i].Count > clusters[j].Count
+		}
+		return clusters[i].Pattern < clusters[j].Pattern
 	})
 
 	return clusters
@@ -628,27 +653,33 @@ func extractMessage(eventMap map[string]interface{}) string {
 	return ""
 }
 
-// extractSeverityName returns a human-readable severity from an event map.
-func extractSeverityName(eventMap map[string]interface{}) string {
+// extractSeverityLevel returns the raw numeric severity from an event map
+// (checking both a top-level "severity" field and a nested "metadata.severity"
+// field), or 0 if none is present/recognized.
+func extractSeverityLevel(eventMap map[string]interface{}) int {
+	if s, ok := eventMap["severity"].(float64); ok {
+		return int(s)
+	}
+	if meta, ok := eventMap["metadata"].(map[string]interface{}); ok {
+		if s, ok := meta["severity"].(float64); ok {
+			return int(s)
+		}
+	}
+	return 0
+}
+
+// severityLevelName maps a numeric severity level to its human-readable name.
+func severityLevelName(level int) string {
 	severityNames := map[int]string{
 		1: "Debug", 2: "Verbose", 3: "Info",
 		4: "Warning", 5: "Error", 6: "Critical",
 	}
 
-	var sev float64
-	if s, ok := eventMap["severity"].(float64); ok {
-		sev = s
-	} else if meta, ok := eventMap["metadata"].(map[string]interface{}); ok {
-		if s, ok := meta["severity"].(float64); ok {
-			sev = s
-		}
-	}
-
-	if name, ok := severityNames[int(sev)]; ok {
+	if name, ok := severityNames[level]; ok {
 		return name
 	}
-	if sev > 0 {
-		return fmt.Sprintf("Level %d", int(sev))
+	if level > 0 {
+		return fmt.Sprintf("Level %d", level)
 	}
 	return "Unknown"
 }
