@@ -17,13 +17,13 @@ This project provides two complementary ways to work with IBM Cloud Logs through
 
 | | MCP Server | Agent Skills |
 |---|---|---|
-| **What** | Running Go server with 88 tools via JSON-RPC | 8 portable instruction bundles (markdown + JSON) |
+| **What** | Running Go server with 96 tools via JSON-RPC | 8 portable instruction bundles (markdown + JSON) |
 | **When** | Real-time log queries, CRUD operations, live monitoring | Query writing, architecture guidance, offline reference |
 | **Requires** | Binary + API key + network | Nothing — loaded on-demand by your agent |
 | **Works with** | Claude Desktop, any MCP client | Claude Code, Cursor, Gemini CLI, GitHub Copilot, 30+ agents |
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (88 tools)
+- Complete IBM Cloud Logs API coverage (96 tools)
 - 8 embedded Agent Skills following the [agentskills.io](https://agentskills.io) open standard
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
@@ -133,7 +133,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-88 tools organized by functionality:
+96 tools organized by functionality:
 
 #### Query Operations (5 tools)
 - `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
@@ -284,7 +284,7 @@ The binary embeds 8 Agent Skills following the [agentskills.io](https://agentski
 | `ibm-cloud-logs-cost-optimization` | TCO policies, data tier selection, and Events-to-Metrics |
 | `ibm-cloud-logs-ingestion` | Log ingestion, parsing rules, and enrichments |
 | `ibm-cloud-logs-access-control` | Data access rules, audit logging, and compliance patterns |
-| `ibm-cloud-logs-api-reference` | Full API reference for all 88 tool endpoints |
+| `ibm-cloud-logs-api-reference` | Full API reference for all 96 tool endpoints |
 
 ### Installing Skills
 
@@ -468,7 +468,7 @@ make lint      # Run linters
 │   ├── auth/                  # IBM Cloud IAM authentication
 │   ├── client/                # HTTP client with retry/rate limiting
 │   ├── config/                # Configuration management
-│   ├── tools/                 # MCP tool implementations (88 tools)
+│   ├── tools/                 # MCP tool implementations (96 tools)
 │   ├── skills/                # Skill installer
 │   ├── server/                # MCP server
 │   ├── health/                # Health checks
