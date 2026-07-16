@@ -62,6 +62,11 @@ func NewMockClient() *MockClient {
 
 // Do executes a mock API request. It records the request and returns the
 // configured response.
+//
+// To match the real client's contract, a queued or default response with
+// StatusCode >= 400 is returned alongside the same classified error
+// Client.Do would produce. Use DoFunc for full manual control over the
+// (response, error) pair.
 func (m *MockClient) Do(ctx context.Context, req *Request) (*Response, error) {
 	doFunc, resp, respErr, defaultResp, defaultErr := m.popRequest(req)
 
@@ -77,14 +82,23 @@ func (m *MockClient) Do(ctx context.Context, req *Request) (*Response, error) {
 
 	// Queued response.
 	if resp != nil {
-		return resp, nil
+		return resp, classifyIfError(resp)
 	}
 
 	// Defaults.
 	if defaultErr != nil {
 		return nil, defaultErr
 	}
-	return defaultResp, nil
+	return defaultResp, classifyIfError(defaultResp)
+}
+
+// classifyIfError mirrors Client.Do's final-response handling: non-2xx
+// statuses yield a classified error alongside the response.
+func classifyIfError(resp *Response) error {
+	if resp == nil || resp.StatusCode < 400 {
+		return nil
+	}
+	return classifyResponseError(resp)
 }
 
 // popRequest records the request and extracts the next response under the lock.

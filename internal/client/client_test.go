@@ -616,6 +616,41 @@ func TestCallerAuthorizationHeaderCannotClobberAuthentication(t *testing.T) {
 	assert.Equal(t, "Bearer test-token", capturedAuth)
 }
 
+// TestCallerHeadersCannotClobberIdempotencyKey verifies that caller-supplied
+// Idempotency-Key / X-Request-ID headers are rejected: the retry machinery
+// depends on the RequestID-derived Idempotency-Key staying stable across
+// attempts, so callers must use Request.RequestID, not raw headers.
+func TestCallerHeadersCannotClobberIdempotencyKey(t *testing.T) {
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method:    "POST",
+		Path:      "/v1/alerts",
+		RequestID: "real-request-id",
+		Headers: map[string]string{
+			"Idempotency-Key": "attacker-key",
+			"X-Request-ID":    "spoofed-id",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "real-request-id", capturedHeaders.Get("Idempotency-Key"),
+		"caller headers must not clobber the RequestID-derived Idempotency-Key")
+	assert.Equal(t, "real-request-id", capturedHeaders.Get("X-Request-ID"),
+		"caller headers must not clobber the RequestID-derived X-Request-ID")
+}
+
 // TestCustomHeadersAppliedBeforeAuthentication verifies that non-Authorization
 // caller headers are still applied (ordering change should not drop them).
 func TestCustomHeadersAppliedBeforeAuthentication(t *testing.T) {

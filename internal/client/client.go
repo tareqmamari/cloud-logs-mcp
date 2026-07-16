@@ -419,17 +419,34 @@ func (c *Client) doRequest(ctx context.Context, req *Request) (*Response, error)
 	return c.executeRequest(httpReq, req, requestURL)
 }
 
+// protectedHeaders are headers callers must not supply via Request.Headers:
+// Authorization is owned by the authenticator, and Idempotency-Key /
+// X-Request-ID are derived from Request.RequestID — the retry machinery
+// depends on the key staying stable across attempts.
+var protectedHeaders = []string{"Authorization", "Idempotency-Key", "X-Request-ID"}
+
 // applyCallerHeaders sets caller-supplied headers on httpReq, applied before
-// authentication so they can be overridden by it. Authorization is skipped
-// entirely: a caller must never be able to supply its own credentials.
+// authentication so they can be overridden by it. Protected headers are
+// skipped entirely: a caller must never be able to supply its own
+// credentials or clobber the client-managed idempotency headers.
 func (c *Client) applyCallerHeaders(httpReq *http.Request, req *Request) {
 	for k, v := range req.Headers {
-		if strings.EqualFold(k, "Authorization") {
-			c.logger.Warn("Ignoring caller-supplied Authorization header", zap.String("header", k))
+		if isProtectedHeader(k) {
+			c.logger.Warn("Ignoring caller-supplied protected header", zap.String("header", k))
 			continue
 		}
 		httpReq.Header.Set(k, v)
 	}
+}
+
+// isProtectedHeader reports whether name is a header callers may not set.
+func isProtectedHeader(name string) bool {
+	for _, h := range protectedHeaders {
+		if strings.EqualFold(name, h) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) applyRateLimit(ctx context.Context) error {

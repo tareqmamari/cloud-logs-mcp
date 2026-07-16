@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/cache"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tracing"
 )
 
@@ -109,33 +111,26 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 				Message:    fmt.Sprintf("Request timed out: %v", ctx.Err()),
 			}
 		}
+		// The client classifies non-2xx statuses as *mcperrors.StructuredError
+		// (returned alongside the response). Translate it into *tools.APIError
+		// so downstream errors.As matching (HandleGetError/HandleQueryError:
+		// IsNotFound/IsTimeout handling, list_* suggestions, request IDs)
+		// keeps working exactly as it did when this method built the APIError
+		// from the raw status code itself.
+		var structuredErr *mcperrors.StructuredError
+		if errors.As(err, &structuredErr) && structuredErr.StatusCode >= 400 {
+			apiErr := newAPIErrorFromResponse(structuredErr.StatusCode, resp)
+			tracing.RecordError(span, apiErr)
+			return nil, apiErr
+		}
 		return nil, fmt.Errorf("API request failed: %w", err)
 	}
 
-	// Extract request ID from response headers (IBM Cloud uses X-Request-ID or X-Correlation-ID)
-	requestID := resp.Headers.Get("X-Request-ID")
-	if requestID == "" {
-		requestID = resp.Headers.Get("X-Correlation-ID")
-	}
-	if requestID == "" {
-		requestID = resp.Headers.Get("X-Global-Transaction-ID")
-	}
-
-	// Check for error status codes
+	// Check for error status codes. The real client returns non-2xx statuses
+	// as errors (handled above); this branch remains for Doer implementations
+	// that surface the raw response without a classified error.
 	if resp.StatusCode >= 400 {
-		var apiError map[string]interface{}
-		var errorMessage string
-		if err := json.Unmarshal(resp.Body, &apiError); err == nil {
-			errorMessage = fmt.Sprintf("API error (HTTP %d): %v", resp.StatusCode, apiError)
-		} else {
-			errorMessage = fmt.Sprintf("API error (HTTP %d): %s", resp.StatusCode, string(resp.Body))
-		}
-		apiErr := &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    errorMessage,
-			RequestID:  requestID,
-			Details:    apiError,
-		}
+		apiErr := newAPIErrorFromResponse(resp.StatusCode, resp)
 		tracing.RecordError(span, apiErr)
 		return nil, apiErr
 	}
@@ -158,6 +153,38 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 	}
 
 	return result, nil
+}
+
+// newAPIErrorFromResponse builds a *tools.APIError for a non-2xx status,
+// pulling the message/details from the response body and the request ID from
+// the response headers when a response is available.
+func newAPIErrorFromResponse(statusCode int, resp *client.Response) *APIError {
+	apiErr := &APIError{
+		StatusCode: statusCode,
+		Message:    fmt.Sprintf("API error (HTTP %d)", statusCode),
+	}
+	if resp == nil {
+		return apiErr
+	}
+
+	// Extract request ID from response headers (IBM Cloud uses X-Request-ID or X-Correlation-ID)
+	requestID := resp.Headers.Get("X-Request-ID")
+	if requestID == "" {
+		requestID = resp.Headers.Get("X-Correlation-ID")
+	}
+	if requestID == "" {
+		requestID = resp.Headers.Get("X-Global-Transaction-ID")
+	}
+	apiErr.RequestID = requestID
+
+	var apiError map[string]interface{}
+	if err := json.Unmarshal(resp.Body, &apiError); err == nil {
+		apiErr.Message = fmt.Sprintf("API error (HTTP %d): %v", statusCode, apiError)
+		apiErr.Details = apiError
+	} else {
+		apiErr.Message = fmt.Sprintf("API error (HTTP %d): %s", statusCode, string(resp.Body))
+	}
+	return apiErr
 }
 
 // SSEParseResult holds the classified output from parsing an SSE response.

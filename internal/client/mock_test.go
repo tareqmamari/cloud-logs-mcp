@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 )
 
 func TestMockClient_DefaultResponse(t *testing.T) {
@@ -40,9 +42,21 @@ func TestMockClient_QueuedResponses(t *testing.T) {
 		t.Errorf("first response StatusCode = %d, want 200", resp1.StatusCode)
 	}
 
+	// A queued 4xx response must match the real client's contract: the
+	// response is returned alongside a classified, errors.As-matchable error.
 	resp2, err := m.Do(ctx, &Request{Method: "GET", Path: "/v1/alerts/2"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("queued 404 should return a classified error like the real client does")
+	}
+	var structuredErr *mcperrors.StructuredError
+	if !errors.As(err, &structuredErr) {
+		t.Fatalf("404 error should be errors.As-matchable to *mcperrors.StructuredError, got %T: %v", err, err)
+	}
+	if structuredErr.StatusCode != 404 {
+		t.Errorf("classified error StatusCode = %d, want 404", structuredErr.StatusCode)
+	}
+	if resp2 == nil {
+		t.Fatal("response should be returned alongside the classified error")
 	}
 	if resp2.StatusCode != 404 {
 		t.Errorf("second response StatusCode = %d, want 404", resp2.StatusCode)
