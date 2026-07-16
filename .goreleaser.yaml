@@ -124,6 +124,7 @@ release:
     logs-mcp-server skills install            # user-level (~/.agents/skills/)
     logs-mcp-server skills install --project  # project-level (./.agents/skills/)
     logs-mcp-server skills list               # see all available skills
+    logs-mcp-server skills remove             # remove installed skills
     ```
 
     See the [README](https://github.com/tareqmamari/cloud-logs-mcp#installation) for full setup instructions including Claude Desktop configuration.
@@ -166,6 +167,8 @@ brews:
         logs-mcp-server skills list               # list available skills
         logs-mcp-server skills install             # reinstall to ~/.agents/skills/
         logs-mcp-server skills install --project   # install to current project
+        logs-mcp-server skills remove              # remove from ~/.agents/skills/
+        logs-mcp-server skills remove --project    # remove from current project
 
       For more information, see: https://github.com/tareqmamari/cloud-logs-mcp
 
