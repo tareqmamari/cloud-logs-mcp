@@ -203,6 +203,132 @@ func TestSeverityToInt(t *testing.T) {
 	}
 }
 
+// TestEscapeDataPrimeString locks down escapeDataPrimeString against the
+// adversarial payloads called out for this fix: a trailing backslash, an
+// embedded escaped quote, a quote-breakout attempt, and control-character
+// (newline) injection. The original implementation only escaped "'", so a
+// trailing backslash would "consume" the following escaped quote and a raw
+// newline could smuggle a second query statement.
+func TestEscapeDataPrimeString(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "trailing backslash is escaped so it can't consume the closing quote",
+			input: `foo\`,
+			want:  `foo\\`,
+		},
+		{
+			name:  "backslash is escaped before quote is escaped",
+			input: `\'`,
+			want:  `\\\'`,
+		},
+		{
+			name:  "quote breakout attempt keeps quotes escaped",
+			input: `x' || true || '`,
+			want:  `x\' || true || \'`,
+		},
+		{
+			name:  "newline is stripped, not passed through",
+			input: "line1\nline2",
+			want:  "line1line2",
+		},
+		{
+			name:  "tab and other control characters are stripped",
+			input: "a\tb\rc\x00d",
+			want:  "abcd",
+		},
+		{
+			name:  "plain string is unchanged",
+			input: "hello world",
+			want:  "hello world",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := escapeDataPrimeString(tt.input)
+			if got != tt.want {
+				t.Errorf("escapeDataPrimeString(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// scanDataPrimeStringLiteral parses a single-quoted DataPrime string literal
+// starting at s[0] == '\”, honoring backslash escapes the same way a
+// DataPrime parser would. It returns the decoded literal value and whatever
+// text follows the closing quote. This lets tests assert that an escaped,
+// attacker-controlled value stays confined to a single string literal instead
+// of breaking out into query syntax.
+func scanDataPrimeStringLiteral(t *testing.T, s string) (decoded, rest string) {
+	t.Helper()
+	if len(s) == 0 || s[0] != '\'' {
+		t.Fatalf("expected literal to start with a quote: %q", s)
+	}
+	var b strings.Builder
+	i := 1
+	for i < len(s) {
+		c := s[i]
+		if c == '\\' {
+			if i+1 >= len(s) {
+				t.Fatalf("unterminated escape in literal: %q", s)
+			}
+			b.WriteByte(s[i+1])
+			i += 2
+			continue
+		}
+		if c == '\'' {
+			return b.String(), s[i+1:]
+		}
+		b.WriteByte(c)
+		i++
+	}
+	t.Fatalf("literal was never closed: %q", s)
+	return "", ""
+}
+
+// TestBuildDataPrimeQuery_InjectionPayloadsStayInsideLiteral is an end-to-end
+// regression test: it builds a real DataPrime query through BuildQueryTool
+// with adversarial text_search payloads and verifies, via a
+// backslash-aware scanner, that the payload decodes back to its original
+// value and the query is not left with dangling injected syntax after the
+// literal closes.
+func TestBuildDataPrimeQuery_InjectionPayloadsStayInsideLiteral(t *testing.T) {
+	tool := NewBuildQueryTool(nil, zap.NewNop())
+
+	payloads := []string{
+		`foo\`,
+		`\'`,
+		`x' || true || '`,
+		"line1\nline2",
+	}
+
+	for _, payload := range payloads {
+		t.Run(payload, func(t *testing.T) {
+			query := tool.buildDataPrimeQuery(payload, "", nil, nil, nil, "", nil)
+
+			const prefix = "$d.message.contains("
+			idx := strings.Index(query, prefix)
+			if idx == -1 {
+				t.Fatalf("query %q missing expected contains() call", query)
+			}
+			literalStart := idx + len(prefix)
+			decoded, rest := scanDataPrimeStringLiteral(t, query[literalStart:])
+
+			wantDecoded := strings.NewReplacer("\n", "", "\r", "", "\x00", "").Replace(payload)
+			if decoded != wantDecoded {
+				t.Errorf("decoded literal = %q, want %q (payload leaked out of the string literal)", decoded, wantDecoded)
+			}
+			if !strings.HasPrefix(rest, ")") {
+				t.Errorf("expected literal to be immediately followed by ')', got %q", rest)
+			}
+		})
+	}
+}
+
 func TestToDataPrimeField(t *testing.T) {
 	tests := []struct {
 		input    string
