@@ -517,6 +517,11 @@ func TestNewWithDeps(t *testing.T) {
 				t.Errorf("Expected tool %q to be registered", name)
 			}
 		}
+
+		// Byte-identity contract: the full set of served tool names and their
+		// input schemas must match the checked-in golden contract. This is the
+		// safety net guarding the single-descriptor-registry refactor.
+		assertServedToolsMatchGolden(t, result.Tools)
 	})
 
 	t.Run("ToolCallWithMock", func(t *testing.T) {
