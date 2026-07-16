@@ -502,7 +502,7 @@ func filterBySeverity(result map[string]interface{}, minSeverity float64) map[st
 func formatContentToString(result interface{}) string {
 	// Use reflection to extract text content from MCP CallToolResult
 	v := reflect.ValueOf(result)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
@@ -518,7 +518,7 @@ func formatContentToString(result interface{}) string {
 		if item.Kind() == reflect.Interface {
 			item = item.Elem()
 		}
-		if item.Kind() == reflect.Ptr {
+		if item.Kind() == reflect.Pointer {
 			item = item.Elem()
 		}
 		if item.Kind() == reflect.Struct {
