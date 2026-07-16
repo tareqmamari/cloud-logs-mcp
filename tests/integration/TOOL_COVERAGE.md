@@ -273,5 +273,5 @@ func TestResourceCRUD(t *testing.T) {
 
 - **API Structures:** [API_STRUCTURES.md](API_STRUCTURES.md)
 - **Terraform Examples:** https://github.com/IBM-Cloud/terraform-provider-ibm/tree/master/examples/ibm-logs
-- **API Spec:** [logs-service-api.json](../../logs-service-api.json)
+- **API Spec:** [logs-service-api.json](../../api/logs-service-api.json)
 - **Passing Tests:** [alerts_test.go](alerts_test.go)

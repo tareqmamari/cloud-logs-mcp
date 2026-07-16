@@ -224,7 +224,7 @@ See [.github/workflows/integration-tests.yml.example](../../.github/workflows/in
 - Read the full [Integration Tests README](README.md)
 - Check [Terraform examples](https://github.com/IBM-Cloud/terraform-provider-ibm/tree/master/examples/ibm-logs)
 - Review [IBM Cloud Logs API docs](https://cloud.ibm.com/apidocs/logs-service-api)
-- Explore the [API specification](../../logs-service-api.json)
+- Explore the [API specification](../../api/logs-service-api.json)
 
 ## Need Help?
 
