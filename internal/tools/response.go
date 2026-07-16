@@ -5,10 +5,44 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 )
+
+// truncateBytesUTF8Safe truncates b to at most maxLen bytes, backing off to
+// the nearest preceding rune boundary so a multi-byte UTF-8 character is
+// never split in half. A raw b[:maxLen] slice can land mid-rune, producing
+// invalid UTF-8 (and, when b holds JSON text, a corrupted document).
+func truncateBytesUTF8Safe(b []byte, maxLen int) []byte {
+	if maxLen <= 0 {
+		return nil
+	}
+	if len(b) <= maxLen {
+		return b
+	}
+	end := maxLen
+	for end > 0 && !utf8.RuneStart(b[end]) {
+		end--
+	}
+	return b[:end]
+}
+
+// truncateUTF8Safe is the string counterpart of truncateBytesUTF8Safe.
+func truncateUTF8Safe(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	end := maxLen
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return s[:end]
+}
 
 // Response size limits
 const (
@@ -270,7 +304,7 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 			responseText = string(truncatedBytes)
 		} else {
 			// Fallback: hard truncate the JSON string
-			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
+			responseText = string(truncateBytesUTF8Safe(jsonBytes, MaxResultSize-TruncationBufferSize))
 		}
 
 		totalItems := countItems(result)
@@ -896,7 +930,7 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 		if truncatedBytes != nil {
 			responseText = string(truncatedBytes)
 		} else {
-			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
+			responseText = string(truncateBytesUTF8Safe(jsonBytes, MaxResultSize-TruncationBufferSize))
 		}
 
 		totalItems := countItems(result)
@@ -1264,7 +1298,7 @@ func ensureResponseLimit(text string, logger *zap.Logger) string {
 	}
 
 	// Hard truncate and add warning
-	truncated := text[:FinalResponseLimit-TruncationBufferSize]
+	truncated := truncateUTF8Safe(text, FinalResponseLimit-TruncationBufferSize)
 	truncated += "\n\n---\n⚠️ **Response truncated** due to size limits. Use filters or pagination to get complete results."
 	return truncated
 }
