@@ -5,6 +5,59 @@ import (
 	"testing"
 )
 
+// TestDiscoveryToolReferencesResolve guards against curated discovery
+// metadata (recommendations, chains, intents, related-tools) drifting from
+// the real registered tool names. It exists because discovery.go once
+// referenced "query_templates" everywhere the real tool is registered as
+// "get_query_templates" — a phantom name that would never resolve.
+func TestDiscoveryToolReferencesResolve(t *testing.T) {
+	realTools := map[string]bool{}
+	for _, tool := range GetAllTools(nil, nil) {
+		realTools[tool.Name()] = true
+	}
+	if len(realTools) == 0 {
+		t.Fatal("GetAllTools returned no tools; cannot validate discovery references")
+	}
+
+	registry := NewToolRegistry()
+
+	checkName := func(context, name string) {
+		t.Helper()
+		if name == "" {
+			return
+		}
+		if !realTools[name] {
+			t.Errorf("%s references unknown tool name %q (not returned by GetAllTools)", context, name)
+		}
+	}
+
+	// Baseline tool metadata keys and their RelatedTools.
+	for toolName, meta := range registry.tools {
+		checkName("registry.tools key", toolName)
+		if meta == nil {
+			continue
+		}
+		for _, related := range meta.RelatedTools {
+			checkName("registry.tools[\""+toolName+"\"].RelatedTools", related)
+		}
+	}
+
+	// Tool chains: Trigger and Sequence.
+	for _, chain := range registry.chains {
+		checkName("chain \""+chain.Name+"\".Trigger", chain.Trigger)
+		for _, name := range chain.Sequence {
+			checkName("chain \""+chain.Name+"\".Sequence", name)
+		}
+	}
+
+	// Intent -> tool name mappings.
+	for intent, names := range registry.intents {
+		for _, name := range names {
+			checkName("intents[\""+intent+"\"]", name)
+		}
+	}
+}
+
 func TestToolRegistry(t *testing.T) {
 	registry := NewToolRegistry()
 
@@ -136,7 +189,7 @@ func TestIntentMappings(t *testing.T) {
 		{
 			name:          "learn dataprime",
 			intent:        "learn dataprime",
-			expectedTools: []string{"query_templates", "build_query", "explain_query"},
+			expectedTools: []string{"get_query_templates", "build_query", "explain_query"},
 			minMatches:    2,
 		},
 		{
