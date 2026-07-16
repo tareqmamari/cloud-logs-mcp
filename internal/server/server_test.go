@@ -24,6 +24,10 @@ type mockAuthenticator struct {
 	validateErr error
 	userID      string
 	identityErr error
+
+	// block, if non-nil, is closed to unblock GetUserIdentity — used to
+	// simulate a slow/hanging identity lookup for bounded-startup tests.
+	block chan struct{}
 }
 
 func (m *mockAuthenticator) ValidateToken() error {
@@ -31,6 +35,9 @@ func (m *mockAuthenticator) ValidateToken() error {
 }
 
 func (m *mockAuthenticator) GetUserIdentity() (string, error) {
+	if m.block != nil {
+		<-m.block
+	}
 	if m.identityErr != nil {
 		return "", m.identityErr
 	}
@@ -389,10 +396,12 @@ func TestMCPProtocol_ToolCall(t *testing.T) {
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		APIKey:     "test-api-key", // pragma: allowlist secret
-		InstanceID: "test-instance",
-		Region:     "us-south",
-		HealthPort: 0, // disable health server for unit tests
+		APIKey:          "test-api-key", // pragma: allowlist secret
+		InstanceID:      "test-instance",
+		Region:          "us-south",
+		HealthPort:      0, // disable health server for unit tests
+		Timeout:         5 * time.Second,
+		ShutdownTimeout: 5 * time.Second,
 	}
 }
 
@@ -404,10 +413,37 @@ func TestNewWithDeps(t *testing.T) {
 	mock.DefaultResponse = &client.Response{StatusCode: 200, Body: []byte(`{}`)}
 	authMock := &mockAuthenticator{userID: "test-user-123"}
 
-	srv, err := server.NewWithDeps(newTestConfig(), mock, authMock, zap.NewNop(), "1.0.0-test")
+	// Capture whether the context used for the startup TCO-policy fetch
+	// (server.go's call to tools.FetchAndCacheTCOConfig) carries a deadline,
+	// proving NewWithDeps bounds it by cfg.Timeout instead of passing an
+	// unbounded context.Background(). Cleared after construction so it
+	// doesn't interfere with the tool-call subtests below.
+	var tcoFetchObserved bool
+	var tcoCtxHadDeadline bool
+	mock.DoFunc = func(ctx context.Context, req *client.Request) (*client.Response, error) {
+		if req.Path == "/v1/policies" {
+			tcoFetchObserved = true
+			_, tcoCtxHadDeadline = ctx.Deadline()
+		}
+		return &client.Response{StatusCode: 200, Body: []byte(`{"policies":[]}`)}, nil
+	}
+
+	srv, err := server.NewWithDeps(context.Background(), newTestConfig(), mock, authMock, zap.NewNop(), "1.0.0-test")
 	if err != nil {
 		t.Fatalf("NewWithDeps failed: %v", err)
 	}
+
+	// Restore normal mock behavior for the subtests below.
+	mock.DoFunc = nil
+
+	t.Run("BoundsStartupTCOFetchContext", func(t *testing.T) {
+		if !tcoFetchObserved {
+			t.Fatal("expected NewWithDeps to trigger a TCO policy fetch (GET /v1/policies)")
+		}
+		if !tcoCtxHadDeadline {
+			t.Error("expected the context passed to the startup TCO fetch to carry a deadline (bounded by cfg.Timeout), got an unbounded context")
+		}
+	})
 
 	t.Run("CreatesServer", func(t *testing.T) {
 		if srv == nil {

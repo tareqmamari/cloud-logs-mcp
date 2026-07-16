@@ -88,7 +88,11 @@ func (c *Checker) checkAuthentication() Check {
 
 	if err != nil {
 		check.Status = StatusUnhealthy
-		check.Message = fmt.Sprintf("Authentication failed: %v", err)
+		// Keep the public message generic: the underlying error can embed
+		// upstream response bodies (e.g. IAM error detail) that must not be
+		// exposed via the unauthenticated /health endpoint. The detailed
+		// error is logged server-side below instead.
+		check.Message = "Authentication failed"
 		c.logger.Error("Health check failed: authentication",
 			zap.Error(err),
 			zap.Duration("duration", check.Duration),
@@ -137,8 +141,11 @@ func (c *Checker) checkAPIConnectivity(ctx context.Context) Check {
 		// The client returned a response alongside the error: the API is
 		// reachable, it just responded with an error status (e.g. 401/404).
 		// Report the actual status instead of a misleading "unreachable".
+		// The status code alone is safe to expose; the error's formatted
+		// text can embed the upstream response body, so it is logged
+		// server-side only, not included in the public message.
 		check.Status = StatusUnhealthy
-		check.Message = fmt.Sprintf("API returned HTTP %d: %v", resp.StatusCode, err)
+		check.Message = fmt.Sprintf("API returned HTTP %d", resp.StatusCode)
 		c.logger.Warn("Health check failed: API returned error status",
 			zap.Int("status", resp.StatusCode),
 			zap.Error(err),
@@ -153,8 +160,11 @@ func (c *Checker) checkAPIConnectivity(ctx context.Context) Check {
 			zap.Duration("duration", check.Duration),
 		)
 	default:
+		// Keep the public message generic; log the detailed error
+		// server-side instead of embedding it in the unauthenticated
+		// /health response.
 		check.Status = StatusUnhealthy
-		check.Message = fmt.Sprintf("API unreachable: %v", err)
+		check.Message = "API unreachable"
 		c.logger.Warn("Health check failed: API connectivity",
 			zap.Error(err),
 			zap.Duration("duration", check.Duration),

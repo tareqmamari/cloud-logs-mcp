@@ -65,6 +65,25 @@ func newTestConfig(serverURL string) *config.Config {
 	}
 }
 
+// TestNewWithAuthenticator_UsesInjectedAuthenticator verifies that
+// NewWithAuthenticator wires the client to the caller-supplied authenticator
+// instead of constructing its own. This is what lets server wiring share a
+// single authenticator (and thus a single IAM token cache) between the API
+// client and health checks.
+func TestNewWithAuthenticator_UsesInjectedAuthenticator(t *testing.T) {
+	cfg := newTestConfig("https://example.com")
+	logger := newTestLogger()
+	authenticator := &mockAuthenticator{}
+
+	c, err := NewWithAuthenticator(cfg, logger, "test", authenticator)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+
+	if c.authenticator != Authenticator(authenticator) {
+		t.Error("expected client to use the injected authenticator instance, got a different one")
+	}
+}
+
 func TestConvertToIngressURL(t *testing.T) {
 	tests := []struct {
 		name     string

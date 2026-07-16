@@ -27,6 +27,61 @@ type Authenticator interface {
 	GetUserIdentity() (string, error)
 }
 
+// defaultStartupTimeout bounds startup I/O (user-identity lookup, TCO
+// policy fetch) when cfg.Timeout is not positive. Config.Validate requires
+// Timeout > 0 in production; this fallback only matters for callers that
+// construct a Config without validating it (e.g. tests).
+const defaultStartupTimeout = 30 * time.Second
+
+// defaultShutdownTimeout mirrors config.Load()'s ShutdownTimeout default,
+// used as a fallback when cfg.ShutdownTimeout is not positive.
+const defaultShutdownTimeout = 30 * time.Second
+
+// startupTimeout returns the bound to apply to startup I/O calls.
+func startupTimeout(cfg *config.Config) time.Duration {
+	if cfg.Timeout > 0 {
+		return cfg.Timeout
+	}
+	return defaultStartupTimeout
+}
+
+// shutdownTimeout returns the bound to apply when shutting down the health
+// server.
+func shutdownTimeout(cfg *config.Config) time.Duration {
+	if cfg.ShutdownTimeout > 0 {
+		return cfg.ShutdownTimeout
+	}
+	return defaultShutdownTimeout
+}
+
+// boundedGetUserIdentity calls authenticator.GetUserIdentity() but does not
+// wait past ctx's deadline. GetUserIdentity has no context parameter of its
+// own (it's a small, stable interface implemented by *auth.Authenticator),
+// so boundedness is enforced here by racing the call against ctx.Done() in
+// a separate goroutine. If ctx expires first, this returns ctx.Err() and the
+// goroutine is left to finish in the background — acceptable since the
+// underlying call is a single bounded-by-nature HTTP round trip to IAM, not
+// an unbounded operation.
+func boundedGetUserIdentity(ctx context.Context, authenticator Authenticator) (string, error) {
+	type result struct {
+		userID string
+		err    error
+	}
+
+	resultCh := make(chan result, 1)
+	go func() {
+		userID, err := authenticator.GetUserIdentity()
+		resultCh <- result{userID: userID, err: err}
+	}()
+
+	select {
+	case r := <-resultCh:
+		return r.userID, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
 // Server represents the MCP server
 type Server struct {
 	mcpServer     *mcp.Server
@@ -40,25 +95,30 @@ type Server struct {
 }
 
 // New creates a new MCP server instance using real IBM Cloud credentials.
-func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
-	// Create IBM Cloud Logs API client
-	apiClient, err := client.New(cfg, logger, version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API client: %w", err)
-	}
-
-	// Create authenticator for health checks
+// ctx bounds startup I/O (user-identity lookup, TCO policy fetch) — it is
+// not retained beyond NewWithDeps returning.
+func New(ctx context.Context, cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
+	// Create a single authenticator shared by the API client and health
+	// checks, so there is only one IAM token cache per process.
 	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
 
-	return NewWithDeps(cfg, apiClient, authenticator, logger, version)
+	// Create IBM Cloud Logs API client, injecting the shared authenticator.
+	apiClient, err := client.NewWithAuthenticator(cfg, logger, version, authenticator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API client: %w", err)
+	}
+
+	return NewWithDeps(ctx, cfg, apiClient, authenticator, logger, version)
 }
 
 // NewWithDeps creates a new MCP server instance with injectable dependencies.
 // This constructor enables testing with mock clients and authenticators.
-func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authenticator, logger *zap.Logger, version string) (*Server, error) {
+// ctx bounds startup I/O (user-identity lookup, TCO policy fetch) by
+// cfg.Timeout; it is not retained beyond this call returning.
+func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer, authenticator Authenticator, logger *zap.Logger, version string) (*Server, error) {
 	// Create MCP server with tools, prompts, and resources capabilities
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "IBM Cloud Logs MCP Server",
@@ -71,9 +131,12 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 
 	metricsTracker := metrics.New(logger)
 
-	// Initialize user-specific session using JWT subject from IAM token
-	// The subject uniquely identifies the user/service across sessions
-	userID, err := authenticator.GetUserIdentity()
+	// Initialize user-specific session using JWT subject from IAM token.
+	// The subject uniquely identifies the user/service across sessions.
+	// Bounded by cfg.Timeout so a hanging IAM call can't stall startup.
+	identityCtx, cancelIdentity := context.WithTimeout(ctx, startupTimeout(cfg))
+	userID, err := boundedGetUserIdentity(identityCtx, authenticator)
+	cancelIdentity()
 	if err != nil {
 		// Fall back to API key hash if token retrieval fails
 		logger.Warn("Could not get user identity from token, using API key hash",
@@ -104,9 +167,14 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 		s.healthServer = health.NewServer(healthChecker, logger, cfg.HealthPort, cfg.HealthBindAddr, cfg.MetricsEndpoint)
 	}
 
-	// Fetch and cache TCO policies for tier selection
-	// This helps tools determine which tier (archive vs frequent_search) to query
-	if err := tools.FetchAndCacheTCOConfig(context.Background(), apiClient, logger); err != nil {
+	// Fetch and cache TCO policies for tier selection. This helps tools
+	// determine which tier (archive vs frequent_search) to query. Bounded
+	// by cfg.Timeout so a hanging API call can't stall startup; failure
+	// here remains non-fatal (tools fall back to defaults).
+	tcoCtx, cancelTCO := context.WithTimeout(ctx, startupTimeout(cfg))
+	err = tools.FetchAndCacheTCOConfig(tcoCtx, apiClient, logger)
+	cancelTCO()
+	if err != nil {
 		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.Error(err))
 	}
 
@@ -374,14 +442,20 @@ func (s *Server) registerResources() {
 func (s *Server) Start(ctx context.Context) error {
 	s.logger.Info("Starting MCP server")
 
-	// Start health HTTP server in background if configured
+	// Start health HTTP server if configured. Bind synchronously first, so a
+	// bad port/bind address fails startup with a clear error instead of
+	// being swallowed in a background goroutine; only mark the server ready
+	// once the bind has actually succeeded.
 	if s.healthServer != nil {
+		ln, err := s.healthServer.Listen()
+		if err != nil {
+			return fmt.Errorf("failed to start health server: %w", err)
+		}
 		go func() {
-			if err := s.healthServer.Start(); err != nil {
+			if err := s.healthServer.Serve(ln); err != nil {
 				s.logger.Error("Health server error", zap.Error(err))
 			}
 		}()
-		// Mark as ready once server is starting
 		s.healthServer.SetReady(true)
 	}
 
@@ -399,7 +473,7 @@ func (s *Server) Start(ctx context.Context) error {
 		// Shutdown health server
 		if s.healthServer != nil {
 			s.healthServer.SetReady(false)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout(s.config))
 			defer cancel()
 			if err := s.healthServer.Shutdown(shutdownCtx); err != nil {
 				s.logger.Error("Failed to shutdown health server", zap.Error(err))
