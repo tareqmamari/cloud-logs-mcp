@@ -133,18 +133,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-96 tools organized by functionality:
+96 tools organized by functionality (categories mirror the `ToolCategory`
+values in [`internal/tools/descriptors.go`](internal/tools/descriptors.go),
+the single source of truth for the registered tool set):
 
-#### Query Operations (5 tools)
-- `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
+#### Query & Analysis (11 tools)
+- `query_logs`, `build_query`, `validate_query`, `estimate_query_cost`
+- `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
+- `get_query_templates`, `get_dataprime_reference`, `get_audit_log`
+
+#### AI Helpers (2 tools)
+- `explain_query` - explain a DataPrime query in plain language
+- `suggest_alert` - **SRE-grade alert recommendations** (see [Alert Intelligence](#alert-intelligence) below)
 
 #### Log Ingestion (1 tool)
 - `ingest_logs`
 
-#### Alert Management (11 tools)
+#### Alert Management (10 tools)
 - `list_alerts`, `get_alert`, `create_alert`, `update_alert`, `delete_alert`
 - `list_alert_definitions`, `get_alert_definition`, `create_alert_definition`, `update_alert_definition`, `delete_alert_definition`
-- `suggest_alert` - **SRE-grade alert recommendations** (see [Alert Intelligence](#alert-intelligence) below)
 
 #### Dashboard Management (14 tools)
 - `list_dashboards`, `get_dashboard`, `create_dashboard`, `update_dashboard`, `delete_dashboard`
@@ -167,13 +174,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 - `list_data_access_rules`, `get_data_access_rule`, `create_data_access_rule`, `update_data_access_rule`, `delete_data_access_rule`
 
 #### Enrichments (5 tools)
-- `list_enrichments`, `get_enrichment`, `create_enrichment`, `update_enrichment`, `delete_enrichment`
+- `list_enrichments`, `get_enrichments`, `create_enrichment`, `update_enrichment`, `delete_enrichment`
 
-#### Streams (5 tools)
+#### Streams (9 tools)
 - `list_streams`, `get_stream`, `create_stream`, `update_stream`, `delete_stream`
+- `get_event_stream_targets`, `create_event_stream_target`, `update_event_stream_target`, `delete_event_stream_target`
 
-#### Views (5 tools)
+#### Views (10 tools)
 - `list_views`, `get_view`, `create_view`, `replace_view`, `delete_view`
+- `list_view_folders`, `get_view_folder`, `create_view_folder`, `replace_view_folder`, `delete_view_folder`
+
+#### Data Usage & Cost (2 tools)
+- `export_data_usage`, `update_data_usage_metrics_export_status`
+
+#### Workflow & Health (2 tools)
+- `health_check`, `investigate_incident`
+
+#### Discovery & Meta (5 tools)
+- `discover_tools`, `describe_tools`, `search_tools`, `list_tool_categories`, `session_context`
+
+Subtotals: 11 (Query & Analysis) + 2 (AI Helpers) + 1 (Log Ingestion) + 10 (Alert Management) + 14 (Dashboard Management) + 5 (Policies) + 5 (Webhooks) + 5 (E2M) + 5 (Rule Groups) + 5 (Data Access Rules) + 5 (Enrichments) + 9 (Streams) + 10 (Views) + 2 (Data Usage & Cost) + 2 (Workflow & Health) + 5 (Discovery & Meta) = **96**, matching `GetToolCount()`. Every tool above appears in exactly one category.
 
 ### Resources
 
