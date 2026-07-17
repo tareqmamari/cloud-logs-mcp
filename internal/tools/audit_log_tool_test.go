@@ -135,6 +135,85 @@ func TestGetAuditLogTool_Execute_MasksErrors(t *testing.T) {
 	}
 }
 
+// TestToAuditLogEntryView_MasksResourceResourceIDAndMetadata guards Fix 4:
+// toAuditLogEntryView previously only masked ErrorMsg, leaving Resource,
+// ResourceID, and each Metadata value to pass through unmasked. No current
+// writer (LogToolExecution) populates those fields, so this was inert
+// today - but the code's own comment cites "masking as a hard boundary", so
+// it must hold defensively for any future writer. InputHash is a hash, not
+// sensitive free text, and must be left untouched; Metadata keys are field
+// names and must also be left untouched (only values are masked).
+func TestToAuditLogEntryView_MasksResourceResourceIDAndMetadata(t *testing.T) {
+	const (
+		secretPayload = "abcdefghij1234567890secretvalue" // pragma: allowlist secret
+		secret        = "api_key=" + secretPayload        // pragma: allowlist secret
+	)
+
+	entry := audit.Entry{
+		Timestamp:  time.Now(),
+		Tool:       "query_logs",
+		Operation:  "query",
+		Resource:   secret,
+		ResourceID: secret,
+		Success:    true,
+		InputHash:  "deadbeef",
+		Metadata: map[string]interface{}{
+			"note":      secret,
+			"other":     "harmless value",
+			"count":     42,
+			"api_key":   secret, // key itself must be left alone; only the value is masked
+			"api_token": secret,
+		},
+	}
+
+	view := toAuditLogEntryView(entry)
+
+	if strings.Contains(view.Resource, secretPayload) {
+		t.Errorf("Resource leaks raw secret: %q", view.Resource)
+	}
+	if !strings.Contains(view.Resource, "REDACTED") {
+		t.Errorf("expected Resource to be masked, got: %q", view.Resource)
+	}
+
+	if strings.Contains(view.ResourceID, secretPayload) {
+		t.Errorf("ResourceID leaks raw secret: %q", view.ResourceID)
+	}
+	if !strings.Contains(view.ResourceID, "REDACTED") {
+		t.Errorf("expected ResourceID to be masked, got: %q", view.ResourceID)
+	}
+
+	if view.InputHash != "deadbeef" {
+		t.Errorf("InputHash should be left untouched, got: %q", view.InputHash)
+	}
+
+	for _, key := range []string{"note", "api_key", "api_token"} {
+		v, ok := view.Metadata[key]
+		if !ok {
+			t.Fatalf("expected Metadata key %q to survive", key)
+		}
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("Metadata[%q] is not a string: %T", key, v)
+		}
+		if strings.Contains(s, secretPayload) {
+			t.Errorf("Metadata[%q] leaks raw secret: %q", key, s)
+		}
+		if !strings.Contains(s, "REDACTED") {
+			t.Errorf("expected Metadata[%q] to be masked, got: %q", key, s)
+		}
+	}
+
+	if _, ok := view.Metadata["api_key"]; !ok {
+		t.Error("Metadata key 'api_key' should be left untouched even though its value is masked")
+	}
+	if view.Metadata["other"] != "harmless value" {
+		t.Errorf("Metadata[\"other\"] = %v, want unchanged %q", view.Metadata["other"], "harmless value")
+	}
+	if view.Metadata["count"] != 42 {
+		t.Errorf("Metadata[\"count\"] = %v, want unchanged non-string value 42", view.Metadata["count"])
+	}
+}
+
 // TestGetAuditLogTool_Execute_NoLoggerInContext verifies the honest-fallback
 // path: when no audit logger is available (e.g. audit logging disabled),
 // Execute must say so rather than returning entries or the old always-on

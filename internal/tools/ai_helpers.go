@@ -928,24 +928,53 @@ type auditLogResponse struct {
 // it, so this is a defensive second pass - SanitizeError is idempotent on
 // already-masked text - matching how the tool-execution chokepoint treats
 // masking as a hard boundary rather than trusting a single call site.
+//
+// Resource, ResourceID, and each Metadata value get the same defensive
+// treatment: no current writer populates them, so this is inert today, but
+// masking-as-a-hard-boundary means the view must not trust that a future
+// writer will always pre-mask them itself. Metadata keys are field names
+// (not user/API data) and are left untouched; only values are masked, and
+// only string values - a non-string value (e.g. a count) can't carry masked
+// text and is passed through unchanged. InputHash is a hash of the input,
+// not free text, and is intentionally left untouched.
 func toAuditLogEntryView(e audit.Entry) auditLogEntryView {
 	view := auditLogEntryView{
 		Timestamp:   e.Timestamp.UTC().Format("2006-01-02T15:04:05.000Z07:00"),
 		TraceID:     e.TraceID,
 		Tool:        e.Tool,
 		Operation:   e.Operation,
-		Resource:    e.Resource,
-		ResourceID:  e.ResourceID,
+		Resource:    security.MaskSensitiveData(e.Resource),
+		ResourceID:  security.MaskSensitiveData(e.ResourceID),
 		Success:     e.Success,
 		DurationMS:  e.Duration.Milliseconds(),
 		InputHash:   e.InputHash,
 		ResultCount: e.ResultCount,
-		Metadata:    e.Metadata,
+		Metadata:    maskMetadataValues(e.Metadata),
 	}
 	if e.ErrorMsg != "" {
 		view.ErrorMsg = security.MaskSensitiveData(e.ErrorMsg)
 	}
 	return view
+}
+
+// maskMetadataValues returns a copy of metadata with every string value
+// masked via security.MaskSensitiveData. Keys are left untouched (they're
+// field names, not data); non-string values are copied through unchanged
+// since MaskSensitiveData operates on strings. Returns nil for nil input so
+// the "omitempty" json tag on auditLogEntryView.Metadata still applies.
+func maskMetadataValues(metadata map[string]interface{}) map[string]interface{} {
+	if metadata == nil {
+		return nil
+	}
+	masked := make(map[string]interface{}, len(metadata))
+	for k, v := range metadata {
+		if s, ok := v.(string); ok {
+			masked[k] = security.MaskSensitiveData(s)
+		} else {
+			masked[k] = v
+		}
+	}
+	return masked
 }
 
 // Execute returns recent audit entries from the server's in-memory audit
