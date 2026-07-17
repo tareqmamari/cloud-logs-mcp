@@ -65,9 +65,11 @@ func shutdownTimeout(cfg *config.Config) time.Duration {
 // own (it's a small, stable interface implemented by *auth.Authenticator),
 // so boundedness is enforced here by racing the call against ctx.Done() in
 // a separate goroutine. If ctx expires first, this returns ctx.Err() and the
-// goroutine is left to finish in the background — acceptable since the
-// underlying call is a single bounded-by-nature HTTP round trip to IAM, not
-// an unbounded operation.
+// goroutine is left to finish in the background. That leaked goroutine is
+// now itself bounded rather than potentially-forever: auth.New gives the
+// underlying IAM authenticator's HTTP client an explicit timeout
+// (defaultIAMClientTimeout), so the token round trip - and therefore this
+// goroutine - always returns within that timeout even if IAM hangs.
 func boundedGetUserIdentity(ctx context.Context, authenticator Authenticator) (string, error) {
 	type result struct {
 		userID string
