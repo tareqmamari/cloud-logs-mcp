@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
@@ -577,6 +578,21 @@ func (t *CreateDashboardTool) Metadata() *ToolMetadata {
 }
 
 // ensureRequiredDashboardFields adds missing required fields to dashboard structure
+// ensureUUIDID makes sure m carries an API-acceptable id of the shape
+// {"id": {"value": "<uuid>"}}. The live API rejects non-UUID id values
+// (e.g. "section-1"), so missing or invalid ids are replaced with a
+// generated UUID.
+func ensureUUIDID(m map[string]interface{}) {
+	if idMap, ok := m["id"].(map[string]interface{}); ok {
+		if val, ok := idMap["value"].(string); ok {
+			if _, err := uuid.Parse(val); err == nil {
+				return
+			}
+		}
+	}
+	m["id"] = map[string]interface{}{"value": uuid.NewString()}
+}
+
 func ensureRequiredDashboardFields(layout interface{}) {
 	layoutMap, ok := layout.(map[string]interface{})
 	if !ok {
@@ -593,6 +609,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 		if !ok {
 			continue
 		}
+		ensureUUIDID(sectionMap)
 
 		rows, ok := sectionMap["rows"].([]interface{})
 		if !ok {
@@ -604,6 +621,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 			if !ok {
 				continue
 			}
+			ensureUUIDID(rowMap)
 
 			widgets, ok := rowMap["widgets"].([]interface{})
 			if !ok {
@@ -615,6 +633,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 				if !ok {
 					continue
 				}
+				ensureUUIDID(widgetMap)
 
 				// Ensure widget has appearance.width
 				if _, hasAppearance := widgetMap["appearance"]; !hasAppearance {
@@ -649,6 +668,85 @@ func ensureRequiredDashboardFields(layout interface{}) {
 			}
 		}
 	}
+}
+
+// aggregationsNeedingField are logs-aggregation types the API requires an
+// observation_field for (a value aggregation is meaningless without one).
+var aggregationsNeedingField = map[string]bool{
+	"average": true, "sum": true, "min": true, "max": true,
+	"percentile": true, "count_distinct": true,
+}
+
+// validateDashboardStructure checks constraints the live API enforces on
+// dashboard layouts that JSON shape alone does not capture: line-chart logs
+// queries must carry at least one aggregation, and value aggregations must
+// name an observation_field.
+func validateDashboardStructure(layout interface{}) []string {
+	var errs []string
+	layoutMap, ok := layout.(map[string]interface{})
+	if !ok {
+		return errs
+	}
+	sections, _ := layoutMap["sections"].([]interface{})
+	for si, section := range sections {
+		sectionMap, ok := section.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rows, _ := sectionMap["rows"].([]interface{})
+		for ri, row := range rows {
+			rowMap, ok := row.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			widgets, _ := rowMap["widgets"].([]interface{})
+			for wi, widget := range widgets {
+				widgetMap, ok := widget.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				definition, _ := widgetMap["definition"].(map[string]interface{})
+				lineChart, ok := definition["line_chart"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				queryDefs, _ := lineChart["query_definitions"].([]interface{})
+				for qi, qd := range queryDefs {
+					qdMap, ok := qd.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					query, _ := qdMap["query"].(map[string]interface{})
+					logs, ok := query["logs"].(map[string]interface{})
+					if !ok {
+						continue
+					}
+					at := fmt.Sprintf("sections[%d].rows[%d].widgets[%d].query_definitions[%d]", si, ri, wi, qi)
+					aggs, _ := logs["aggregations"].([]interface{})
+					if len(aggs) == 0 {
+						errs = append(errs, at+": line-chart logs query needs at least one aggregation (e.g. {\"count\": {}})")
+						continue
+					}
+					for ai, agg := range aggs {
+						aggMap, ok := agg.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						for kind, body := range aggMap {
+							if !aggregationsNeedingField[kind] {
+								continue
+							}
+							bodyMap, _ := body.(map[string]interface{})
+							if _, has := bodyMap["observation_field"]; !has {
+								errs = append(errs, fmt.Sprintf("%s.aggregations[%d]: %q aggregation requires an observation_field", at, ai, kind))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return errs
 }
 
 // ensureLineChartFields ensures line chart has all required fields
@@ -805,9 +903,16 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// Ensure all required fields are present in the layout
 	ensureRequiredDashboardFields(layout)
 
+	// Check structural constraints the API enforces beyond JSON shape
+	structureErrors := validateDashboardStructure(layout)
+	if len(structureErrors) > 0 && !dryRun {
+		return NewToolResultError(fmt.Sprintf("Dashboard layout has %d structural error(s). Please fix them before creating the dashboard:\n- %s",
+			len(structureErrors), joinErrors(structureErrors))), nil
+	}
+
 	// Extract queries with syntax information for better validation
 	queryInfos := extractQueriesWithInfo(layout, "layout")
-	var invalidQueries []string
+	invalidQueries := structureErrors
 	var validatedQueries []string
 
 	if len(queryInfos) > 0 {

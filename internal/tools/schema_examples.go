@@ -37,47 +37,96 @@ var ApplicationNameExamples = []interface{}{
 	"user-service",
 }
 
-// AlertDefinitionExample provides a complete alert definition example
+// AlertDefinitionExample provides a complete alert definition example.
+// The shape mirrors a payload verified against the live v3 API: the type
+// config lives under a key matching the type name, priorities are lowercase
+// (p1..p4, p5_or_unspecified), and enums carry the *_or_unspecified variants.
 var AlertDefinitionExample = map[string]interface{}{
 	"name":        "High Error Rate Alert",
-	"description": "Triggers when error rate exceeds threshold",
+	"description": "Fires when error logs exceed 10% of total logs over 5 minutes",
 	"enabled":     true,
-	"priority":    "P2",
-	"type":        "logs_threshold",
-	"condition": map[string]interface{}{
-		"threshold": map[string]interface{}{
-			"condition":            "more_than",
-			"threshold":            100,
-			"time_window_seconds":  300,
-			"group_by_keys":        []string{},
-			"condition_match_type": "any",
+	"type":        "logs_ratio_threshold",
+	"logs_ratio_threshold": map[string]interface{}{
+		"condition_type": "more_than_or_unspecified",
+		"group_by_for":   "both_or_unspecified",
+		"numerator": map[string]interface{}{
+			"simple_filter": map[string]interface{}{
+				"lucene_query": "subsystemname:payment-service AND severity:error",
+			},
 		},
-	},
-	"filter": map[string]interface{}{
-		"simple_filter": map[string]interface{}{
-			"query": "severity:>=5",
+		"numerator_alias": "errors",
+		"denominator": map[string]interface{}{
+			"simple_filter": map[string]interface{}{
+				"lucene_query": "subsystemname:payment-service",
+			},
+		},
+		"denominator_alias": "total",
+		"rules": []map[string]interface{}{
+			{
+				"condition": map[string]interface{}{
+					"threshold": 0.1,
+					"time_window": map[string]interface{}{
+						"logs_ratio_time_window_specific_value": "minutes_5_or_unspecified",
+					},
+					"condition_type": "more_than_or_unspecified",
+				},
+				"override": map[string]interface{}{"priority": "p1"},
+			},
 		},
 	},
 }
 
-// DashboardExample provides a complete dashboard example
+// DashboardExample provides a complete dashboard example.
+// The shape mirrors a payload verified against the live API: every id is a
+// {"value": "<uuid>"} object (the API rejects non-UUID ids), widgets define a
+// typed chart under definition, and logs queries carry aggregations
+// (value aggregations like average also need an observation_field).
 var DashboardExample = map[string]interface{}{
 	"name":        "Application Overview",
 	"description": "Monitor application health and performance",
 	"layout": map[string]interface{}{
 		"sections": []map[string]interface{}{
 			{
-				"id": "section-1",
+				"id": map[string]interface{}{"value": "aaaaaaaa-0000-4000-8000-000000000001"},
 				"rows": []map[string]interface{}{
 					{
-						"id":     "row-1",
-						"height": 4,
+						"id":         map[string]interface{}{"value": "aaaaaaaa-0000-4000-8000-000000000002"},
+						"appearance": map[string]interface{}{"height": 19},
 						"widgets": []map[string]interface{}{
 							{
-								"id":    "widget-1",
-								"title": "Error Count",
+								"id":         map[string]interface{}{"value": "aaaaaaaa-0000-4000-8000-000000000003"},
+								"title":      "Errors by subsystem",
+								"appearance": map[string]interface{}{"width": 0},
 								"definition": map[string]interface{}{
-									"query": "source logs | filter $m.severity >= 5 | count() as errors",
+									"line_chart": map[string]interface{}{
+										"legend":  map[string]interface{}{"is_visible": true, "group_by_query": true},
+										"tooltip": map[string]interface{}{"show_labels": false, "type": "all"},
+										"query_definitions": []map[string]interface{}{
+											{
+												"id":                 "aaaaaaaa-0000-4000-8000-000000000004",
+												"name":               "errors",
+												"is_visible":         true,
+												"color_scheme":       "classic",
+												"scale_type":         "linear",
+												"series_count_limit": "20",
+												"unit":               "unspecified",
+												"resolution":         map[string]interface{}{"buckets_presented": 96},
+												"data_mode_type":     "high_unspecified",
+												"query": map[string]interface{}{
+													"logs": map[string]interface{}{
+														"lucene_query": map[string]interface{}{"value": "severity:error"},
+														"filters":      []interface{}{},
+														"aggregations": []map[string]interface{}{
+															{"count": map[string]interface{}{}},
+														},
+														"group_bys": []map[string]interface{}{
+															{"keypath": []string{"subsystemname"}, "scope": "label"},
+														},
+													},
+												},
+											},
+										},
+									},
 								},
 							},
 						},
