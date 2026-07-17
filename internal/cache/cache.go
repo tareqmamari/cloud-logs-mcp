@@ -23,11 +23,33 @@ func (e *Entry) IsExpired() bool {
 	return time.Now().After(e.ExpiresAt)
 }
 
+// defaultSweepInterval bounds how often Set performs a full expired-entry
+// scan (see UserCache.sweepInterval / evictExpiredLocked). 30s is short
+// enough that expired entries in a cache that's never read again don't
+// linger meaningfully, but long enough that a burst of Set calls (the common
+// case: many tool calls in quick succession) pays the O(n) scan cost once
+// per burst rather than once per call.
+const defaultSweepInterval = 30 * time.Second
+
 // UserCache holds cached data for a specific user+instance combination
 type UserCache struct {
 	mu      sync.RWMutex
 	entries map[string]*Entry
 	maxSize int
+
+	// lastSweep and sweepInterval throttle the opportunistic full scan in
+	// Set (see evictExpiredLocked): a scan only runs if at least
+	// sweepInterval has elapsed since the previous one, bounding the O(n)
+	// cost to once per interval instead of once per Set. Lazy per-Get
+	// eviction and the at-capacity LRU eviction path are unaffected - they
+	// still run unconditionally.
+	lastSweep     time.Time
+	sweepInterval time.Duration
+
+	// sweepRuns counts how many times the throttled sweep in Set actually
+	// executed (as opposed to being skipped because the interval hadn't
+	// elapsed). Test-only observability hook.
+	sweepRuns int
 }
 
 // NewUserCache creates a new user-specific cache
@@ -36,8 +58,9 @@ func NewUserCache(maxSize int) *UserCache {
 		maxSize = 100 // Default max entries
 	}
 	return &UserCache{
-		entries: make(map[string]*Entry),
-		maxSize: maxSize,
+		entries:       make(map[string]*Entry),
+		maxSize:       maxSize,
+		sweepInterval: defaultSweepInterval,
 	}
 }
 
@@ -72,18 +95,27 @@ func (c *UserCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Opportunistically sweep expired entries on every Set. This is a cheap,
-	// bounded full scan (capped by maxSize entries) that keeps expired data
-	// from lingering indefinitely in caches that are never read from again,
-	// rather than relying solely on lazy eviction from Get or at-capacity Set.
-	c.evictExpiredLocked()
+	// Opportunistically sweep expired entries on Set, throttled to at most
+	// once per sweepInterval. This is a bounded full scan (capped by maxSize
+	// entries) that keeps expired data from lingering indefinitely in caches
+	// that are never read from again, rather than relying solely on lazy
+	// eviction from Get or at-capacity Set - but running that scan on every
+	// single Set made Set O(n) unconditionally, so it's throttled here. The
+	// interval bounds how stale the cache can get without a read: expired
+	// entries are still guaranteed to be swept within sweepInterval of
+	// becoming eligible, even with zero Get calls.
+	now := time.Now()
+	if now.Sub(c.lastSweep) >= c.sweepInterval {
+		c.evictExpiredLocked()
+		c.lastSweep = now
+		c.sweepRuns++
+	}
 
 	// If still at capacity, evict least recently used
 	if len(c.entries) >= c.maxSize {
 		c.evictLRULocked()
 	}
 
-	now := time.Now()
 	c.entries[key] = &Entry{
 		Value:        value,
 		ExpiresAt:    now.Add(ttl),
