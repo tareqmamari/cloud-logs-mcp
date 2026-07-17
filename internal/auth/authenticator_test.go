@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/IBM/go-sdk-core/v5/core"
 	"go.uber.org/zap"
 )
 
@@ -46,6 +47,36 @@ func TestNewAuthenticator(t *testing.T) {
 				t.Error("Expected authenticator to be created")
 			}
 		})
+	}
+}
+
+// TestNewAuthenticator_BoundsIAMHTTPClientTimeout guards against the
+// boundedGetUserIdentity goroutine in internal/server leaking forever: that
+// helper races authenticator.GetUserIdentity() against a context deadline,
+// but the spawned goroutine itself keeps running past the deadline until the
+// underlying IAM HTTP round trip returns. The IBM SDK's IamAuthenticator
+// otherwise lazily builds an *http.Client with no timeout, so an IAM outage
+// could hang that goroutine indefinitely. New() must give it an explicit,
+// bounded http.Client so the round trip - and therefore the leaked
+// goroutine - always returns within a sane wall-clock bound.
+func TestNewAuthenticator_BoundsIAMHTTPClientTimeout(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	a, err := New("test-api-key-12345", "", logger) //nolint:gosec // test value, not a real secret
+	if err != nil {
+		t.Fatalf("New() returned unexpected error: %v", err)
+	}
+
+	iamAuth, ok := a.authenticator.(*core.IamAuthenticator)
+	if !ok {
+		t.Fatalf("expected underlying authenticator to be *core.IamAuthenticator, got %T", a.authenticator)
+	}
+
+	if iamAuth.Client == nil {
+		t.Fatal("expected IamAuthenticator.Client to be set, got nil (SDK would lazily build an unbounded client)")
+	}
+	if iamAuth.Client.Timeout <= 0 {
+		t.Errorf("expected IamAuthenticator.Client.Timeout to be a positive bound, got %v", iamAuth.Client.Timeout)
 	}
 }
 
