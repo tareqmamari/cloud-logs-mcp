@@ -578,6 +578,18 @@ func (t *CreateDashboardTool) Metadata() *ToolMetadata {
 }
 
 // ensureRequiredDashboardFields adds missing required fields to dashboard structure
+// ensureQueryDefinitionUUID replaces a missing or non-UUID query-definition
+// id with a generated UUID. Unlike section/row/widget ids, these are plain
+// strings, but the API applies the same UUID requirement.
+func ensureQueryDefinitionUUID(qd map[string]interface{}) {
+	if val, ok := qd["id"].(string); ok && val != "" {
+		if _, err := uuid.Parse(val); err == nil {
+			return
+		}
+	}
+	qd["id"] = uuid.NewString()
+}
+
 // ensureUUIDID makes sure m carries an API-acceptable id of the shape
 // {"id": {"value": "<uuid>"}}. The live API rejects non-UUID id values
 // (e.g. "section-1"), so missing or invalid ids are replaced with a
@@ -777,6 +789,7 @@ func ensureLineChartFields(lineChart map[string]interface{}) {
 		for _, qd := range queryDefs {
 			if qdMap, ok := qd.(map[string]interface{}); ok {
 				ensureQueryDefinitionFields(qdMap)
+				ensureQueryDefinitionUUID(qdMap)
 			}
 		}
 	}

@@ -266,6 +266,16 @@ func TestEnsureLineChartFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ensureLineChartFields(tt.input)
+			// Query definition ids are generated UUIDs — assert shape
+			// separately, then drop them for the deep comparison.
+			if qds, ok := tt.input["query_definitions"].([]interface{}); ok {
+				for _, qd := range qds {
+					if qdMap, ok := qd.(map[string]interface{}); ok {
+						assert.Regexp(t, `^[0-9a-f-]{36}$`, qdMap["id"])
+						delete(qdMap, "id")
+					}
+				}
+			}
 			assert.Equal(t, tt.expected, tt.input)
 		})
 	}
@@ -576,4 +586,14 @@ func TestValidateDashboardStructure_ValidLayout(t *testing.T) {
 	})
 	errs := validateDashboardStructure(layout)
 	assert.Empty(t, errs)
+}
+
+func TestEnsureDashboardIDs_QueryDefinitionIDs(t *testing.T) {
+	layout := demoLayout(nil, []interface{}{map[string]interface{}{"count": map[string]interface{}{}}})
+	widget := layout["sections"].([]interface{})[0].(map[string]interface{})["rows"].([]interface{})[0].(map[string]interface{})["widgets"].([]interface{})[0].(map[string]interface{})
+	qd := widget["definition"].(map[string]interface{})["line_chart"].(map[string]interface{})["query_definitions"].([]interface{})[0].(map[string]interface{})
+	qd["id"] = "qd-1" // API rejects non-UUID query definition ids
+	ensureRequiredDashboardFields(layout)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, qd["id"],
+		"non-UUID query_definitions[].id must be replaced with a UUID")
 }

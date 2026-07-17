@@ -270,10 +270,19 @@ func validateAlertDefinitionConfig(def map[string]interface{}) *ValidationResult
 				"Invalid alert type: "+alertType+". Valid types: "+joinStrings(validAlertDefTypes, ", "))
 			result.Valid = false
 		} else if key := alertTypeConfigKey(alertType); key != "" {
-			if _, ok := def[key].(map[string]interface{}); !ok {
+			typeConfig, ok := def[key].(map[string]interface{})
+			if !ok {
 				result.Errors = append(result.Errors,
 					"Alert type "+alertType+" requires a matching config object under the key \""+key+"\"")
 				result.Valid = false
+			} else if alertType == "logs_threshold" || alertType == "logs_ratio_threshold" {
+				// The API requires condition_type both inside each rule's
+				// condition AND at the top of the type config object.
+				if _, has := typeConfig["condition_type"]; !has {
+					result.Errors = append(result.Errors,
+						key+" requires a top-level \"condition_type\" field (in addition to the one inside each rule's condition)")
+					result.Valid = false
+				}
 			}
 		}
 	}

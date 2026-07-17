@@ -142,3 +142,12 @@ func TestValidateAlertDefinition_RequiresMatchingTypeConfig(t *testing.T) {
 	assert.False(t, result.Valid)
 	assert.Contains(t, joinStrings(result.Errors, "\n"), "logs_ratio_threshold")
 }
+
+func TestValidateAlertDefinition_RequiresConfigLevelConditionType(t *testing.T) {
+	def := validDemoRatioDef()
+	cfg := def["logs_ratio_threshold"].(map[string]interface{})
+	delete(cfg, "condition_type") // API 400s: logs_ratio_threshold: missing field `condition_type`
+	result := validateAlertDefinitionConfig(def)
+	assert.False(t, result.Valid)
+	assert.Contains(t, joinStrings(result.Errors, "\n"), "condition_type")
+}
