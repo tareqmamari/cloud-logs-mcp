@@ -659,6 +659,20 @@ func (s *SessionContext) oldestResultKeyLocked() string {
 
 // GetCachedResult retrieves a cached tool result, updating its last-accessed
 // time so it counts as recently used for CacheResult's eviction policy.
+//
+// This takes the full write lock even though it's a read of LastResults,
+// because it also mutates resultTimes[toolName] on every call. A design
+// that stores per-entry last-access as an atomic.Int64 (updated under RLock
+// instead) was considered, but it would require eagerly materializing an
+// atomic pointer for every entry in resultTimes whenever a session is
+// loaded from disk (LastResults can be populated from JSON with no
+// corresponding resultTimes entries - see the lazy-nil-check below and
+// CacheResult), adding a second invariant ("every LastResults key has a
+// resultTimes pointer before any GetCachedResult call") that's easy to
+// violate silently and hard to verify. Given maxCachedResults caps this at
+// 5 entries per session and calls are infrequent (bounded by tool-call
+// rate, not request volume), the write lock is a deliberate, low-risk
+// tradeoff over that added complexity.
 func (s *SessionContext) GetCachedResult(toolName string) map[string]interface{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
