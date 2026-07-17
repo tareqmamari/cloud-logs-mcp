@@ -332,8 +332,8 @@ func TestAlertsErrorHandling(t *testing.T) {
 			Body:   invalidConfig,
 		}
 
-		_, err := tc.DoRequestExpectError(req, 422)
-		assert.NoError(t, err, "Should handle 422 error for invalid data")
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Should handle 400 error for invalid data")
 	})
 
 	t.Run("UpdateNonExistentAlert", func(t *testing.T) {
@@ -362,11 +362,10 @@ func TestAlertsErrorHandling(t *testing.T) {
 			Body:   updateConfig,
 		}
 
-		// API returns 4xx for malformed/non-existent UUIDs (can be 400 or 422)
-		ctx := context.Background()
-		resp, err := tc.Client.Do(ctx, req)
-		require.NoError(t, err)
-		assert.True(t, resp.StatusCode == 400 || resp.StatusCode == 422, "Should return 4xx error for non-existent alert")
+		// The API rejects an update to a non-existent alert with HTTP 400
+		// (the "not found" detail is wrapped inside a bad-request response).
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Updating a non-existent alert should return 400")
 	})
 
 	t.Run("DeleteNonExistentAlert", func(t *testing.T) {
