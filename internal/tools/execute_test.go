@@ -3,8 +3,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"go.uber.org/zap"
@@ -12,11 +14,28 @@ import (
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
-// testCtx returns a context with a mock client and isolated session injected.
+// testCtxSeq generates a unique suffix per testCtx() call so every caller gets
+// its own userID/instanceID pair. Tool results (e.g. list_streams) are cached
+// in the process-wide, singleton cache.Manager (internal/cache) keyed by
+// userID+instanceID+tool+key; a fixed session shared by every call would let
+// one Execute() call's cached result leak into an unrelated call within the
+// same test binary (this bit under `go test -count>1`, where the whole test
+// binary - and its package-level singletons - runs multiple times in the same
+// process). Minting a fresh identity per call keeps every call's cache entry
+// isolated, regardless of how many times or in what order tests run.
+var testCtxSeq atomic.Int64
+
+// testCtx returns a context with a mock client and an isolated session
+// injected. Each call gets its own userID/instanceID so cache entries never
+// leak between calls.
 func testCtx(mock *client.MockClient) context.Context {
 	ctx := context.Background()
 	ctx = WithClient(ctx, mock)
-	ctx = WithSession(ctx, NewSessionContext("test-user", "test-instance"))
+	n := testCtxSeq.Add(1)
+	ctx = WithSession(ctx, NewSessionContext(
+		fmt.Sprintf("test-user-%d", n),
+		fmt.Sprintf("test-instance-%d", n),
+	))
 	return ctx
 }
 
@@ -469,6 +488,48 @@ func TestListStreamsTool_Execute_Success(t *testing.T) {
 	req := mock.LastRequest()
 	if req.Path != "/v1/streams" {
 		t.Errorf("Path = %q, want /v1/streams", req.Path)
+	}
+}
+
+// TestListStreamsTool_Execute_CacheIsolatedAcrossCalls is a deterministic,
+// single-run reproduction of the flake seen under `go test -count>1`.
+//
+// list_streams is cached (5 min TTL) under a key derived from the session's
+// userID+instanceID. testCtx used to hand every caller the exact same fixed
+// session ("test-user"/"test-instance"), so the *second* Execute() call here
+// (a fresh tool + fresh mock, standing in for a second `-count` iteration
+// reusing the same process-wide cache.Manager singleton) would silently hit
+// the first call's cached result instead of calling the mock, and
+// mock.LastRequest() would come back nil. Each testCtx() call must therefore
+// mint its own isolated session so no two Execute() calls can ever share a
+// cache entry.
+func TestListStreamsTool_Execute_CacheIsolatedAcrossCalls(t *testing.T) {
+	for i := 0; i < 2; i++ {
+		mock := client.NewMockClient()
+		mock.RespondWith(200, map[string]interface{}{
+			"streams": []map[string]interface{}{
+				{"id": "stream-1", "name": "Production Stream"},
+			},
+		})
+
+		tool := NewListStreamsTool(mock, zap.NewNop())
+		ctx := testCtx(mock)
+
+		result, err := tool.Execute(ctx, map[string]interface{}{})
+		if err != nil {
+			t.Fatalf("iteration %d: Execute error: %v", i, err)
+		}
+		if result.IsError {
+			t.Fatalf("iteration %d: expected success result", i)
+		}
+
+		req := mock.LastRequest()
+		if req == nil {
+			t.Fatalf("iteration %d: mock received no request - likely a stale cache hit from a session shared with another call", i)
+		}
+		if req.Path != "/v1/streams" {
+			t.Errorf("iteration %d: Path = %q, want /v1/streams", i, req.Path)
+		}
 	}
 }
 
