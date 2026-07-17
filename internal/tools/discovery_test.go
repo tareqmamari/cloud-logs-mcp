@@ -2,6 +2,7 @@ package tools
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -530,8 +531,9 @@ func TestIntentCoverage(t *testing.T) {
 }
 
 func TestGetToolRegistry(t *testing.T) {
-	// Reset global registry
+	// Reset global registry singleton state so the sync.Once fires again.
 	globalRegistry = nil
+	globalRegistryOnce = sync.Once{}
 
 	// First call should create registry
 	registry1 := GetToolRegistry()
@@ -543,6 +545,41 @@ func TestGetToolRegistry(t *testing.T) {
 	registry2 := GetToolRegistry()
 	if registry1 != registry2 {
 		t.Error("GetToolRegistry should return singleton instance")
+	}
+}
+
+// TestGetToolRegistry_ConcurrentAccessIsRaceFree exercises the concurrent
+// first-initialization path: GetToolRegistry() did a plain check-then-set on
+// the package-global globalRegistry with no synchronization, which is a data
+// race under concurrent first calls (e.g. two MCP requests racing to
+// initialize discovery on server startup). It must be race-clean under
+// `go test -race` and every caller must observe the same singleton instance.
+func TestGetToolRegistry_ConcurrentAccessIsRaceFree(t *testing.T) {
+	// Reset global singleton state so this exercises concurrent
+	// first-initialization rather than an already-initialized registry.
+	globalRegistry = nil
+	globalRegistryOnce = sync.Once{}
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	results := make([]*ToolRegistry, goroutines)
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i] = GetToolRegistry()
+		}(i)
+	}
+	wg.Wait()
+
+	first := results[0]
+	if first == nil {
+		t.Fatal("GetToolRegistry returned nil")
+	}
+	for i, r := range results {
+		if r != first {
+			t.Errorf("goroutine %d got registry pointer %p, want %p (all callers must observe the same singleton)", i, r, first)
+		}
 	}
 }
 
