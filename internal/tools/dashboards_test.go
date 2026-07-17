@@ -495,3 +495,85 @@ func TestEnsureRequiredDashboardFields(t *testing.T) {
 		assert.NotNil(t, layout, "layout should still be valid after processing")
 	})
 }
+
+// --- live v3 API contract: ids must be UUIDs, line-chart logs queries need
+// aggregations, and average aggregations need an observation_field ---
+
+func demoLayout(sectionID interface{}, aggregations []interface{}) map[string]interface{} {
+	section := map[string]interface{}{
+		"rows": []interface{}{
+			map[string]interface{}{
+				"appearance": map[string]interface{}{"height": 19},
+				"widgets": []interface{}{
+					map[string]interface{}{
+						"title": "errors",
+						"definition": map[string]interface{}{
+							"line_chart": map[string]interface{}{
+								"query_definitions": []interface{}{
+									map[string]interface{}{
+										"query": map[string]interface{}{
+											"logs": map[string]interface{}{
+												"lucene_query": map[string]interface{}{"value": "severity:error"},
+												"aggregations": aggregations,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	if sectionID != nil {
+		section["id"] = sectionID
+	}
+	return map[string]interface{}{"sections": []interface{}{section}}
+}
+
+func TestEnsureDashboardIDs_GeneratesUUIDs(t *testing.T) {
+	layout := demoLayout(map[string]interface{}{"value": "section-1"}, []interface{}{
+		map[string]interface{}{"count": map[string]interface{}{}},
+	})
+	ensureRequiredDashboardFields(layout)
+
+	section := layout["sections"].([]interface{})[0].(map[string]interface{})
+	idVal := section["id"].(map[string]interface{})["value"].(string)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, idVal,
+		"non-UUID section id must be replaced with a UUID")
+
+	row := section["rows"].([]interface{})[0].(map[string]interface{})
+	rowID := row["id"].(map[string]interface{})["value"].(string)
+	assert.Regexp(t, `^[0-9a-f-]{36}$`, rowID, "missing row id must be generated")
+
+	widget := row["widgets"].([]interface{})[0].(map[string]interface{})
+	widgetID := widget["id"].(map[string]interface{})["value"].(string)
+	assert.Regexp(t, `^[0-9a-f-]{36}$`, widgetID, "missing widget id must be generated")
+}
+
+func TestValidateDashboardStructure_EmptyAggregations(t *testing.T) {
+	layout := demoLayout(nil, []interface{}{})
+	errs := validateDashboardStructure(layout)
+	assert.NotEmpty(t, errs)
+	assert.Contains(t, joinStrings(errs, "\n"), "aggregation")
+}
+
+func TestValidateDashboardStructure_AverageNeedsObservationField(t *testing.T) {
+	layout := demoLayout(nil, []interface{}{
+		map[string]interface{}{"average": map[string]interface{}{}},
+	})
+	errs := validateDashboardStructure(layout)
+	assert.NotEmpty(t, errs)
+	assert.Contains(t, joinStrings(errs, "\n"), "observation_field")
+}
+
+func TestValidateDashboardStructure_ValidLayout(t *testing.T) {
+	layout := demoLayout(nil, []interface{}{
+		map[string]interface{}{"average": map[string]interface{}{
+			"observation_field": map[string]interface{}{"keypath": []interface{}{"duration_ms"}, "scope": "user_data"},
+		}},
+	})
+	errs := validateDashboardStructure(layout)
+	assert.Empty(t, errs)
+}

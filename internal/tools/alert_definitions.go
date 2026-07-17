@@ -126,34 +126,34 @@ func (t *CreateAlertDefinitionTool) InputSchema() interface{} {
 				"description": "Alert definition configuration",
 				"example": map[string]interface{}{
 					"name":        "High Error Rate Alert",
-					"description": "Triggers when error rate exceeds threshold",
+					"description": "Fires when error logs exceed 10% of total logs over 5 minutes",
 					"enabled":     true,
-					"priority":    "P2",
-					"type":        "logs_threshold",
-					"condition": map[string]interface{}{
-						"threshold": map[string]interface{}{
-							"condition":            "more_than",
-							"threshold":            100,
-							"time_window_seconds":  300,
-							"group_by_keys":        []string{},
-							"condition_match_type": "any",
+					"type":        "logs_ratio_threshold",
+					"logs_ratio_threshold": map[string]interface{}{
+						"condition_type": "more_than_or_unspecified",
+						"group_by_for":   "both_or_unspecified",
+						"numerator": map[string]interface{}{
+							"simple_filter": map[string]interface{}{
+								"lucene_query": "subsystemname:payment-service AND severity:error",
+							},
 						},
-					},
-					"filter": map[string]interface{}{
-						"simple_filter": map[string]interface{}{
-							"query": "severity:>=5",
+						"numerator_alias": "errors",
+						"denominator": map[string]interface{}{
+							"simple_filter": map[string]interface{}{
+								"lucene_query": "subsystemname:payment-service",
+							},
 						},
-					},
-					"notification_groups": []map[string]interface{}{
-						{
-							"notifications": []map[string]interface{}{
-								{
-									"webhook_id":                     "webhook-uuid-here",
-									"notify_on":                      "triggered_only",
-									"retriggering_period_seconds":    60,
-									"notify_on_resolved":             true,
-									"integration_connection_details": map[string]interface{}{},
+						"denominator_alias": "total",
+						"rules": []map[string]interface{}{
+							{
+								"condition": map[string]interface{}{
+									"threshold": 0.1,
+									"time_window": map[string]interface{}{
+										"logs_ratio_time_window_specific_value": "minutes_5_or_unspecified",
+									},
+									"condition_type": "more_than_or_unspecified",
 								},
+								"override": map[string]interface{}{"priority": "p1"},
 							},
 						},
 					},
@@ -189,58 +189,133 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	return t.FormatResponseWithSuggestions(result, "create_alert_definition")
 }
 
-// validateAlertDefinition performs dry-run validation
-func (t *CreateAlertDefinitionTool) validateAlertDefinition(def map[string]interface{}) (*mcp.CallToolResult, error) {
+// v3 alert definition enums, as enforced by the live API's deserializer.
+var validAlertDefTypes = []string{
+	"logs_immediate_or_unspecified",
+	"logs_threshold",
+	"logs_anomaly",
+	"logs_ratio_threshold",
+	"logs_new_value",
+	"logs_unique_count",
+	"logs_time_relative_threshold",
+	"metric_threshold",
+	"metric_anomaly",
+	"flow",
+}
+
+var validAlertDefPriorities = []string{"p5_or_unspecified", "p4", "p3", "p2", "p1"}
+
+// alertTypeConfigKey returns the definition key that must hold the config
+// object for a given alert type. For every type except the immediate default,
+// the key matches the type name (e.g. type "logs_ratio_threshold" requires a
+// "logs_ratio_threshold" object).
+func alertTypeConfigKey(alertType string) string {
+	if alertType == "logs_immediate_or_unspecified" {
+		return ""
+	}
+	return alertType
+}
+
+// rulesHaveOverride reports whether any rule inside the type config object
+// carries an override. The live API rejects definitions that set a top-level
+// priority alongside rule overrides.
+func rulesHaveOverride(typeConfig map[string]interface{}) bool {
+	rules, ok := typeConfig["rules"].([]interface{})
+	if !ok {
+		return false
+	}
+	for _, r := range rules {
+		if rule, ok := r.(map[string]interface{}); ok {
+			if _, has := rule["override"]; has {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateAlertDefinitionConfig checks an alert definition against the live
+// v3 API contract. It intentionally covers the failure modes the API is known
+// to reject (type/priority enums, missing type config, priority-vs-override
+// conflict) rather than replicating the full server-side schema.
+func validateAlertDefinitionConfig(def map[string]interface{}) *ValidationResult {
 	result := &ValidationResult{
 		Valid:   true,
 		Summary: make(map[string]interface{}),
 	}
 
-	// Validate required fields
-	requiredFields := []string{"name", "type"}
-	for _, field := range requiredFields {
+	for _, field := range []string{"name", "type"} {
 		if _, ok := def[field]; !ok {
 			result.Errors = append(result.Errors, "Missing required field: "+field)
 			result.Valid = false
 		}
 	}
 
-	// Validate name
 	if name, ok := def["name"].(string); ok {
 		result.Summary["name"] = name
 	}
 
-	// Validate type
-	validTypes := map[string]bool{
-		"logs_immediate": true,
-		"logs_threshold": true,
-		"logs_ratio":     true,
-		"logs_anomaly":   true,
-		"logs_new_value": true,
+	alertType, _ := def["type"].(string)
+	if alertType != "" {
+		result.Summary["type"] = alertType
+		valid := false
+		for _, t := range validAlertDefTypes {
+			if alertType == t {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			result.Errors = append(result.Errors,
+				"Invalid alert type: "+alertType+". Valid types: "+joinStrings(validAlertDefTypes, ", "))
+			result.Valid = false
+		} else if key := alertTypeConfigKey(alertType); key != "" {
+			if _, ok := def[key].(map[string]interface{}); !ok {
+				result.Errors = append(result.Errors,
+					"Alert type "+alertType+" requires a matching config object under the key \""+key+"\"")
+				result.Valid = false
+			}
+		}
 	}
-	if alertType, ok := def["type"].(string); ok {
-		if !validTypes[alertType] {
-			result.Errors = append(result.Errors, "Invalid alert type: "+alertType+". Valid types: logs_immediate, logs_threshold, logs_ratio, logs_anomaly, logs_new_value")
+
+	if priority, ok := def["priority"].(string); ok {
+		valid := false
+		for _, p := range validAlertDefPriorities {
+			if priority == p {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			result.Errors = append(result.Errors,
+				"Invalid priority: "+priority+". Valid values (lowercase): "+joinStrings(validAlertDefPriorities, ", "))
 			result.Valid = false
 		}
-		result.Summary["type"] = alertType
+		if key := alertTypeConfigKey(alertType); key != "" {
+			if typeConfig, ok := def[key].(map[string]interface{}); ok && rulesHaveOverride(typeConfig) {
+				result.Errors = append(result.Errors,
+					"Cannot set a top-level priority when rules define an override — remove one of them")
+				result.Valid = false
+			}
+		}
 	}
 
-	// Check for condition (required for most types)
-	if _, ok := def["condition"]; !ok {
-		result.Warnings = append(result.Warnings, "No condition specified - alert may not trigger as expected")
-	}
-
-	// Add suggestions
 	if result.Valid {
 		result.Suggestions = append(result.Suggestions, "Alert definition configuration is valid")
 		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the alert definition")
+		result.Warnings = append(result.Warnings,
+			"Dry-run checks known API constraints but is not a full schema validation — the API may still reject unknown fields or enum values")
 	} else {
 		result.Suggestions = append(result.Suggestions, "Fix the errors above before creating")
 	}
 
 	result.EstimatedImpact = &ImpactEstimate{RiskLevel: "low"}
-	return FormatDryRunResult(result, "Alert Definition", def), nil
+	return result
+}
+
+// validateAlertDefinition performs dry-run validation
+func (t *CreateAlertDefinitionTool) validateAlertDefinition(def map[string]interface{}) (*mcp.CallToolResult, error) {
+	return FormatDryRunResult(validateAlertDefinitionConfig(def), "Alert Definition", def), nil
 }
 
 // UpdateAlertDefinitionTool updates an existing alert definition
