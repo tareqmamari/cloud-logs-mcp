@@ -89,13 +89,25 @@ func FuzzEscapeDataPrimeString(f *testing.F) {
 		// the two-character `\'` sequence, so this holds by construction -
 		// a failure here means a caller-controlled quote is escaping
 		// unescaped.
+		//
+		// Checking only "is the immediately preceding rune a backslash"
+		// has a blind spot: a run of backslashes immediately before the
+		// quote pairs up two at a time (each `\\` is one escaped literal
+		// backslash), so only an ODD-length run actually escapes the quote
+		// - an even-length run (e.g. `\\\\'`, four backslashes then an
+		// unescaped quote) would wrongly read as "escaped" under a
+		// single-rune check. Count the full run instead.
 		runes := []rune(out)
 		for i, r := range runes {
 			if r != '\'' {
 				continue
 			}
-			if i == 0 || runes[i-1] != '\\' {
-				t.Errorf("escapeDataPrimeString(%q) produced an unescaped quote at index %d in output %q", input, i, out)
+			backslashRun := 0
+			for j := i - 1; j >= 0 && runes[j] == '\\'; j-- {
+				backslashRun++
+			}
+			if backslashRun%2 == 0 {
+				t.Errorf("escapeDataPrimeString(%q) produced an unescaped quote at index %d (preceded by an even run of %d backslashes) in output %q", input, i, backslashRun, out)
 			}
 		}
 	})

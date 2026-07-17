@@ -127,7 +127,23 @@ fi
 echo "Verifying checksum..."
 # checksums.txt lists archive filenames; keep only the entry for the archive
 # we downloaded so the check tools don't fail on the other (absent) files.
-CHECKSUM_LINE=$(grep -E "  ${ARCHIVE_NAME}\$" "$CHECKSUMS_FILE" || true)
+#
+# This is a literal (non-regex) match on purpose: ARCHIVE_NAME contains "."
+# (e.g. between the version and the ".tar.gz"/".zip" extension), and "."
+# is a wildcard in grep -E, so a plain `grep -E "  ${ARCHIVE_NAME}\$"` could
+# match a checksums.txt line for a DIFFERENT archive that merely has some
+# other character in that position. A bash `case` glob pattern treats "."
+# as an ordinary character (only *, ?, [...] are special), so it matches
+# ARCHIVE_NAME exactly while still anchoring on the trailing "  <name>".
+CHECKSUM_LINE=""
+while IFS= read -r line; do
+    case "$line" in
+        *"  ${ARCHIVE_NAME}")
+            CHECKSUM_LINE="$line"
+            break
+            ;;
+    esac
+done <"$CHECKSUMS_FILE"
 if [ -z "$CHECKSUM_LINE" ]; then
     echo -e "${RED}Error: No checksum entry for ${ARCHIVE_NAME} found in checksums.txt${NC}"
     rm -rf "$TMP_DIR"
