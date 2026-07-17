@@ -396,6 +396,124 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// durationJSONFields lists the duration fields' JSON tag name alongside a
+// pointer to the field itself, in struct order. Shared by UnmarshalJSON so
+// each field is named consistently in parse errors.
+func durationJSONFields(c *Config) []struct {
+	name string
+	dst  *time.Duration
+} {
+	return []struct {
+		name string
+		dst  *time.Duration
+	}{
+		{"timeout", &c.Timeout},
+		{"retry_wait_min", &c.RetryWaitMin},
+		{"retry_wait_max", &c.RetryWaitMax},
+		{"idle_conn_timeout", &c.IdleConnTimeout},
+		{"query_timeout", &c.QueryTimeout},
+		{"background_poll_timeout", &c.BackgroundPollTimeout},
+		{"bulk_operation_timeout", &c.BulkOperationTimeout},
+		{"shutdown_timeout", &c.ShutdownTimeout},
+	}
+}
+
+// UnmarshalJSON implements json.Unmarshaler. encoding/json's default
+// time.Duration handling only accepts an integer number of nanoseconds, but
+// config.example.json (and any hand-written config file) documents durations
+// as human-readable strings like "30s" - the documented, copy-pasteable
+// format everywhere else in this codebase (env vars via time.ParseDuration,
+// CLI flags, etc). Without this, loading the documented example file either
+// fails outright or - depending on the JSON shape - silently leaves duration
+// fields at their defaults.
+//
+// Uses the shadow-struct pattern (mirroring MarshalJSON's redaction above):
+// an anonymous struct embeds *alias (all of Config's fields via promotion)
+// and additionally declares each duration field as json.RawMessage with the
+// same json tag. json.Unmarshal resolves the tag conflict in favor of the
+// shallower, explicitly-declared field, so the raw value is captured there
+// and the promoted time.Duration field from *alias is left untouched. Each
+// captured value is then parsed by parseDurationJSON, which accepts either a
+// duration string ("30s", the documented config-file format) or a JSON
+// number of nanoseconds (what MarshalJSON emits via time.Duration's default
+// encoding, needed so Marshal->Unmarshal round-trips); an unparseable value
+// returns an error naming both the field and the offending value rather than
+// a generic encoding/json error.
+//
+// This runs before loadFromFile's api_key-from-file rejection (which
+// inspects c.APIKey after Unmarshal completes), and composes with it
+// unchanged: api_key is an ordinary string field with no shadow entry, so it
+// unmarshals normally.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	type alias Config
+
+	shadow := &struct {
+		Timeout               json.RawMessage `json:"timeout"`
+		RetryWaitMin          json.RawMessage `json:"retry_wait_min"`
+		RetryWaitMax          json.RawMessage `json:"retry_wait_max"`
+		IdleConnTimeout       json.RawMessage `json:"idle_conn_timeout"`
+		QueryTimeout          json.RawMessage `json:"query_timeout"`
+		BackgroundPollTimeout json.RawMessage `json:"background_poll_timeout"`
+		BulkOperationTimeout  json.RawMessage `json:"bulk_operation_timeout"`
+		ShutdownTimeout       json.RawMessage `json:"shutdown_timeout"`
+		*alias
+	}{
+		alias: (*alias)(c),
+	}
+
+	if err := json.Unmarshal(data, shadow); err != nil {
+		return err
+	}
+
+	rawByField := map[string]json.RawMessage{
+		"timeout":                 shadow.Timeout,
+		"retry_wait_min":          shadow.RetryWaitMin,
+		"retry_wait_max":          shadow.RetryWaitMax,
+		"idle_conn_timeout":       shadow.IdleConnTimeout,
+		"query_timeout":           shadow.QueryTimeout,
+		"background_poll_timeout": shadow.BackgroundPollTimeout,
+		"bulk_operation_timeout":  shadow.BulkOperationTimeout,
+		"shutdown_timeout":        shadow.ShutdownTimeout,
+	}
+
+	for _, f := range durationJSONFields(c) {
+		raw := rawByField[f.name]
+		if len(raw) == 0 || string(raw) == "null" {
+			continue
+		}
+		parsed, err := parseDurationJSON(f.name, raw)
+		if err != nil {
+			return err
+		}
+		*f.dst = parsed
+	}
+
+	return nil
+}
+
+// parseDurationJSON parses a single duration field's raw JSON value,
+// accepting either a human-readable duration string ("30s") or a JSON number
+// of nanoseconds (encoding/json's default time.Duration representation, and
+// what Config's own MarshalJSON emits). name is the JSON field name, used to
+// produce an error that names the offending field and value.
+func parseDurationJSON(name string, raw json.RawMessage) (time.Duration, error) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return 0, fmt.Errorf("config field %q: invalid duration %q: %w", name, s, err)
+		}
+		return d, nil
+	}
+
+	var nanos int64
+	if err := json.Unmarshal(raw, &nanos); err == nil {
+		return time.Duration(nanos), nil
+	}
+
+	return 0, fmt.Errorf("config field %q: invalid duration %s: must be a duration string (e.g. %q) or integer nanoseconds", name, string(raw), "30s")
+}
+
 // Redact returns a copy of the config with sensitive data removed
 func (c *Config) Redact() *Config {
 	redacted := *c
