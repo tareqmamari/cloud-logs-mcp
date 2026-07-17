@@ -14,6 +14,12 @@ type APIError struct {
 	Message    string
 	RequestID  string // Request ID for support/debugging
 	Details    map[string]interface{}
+
+	// wrapped is the original classified error this APIError was translated
+	// from (see newAPIErrorFromResponse in base.go), if any. Exposed via
+	// Unwrap so errors.As/errors.Is can still reach it (and its Suggestion)
+	// after translation, without changing APIError's existing fields/behavior.
+	wrapped error
 }
 
 func (e *APIError) Error() string {
@@ -21,6 +27,15 @@ func (e *APIError) Error() string {
 		return fmt.Sprintf("%s (Request-ID: %s)", e.Message, e.RequestID)
 	}
 	return e.Message
+}
+
+// Unwrap returns the classified error (typically *mcperrors.StructuredError)
+// this APIError was translated from, or nil if it was built directly (e.g.
+// from a Doer that returns a raw non-2xx response without a classified
+// error). This lets errors.As/errors.Is see through the translation done in
+// newAPIErrorFromResponse to reach fields like StructuredError.Suggestion.
+func (e *APIError) Unwrap() error {
+	return e.wrapped
 }
 
 // IsNotFound returns true if this is a 404 error
