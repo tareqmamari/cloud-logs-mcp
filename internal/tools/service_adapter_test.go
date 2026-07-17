@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -273,8 +274,17 @@ func TestSessionProviderContextInjection(t *testing.T) {
 
 // TestCacheHelperContextInjection verifies cache helper uses context session
 func TestCacheHelperContextInjection(t *testing.T) {
-	// Create an isolated session
-	testSession := NewSessionContext("cache-test-user", "cache-test-instance")
+	// Create an isolated session. The identity must be unique per test run,
+	// not a fixed literal: GetCacheHelperFromContext reads/writes the
+	// process-wide, singleton cache.Manager keyed by userID+instanceID (see
+	// testCtxSeq in execute_test.go), so a fixed identity shared across
+	// `go test -count>1` iterations of this test would let one iteration's
+	// cached "test_value" leak into (and mask a bug in) the next.
+	n := testCtxSeq.Add(1)
+	testSession := NewSessionContext(
+		fmt.Sprintf("cache-test-user-%d", n),
+		fmt.Sprintf("cache-test-instance-%d", n),
+	)
 
 	ctx := context.Background()
 	ctx = WithSession(ctx, testSession)

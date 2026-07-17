@@ -4,6 +4,7 @@
 package tools
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sort"
 	"strconv"
@@ -342,7 +343,14 @@ func TestProperty_ValidationResultConsistency(t *testing.T) {
 // (which -race alone would not catch, since a lost update from a correctly
 // locked-but-buggy method isn't a race).
 func TestConcurrent_SessionAccess(t *testing.T) {
-	SetCurrentUser("test-user", "test-instance")
+	// A fixed identity here would let one `go test -count>1` iteration's
+	// session state (e.g. leftover LearnedPatterns) leak into the next via
+	// the global SessionManager singleton (see testCtxSeq in
+	// execute_test.go). The delta-based assertions below happen to tolerate
+	// that, but mint a unique identity anyway for the same isolation Task 11
+	// established for testCtx().
+	n := testCtxSeq.Add(1)
+	SetCurrentUser(fmt.Sprintf("test-user-%d", n), fmt.Sprintf("test-instance-%d", n))
 	session := GetSession()
 
 	// TotalToolCalls is incremented once per RecordToolUse call (unlike
