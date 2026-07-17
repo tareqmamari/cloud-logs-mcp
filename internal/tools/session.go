@@ -60,11 +60,15 @@ type SessionContext struct {
 	// TCOConfig holds TCO policy configuration discovered at session start
 	TCOConfig *TCOConfig `json:"tco_config,omitempty"`
 
-	// resultTimes tracks the last-touched (inserted or read) time for each
-	// entry in LastResults, so CacheResult can evict the true least-recently-
-	// used entry rather than an arbitrary one. Unexported: not persisted, and
-	// lazily populated for entries loaded from disk (see CacheResult).
-	resultTimes map[string]time.Time
+	// resultOrder tracks a strictly increasing "touch" sequence for each entry
+	// in LastResults, so CacheResult can evict the true least-recently-used
+	// entry rather than an arbitrary one. A monotonic counter is used instead
+	// of wall-clock time because rapid successive touches can read an identical
+	// time.Now() on coarse-resolution clocks (notably Windows, ~15ms), which
+	// would leave the oldest-entry choice ambiguous. Unexported: not persisted,
+	// and lazily populated for entries loaded from disk (see CacheResult).
+	resultOrder map[string]uint64
+	resultSeq   uint64
 }
 
 // LearnedPatterns stores patterns that persist across sessions
@@ -617,12 +621,13 @@ func (s *SessionContext) CacheResult(toolName string, result map[string]interfac
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.resultTimes == nil {
-		s.resultTimes = make(map[string]time.Time, len(s.LastResults))
+	if s.resultOrder == nil {
+		s.resultOrder = make(map[string]uint64, len(s.LastResults))
 	}
 
 	s.LastResults[toolName] = result
-	s.resultTimes[toolName] = time.Now()
+	s.resultSeq++
+	s.resultOrder[toolName] = s.resultSeq
 
 	for len(s.LastResults) > maxCachedResults {
 		oldestKey := s.oldestResultKeyLocked()
@@ -630,27 +635,27 @@ func (s *SessionContext) CacheResult(toolName string, result map[string]interfac
 			break
 		}
 		delete(s.LastResults, oldestKey)
-		delete(s.resultTimes, oldestKey)
+		delete(s.resultOrder, oldestKey)
 	}
 }
 
-// oldestResultKeyLocked returns the key in LastResults with the oldest
-// tracked time, evicting entries with no tracked time first (e.g. sessions
-// loaded from disk before resultTimes existed). Caller must hold s.mu.
+// oldestResultKeyLocked returns the key in LastResults with the lowest touch
+// sequence, evicting entries with no tracked sequence first (e.g. sessions
+// loaded from disk before resultOrder existed). Caller must hold s.mu.
 func (s *SessionContext) oldestResultKeyLocked() string {
 	oldestKey := ""
-	var oldestTime time.Time
+	var oldestSeq uint64
 	haveOldest := false
 
 	for k := range s.LastResults {
-		t, tracked := s.resultTimes[k]
+		seq, tracked := s.resultOrder[k]
 		if !tracked {
-			// No recorded time at all - treat as oldest and evict it first.
+			// No recorded sequence at all - treat as oldest and evict it first.
 			return k
 		}
-		if !haveOldest || t.Before(oldestTime) {
+		if !haveOldest || seq < oldestSeq {
 			oldestKey = k
-			oldestTime = t
+			oldestSeq = seq
 			haveOldest = true
 		}
 	}
@@ -661,14 +666,14 @@ func (s *SessionContext) oldestResultKeyLocked() string {
 // time so it counts as recently used for CacheResult's eviction policy.
 //
 // This takes the full write lock even though it's a read of LastResults,
-// because it also mutates resultTimes[toolName] on every call. A design
+// because it also mutates resultOrder[toolName] on every call. A design
 // that stores per-entry last-access as an atomic.Int64 (updated under RLock
 // instead) was considered, but it would require eagerly materializing an
-// atomic pointer for every entry in resultTimes whenever a session is
+// atomic pointer for every entry in resultOrder whenever a session is
 // loaded from disk (LastResults can be populated from JSON with no
-// corresponding resultTimes entries - see the lazy-nil-check below and
+// corresponding resultOrder entries - see the lazy-nil-check below and
 // CacheResult), adding a second invariant ("every LastResults key has a
-// resultTimes pointer before any GetCachedResult call") that's easy to
+// resultOrder entry before any GetCachedResult call") that's easy to
 // violate silently and hard to verify. Given maxCachedResults caps this at
 // 5 entries per session and calls are infrequent (bounded by tool-call
 // rate, not request volume), the write lock is a deliberate, low-risk
@@ -686,10 +691,11 @@ func (s *SessionContext) GetCachedResult(toolName string) map[string]interface{}
 		return nil
 	}
 
-	if s.resultTimes == nil {
-		s.resultTimes = make(map[string]time.Time, len(s.LastResults))
+	if s.resultOrder == nil {
+		s.resultOrder = make(map[string]uint64, len(s.LastResults))
 	}
-	s.resultTimes[toolName] = time.Now()
+	s.resultSeq++
+	s.resultOrder[toolName] = s.resultSeq
 
 	return m
 }
