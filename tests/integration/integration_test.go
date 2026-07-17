@@ -16,6 +16,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 )
 
 // TestConfig holds configuration for integration tests
@@ -140,11 +142,24 @@ func (tc *TestContext) DoRequestExpectError(req *client.Request, expectedStatus 
 
 	ctx := context.Background()
 	resp, err := tc.Client.Do(ctx, req)
+
+	// The client surfaces non-2xx responses as classified errors carrying the
+	// originating HTTP status (a *mcperrors.StructuredError). For these
+	// "expect an error status" checks, that error IS the expected outcome:
+	// pull the status off it and verify it matches, returning nil so callers
+	// can assert.NoError to mean "the expected error occurred". A non-HTTP
+	// error (network, auth, etc.) is genuinely unexpected and is returned.
 	if err != nil {
+		var se *mcperrors.StructuredError
+		if errors.As(err, &se) {
+			assert.Equal(tc.T, expectedStatus, se.StatusCode, "Expected status code mismatch")
+			return nil, nil
+		}
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	// Verify expected status code
+	// No error means the server returned a success we did not expect for an
+	// error-path test; surface the status mismatch.
 	assert.Equal(tc.T, expectedStatus, resp.StatusCode, "Expected status code mismatch")
 
 	// Parse error response

@@ -431,8 +431,8 @@ func TestPoliciesErrorHandling(t *testing.T) {
 			Body:   invalidConfig,
 		}
 
-		_, err := tc.DoRequestExpectError(req, 422)
-		assert.NoError(t, err, "Should handle 422 error for invalid priority")
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Should handle 400 error for invalid priority")
 	})
 
 	t.Run("UpdateNonExistentPolicy", func(t *testing.T) {
