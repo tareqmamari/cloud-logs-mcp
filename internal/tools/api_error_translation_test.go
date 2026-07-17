@@ -102,6 +102,43 @@ func TestExecuteRequest_TranslatesClassifiedErrorToAPIError(t *testing.T) {
 	}
 }
 
+// TestExecuteRequest_APIErrorUnwrapsToStructuredError guards against Fix G's
+// regression: newAPIErrorFromResponse translates the client's classified
+// *mcperrors.StructuredError into a *tools.APIError, but that translation
+// used to sever the chain - after translation, errors.As(err, &structuredErr)
+// no longer matched, silently losing the StructuredError's Suggestion for
+// any downstream consumer that wants it. *APIError must implement
+// Unwrap() error so the original StructuredError is still reachable.
+func TestExecuteRequest_APIErrorUnwrapsToStructuredError(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.DoFunc = func(_ context.Context, _ *client.Request) (*client.Response, error) {
+		resp := &client.Response{
+			StatusCode: 401,
+			Body:       []byte(`{"error":"invalid credential"}`),
+		}
+		return resp, mcperrors.FromHTTPStatus(401, `{"error":"invalid credential"}`)
+	}
+
+	base := NewBaseTool(mock, zap.NewNop())
+	_, err := base.ExecuteRequest(testCtx(mock), &client.Request{Method: "GET", Path: "/v1/alerts/x"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected error to match *tools.APIError via errors.As, got %T: %v", err, err)
+	}
+
+	var structuredErr *mcperrors.StructuredError
+	if !errors.As(err, &structuredErr) {
+		t.Fatalf("expected error to still match *mcperrors.StructuredError via errors.As after APIError translation, got %T: %v", err, err)
+	}
+	if structuredErr.Suggestion != "Check your API key and try again" {
+		t.Errorf("StructuredError.Suggestion = %q, want the original suggestion to survive translation", structuredErr.Suggestion)
+	}
+}
+
 // TestGetTool_NotFound_ViaQueuedMockResponse verifies the same guidance works
 // through MockClient's queued-response path, which now classifies 4xx
 // statuses the same way the real client does (so mock-based tests exercise

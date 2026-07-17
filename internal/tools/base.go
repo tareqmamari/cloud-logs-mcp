@@ -142,6 +142,7 @@ func (t *BaseTool) ExecuteRequest(ctx context.Context, req *client.Request) (map
 		var structuredErr *mcperrors.StructuredError
 		if errors.As(err, &structuredErr) && structuredErr.StatusCode >= 400 {
 			apiErr := newAPIErrorFromResponse(structuredErr.StatusCode, resp)
+			apiErr.wrapped = structuredErr
 			tracing.RecordError(span, apiErr)
 			return nil, apiErr
 		}
