@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -97,13 +98,20 @@ type ToolMatch struct {
 }
 
 // Global tool registry
-var globalRegistry *ToolRegistry
+var (
+	globalRegistry     *ToolRegistry
+	globalRegistryOnce sync.Once
+)
 
-// GetToolRegistry returns the global tool registry
+// GetToolRegistry returns the global tool registry, lazily initializing it on
+// first call. Guarded by sync.Once (matching globalSessionManagerOnce in
+// session.go) so concurrent first calls - e.g. two requests racing at server
+// startup - can't data-race on the check-then-set, and all callers are
+// guaranteed to observe the same singleton instance.
 func GetToolRegistry() *ToolRegistry {
-	if globalRegistry == nil {
+	globalRegistryOnce.Do(func() {
 		globalRegistry = NewToolRegistry()
-	}
+	})
 	return globalRegistry
 }
 
