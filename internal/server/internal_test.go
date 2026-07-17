@@ -13,14 +13,18 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/audit"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/health"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
 )
 
 // slowAuthenticator implements Authenticator with a configurable delay
@@ -123,6 +127,63 @@ func TestShutdownTimeout_FallsBackWhenUnset(t *testing.T) {
 	cfg := &config.Config{}
 	if got := shutdownTimeout(cfg); got != defaultShutdownTimeout {
 		t.Errorf("shutdownTimeout() = %v, want fallback %v", got, defaultShutdownTimeout)
+	}
+}
+
+// --- finishToolExecution: raw Go-error masking path ---
+
+// TestFinishToolExecution_MasksRawGoError guards the raw-Go-error branch of
+// the Task 6 masking chokepoint: `err = errors.New(security.SanitizeError(err))`.
+// The IsError-result masking shape (maskErrorResultContent) is covered by
+// server_test.go's assertToolCallErrorMasksAPIKey, which drives a tool whose
+// failure is converted into an IsError CallToolResult - but a raw Go error
+// returned by a tool (result == nil, err != nil; e.g. the arguments-unmarshal
+// failure, or a tool that doesn't convert its failure to a result) takes a
+// different branch and was untested. This constructs a *Server directly
+// (like TestStart_HealthServerBindFailure) with its own Prometheus registry
+// and a real audit.Logger, then calls finishToolExecution directly with a
+// raw error embedding a fake API key, and asserts the returned error and the
+// resulting audit entry are both masked.
+func TestFinishToolExecution_MasksRawGoError(t *testing.T) {
+	logger := zap.NewNop()
+	s := &Server{
+		logger:      logger,
+		metrics:     metrics.NewWithRegistry(logger, prometheus.NewRegistry()),
+		auditLogger: audit.NewLogger(logger, true),
+	}
+
+	const fakeAPIKey = "AKIA1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ" // pragma: allowlist secret
+	rawErr := errors.New("upstream request failed: api_key=" + fakeAPIKey)
+
+	ctx := context.Background()
+	result, err := s.finishToolExecution(ctx, "get_alert", map[string]interface{}{"id": "alert-1"}, time.Now(), nil, rawErr)
+
+	if result != nil {
+		t.Fatalf("expected a nil result for a raw Go-error path, got %+v", result)
+	}
+	if err == nil {
+		t.Fatal("expected a non-nil error to be returned")
+	}
+	if strings.Contains(err.Error(), fakeAPIKey) {
+		t.Errorf("returned error leaks the fake API key: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "REDACTED") {
+		t.Errorf("expected a REDACTED marker in the masked error, got %q", err.Error())
+	}
+
+	entries := s.auditLogger.GetEntriesByTool("get_alert", 1)
+	if len(entries) == 0 {
+		t.Fatal("expected an audit entry for get_alert")
+	}
+	entry := entries[0]
+	if entry.Success {
+		t.Error("expected Success=false for a failed tool execution")
+	}
+	if strings.Contains(entry.ErrorMsg, fakeAPIKey) {
+		t.Errorf("audit entry leaked the fake API key: %q", entry.ErrorMsg)
+	}
+	if !strings.Contains(entry.ErrorMsg, "REDACTED") {
+		t.Errorf("expected a REDACTED marker in the masked audit ErrorMsg, got %q", entry.ErrorMsg)
 	}
 }
 
