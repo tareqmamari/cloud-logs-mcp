@@ -159,6 +159,10 @@ func TestUserCacheStats(t *testing.T) {
 
 func TestUserCacheSweepsExpiredEntriesOnSetWithoutReads(t *testing.T) {
 	cache := NewUserCache(10) // capacity well above the entries we insert
+	// Sweeping is throttled to at most once per sweepInterval (see
+	// TestUserCacheThrottlesExpiredSweepOnSet); a 0 interval preserves this
+	// test's original intent of observing a sweep on every Set.
+	cache.sweepInterval = 0
 
 	cache.Set("expiring1", "v1", 1*time.Millisecond)
 	cache.Set("expiring2", "v2", 1*time.Millisecond)
@@ -171,6 +175,64 @@ func TestUserCacheSweepsExpiredEntriesOnSetWithoutReads(t *testing.T) {
 
 	if size := cache.Size(); size != 1 {
 		t.Errorf("expected expired entries to be swept opportunistically on Set, got size %d", size)
+	}
+}
+
+// TestUserCacheThrottlesExpiredSweepOnSet guards against Task 2's fix (a full
+// expired-entry sweep on every Set) regressing back to O(n) per Set. The
+// first Set after construction always sweeps (no prior sweep to throttle
+// against), but a second Set within the throttle interval must NOT trigger
+// another full scan.
+func TestUserCacheThrottlesExpiredSweepOnSet(t *testing.T) {
+	cache := NewUserCache(10)
+	cache.sweepInterval = 1 * time.Hour // effectively "never sweep again" within this test
+
+	// The very first Set on a virgin cache always sweeps (lastSweep is the
+	// zero value), trivially - there's nothing to remove yet. This
+	// establishes the throttle baseline for everything that follows.
+	cache.Set("seed", "v0", 5*time.Minute)
+	if got := cache.sweepRuns; got != 1 {
+		t.Fatalf("expected the first-ever Set to run the baseline sweep, sweepRuns = %d, want 1", got)
+	}
+
+	cache.Set("expiring1", "v1", 1*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	// This Set falls well within the 1h throttle window, so it must NOT
+	// trigger another full scan: sweepRuns stays at 1, and the now-expired
+	// entry is still sitting in the map, unswept.
+	cache.Set("fresh1", "v2", 5*time.Minute)
+
+	if got := cache.sweepRuns; got != 1 {
+		t.Errorf("expected the sweep to be throttled (still 1 total run), got %d", got)
+	}
+	cache.mu.RLock()
+	_, stillPresent := cache.entries["expiring1"]
+	cache.mu.RUnlock()
+	if !stillPresent {
+		t.Error("expected the expired-but-unswept entry to still be present within the throttle window")
+	}
+}
+
+// TestUserCacheEventuallySweepsAfterThrottleInterval verifies Task 2's core
+// guarantee - expired entries are removed on Set without any Get calls -
+// still holds once the (now throttled) sweep interval has elapsed.
+func TestUserCacheEventuallySweepsAfterThrottleInterval(t *testing.T) {
+	cache := NewUserCache(10)
+	cache.sweepInterval = 5 * time.Millisecond
+
+	// Baseline sweep (trivial - nothing to remove yet), establishes lastSweep.
+	cache.Set("seed", "v0", 5*time.Minute)
+
+	cache.Set("expiring1", "v1", 1*time.Millisecond)
+	time.Sleep(10 * time.Millisecond) // both the TTL and the throttle interval elapse
+
+	cache.Set("fresh1", "v2", 5*time.Minute)
+	if got := cache.Size(); got != 2 {
+		t.Errorf("expected the sweep (after the throttle interval elapsed) to remove the expired entry without any Get call, size = %d, want 2 (seed, fresh1)", got)
+	}
+	if _, exists := cache.entries["expiring1"]; exists {
+		t.Error("expected expiring1 to have been swept once the throttle interval elapsed")
 	}
 }
 
@@ -413,7 +475,7 @@ func TestCacheManagerConcurrency(t *testing.T) {
 	}
 }
 
-func TestManagerSetEnabledConcurrentAccess(_ *testing.T) {
+func TestManagerSetEnabledConcurrentAccess(t *testing.T) {
 	config := DefaultConfig()
 	manager := NewManager(config)
 
@@ -451,6 +513,20 @@ func TestManagerSetEnabledConcurrentAccess(_ *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	close(stop)
 	wg.Wait()
+
+	// -race is the primary guard against data races here, but it wouldn't
+	// catch a lost/corrupted final write from a correctly-locked-but-buggy
+	// SetEnabled/Get/Set. Once every goroutine has stopped, force a
+	// deterministic final state and verify it's observed exactly and the
+	// cache is left in a consistent, readable condition.
+	manager.SetEnabled(true)
+	if !manager.IsEnabled() {
+		t.Error("expected IsEnabled() to reflect the deterministic SetEnabled(true) call made after the concurrent storm stopped")
+	}
+	manager.Set("user1", "instance1", "list_alerts", "all", "final-value")
+	if val, ok := manager.Get("user1", "instance1", "list_alerts", "all"); !ok || val != "final-value" {
+		t.Errorf("expected the cache to be in a consistent, readable state after the concurrent storm; Get returned (%v, %v), want (\"final-value\", true)", val, ok)
+	}
 }
 
 func TestGetManager(t *testing.T) {
