@@ -950,10 +950,10 @@ func TestValidateServiceURLScheme(t *testing.T) {
 // reaching the strict-https validation this test also exercises.
 //
 // This reads the raw service_url field directly (rather than going through
-// Load()) because config.example.json's duration fields (e.g. "30s") are
-// documentation-oriented and not accepted by encoding/json's default
-// time.Duration unmarshaling - a separate, pre-existing concern unrelated to
-// the URL placeholder this test guards against.
+// Load()) to keep this test scoped to the URL placeholder concern alone;
+// TestLoadFromFile_DurationFieldsParseFromExampleFile below separately
+// exercises config.example.json's duration fields (e.g. "30s") through the
+// real Load() path, now that Config.UnmarshalJSON accepts them.
 func TestExampleConfigServiceURLIsCopyPasteable(t *testing.T) {
 	data, err := os.ReadFile("../../config.example.json")
 	if err != nil {
@@ -976,5 +976,219 @@ func TestExampleConfigServiceURLIsCopyPasteable(t *testing.T) {
 
 	if strings.ContainsAny(raw.ServiceURL, "[]") {
 		t.Errorf("config.example.json's service_url %q still contains bracketed placeholder characters", raw.ServiceURL)
+	}
+}
+
+// --- UnmarshalJSON duration parsing ---
+
+// TestLoadFromFile_DurationFieldsParseFromExampleFile guards against
+// encoding/json's default time.Duration unmarshaling, which cannot parse
+// duration strings like "30s" (it only accepts durations as int64
+// nanoseconds). config.example.json documents durations as strings, so
+// without a custom UnmarshalJSON, CONFIG_FILE pointed at the documented
+// example either errors or silently fails to apply the durations. This loads
+// config.example.json through the real Load() path (CONFIG_FILE) and asserts
+// the duration fields land on their documented values.
+func TestLoadFromFile_DurationFieldsParseFromExampleFile(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", "../../config.example.json")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with CONFIG_FILE=config.example.json should succeed, got: %v", err)
+	}
+
+	wantDurations := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"timeout":           {cfg.Timeout, 30 * time.Second},
+		"retry_wait_min":    {cfg.RetryWaitMin, 1 * time.Second},
+		"retry_wait_max":    {cfg.RetryWaitMax, 30 * time.Second},
+		"idle_conn_timeout": {cfg.IdleConnTimeout, 90 * time.Second},
+	}
+	for field, d := range wantDurations {
+		if d.got != d.want {
+			t.Errorf("%s = %v, want %v", field, d.got, d.want)
+		}
+	}
+}
+
+// TestLoadFromFile_InvalidDurationFieldNamesField asserts that a malformed
+// duration string in a config file fails Load() with an error naming both
+// the offending field and the bad value, rather than a generic json error or
+// a silently-ignored default.
+func TestLoadFromFile_InvalidDurationFieldNamesField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"timeout":"not-a-duration"}`), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail for an invalid timeout duration string")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Errorf("error %q should name the offending field %q", err.Error(), "timeout")
+	}
+	if !strings.Contains(err.Error(), "not-a-duration") {
+		t.Errorf("error %q should include the offending value %q", err.Error(), "not-a-duration")
+	}
+}
+
+// TestConfigUnmarshalJSON_AllDurationFields exercises every duration field
+// directly (not just the subset config.example.json happens to set).
+func TestConfigUnmarshalJSON_AllDurationFields(t *testing.T) {
+	data := []byte(`{
+		"timeout": "30s",
+		"retry_wait_min": "1s",
+		"retry_wait_max": "45s",
+		"idle_conn_timeout": "90s",
+		"query_timeout": "60s",
+		"background_poll_timeout": "10s",
+		"bulk_operation_timeout": "2m",
+		"shutdown_timeout": "15s"
+	}`)
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	cases := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"timeout":                 {cfg.Timeout, 30 * time.Second},
+		"retry_wait_min":          {cfg.RetryWaitMin, 1 * time.Second},
+		"retry_wait_max":          {cfg.RetryWaitMax, 45 * time.Second},
+		"idle_conn_timeout":       {cfg.IdleConnTimeout, 90 * time.Second},
+		"query_timeout":           {cfg.QueryTimeout, 60 * time.Second},
+		"background_poll_timeout": {cfg.BackgroundPollTimeout, 10 * time.Second},
+		"bulk_operation_timeout":  {cfg.BulkOperationTimeout, 2 * time.Minute},
+		"shutdown_timeout":        {cfg.ShutdownTimeout, 15 * time.Second},
+	}
+	for field, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", field, c.got, c.want)
+		}
+	}
+}
+
+// TestConfigUnmarshalJSON_EmptyDurationLeavesFieldUntouched asserts that an
+// absent/empty duration field in JSON does not clobber whatever value the
+// Config already had (e.g. a caller-supplied default), matching the
+// behavior of the env-var duration loaders.
+func TestConfigUnmarshalJSON_EmptyDurationLeavesFieldUntouched(t *testing.T) {
+	cfg := Config{Timeout: 42 * time.Second}
+	if err := json.Unmarshal([]byte(`{"region":"us-south"}`), &cfg); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if cfg.Timeout != 42*time.Second {
+		t.Errorf("Timeout = %v, want unchanged 42s", cfg.Timeout)
+	}
+	if cfg.Region != "us-south" {
+		t.Errorf("Region = %q, want %q", cfg.Region, "us-south")
+	}
+}
+
+// TestConfigMarshalUnmarshalRoundTrip guards against Fix 1's UnmarshalJSON
+// breaking round-tripping through the existing redacting MarshalJSON: since
+// MarshalJSON deliberately replaces APIKey with a redacted placeholder,
+// round-tripping a config with a real key must NOT reproduce the original
+// key (that's the redaction working as intended) - but every other field,
+// including all duration fields, must survive unchanged.
+func TestConfigMarshalUnmarshalRoundTrip(t *testing.T) {
+	original := &Config{
+		ServiceURL:            "https://abc123.api.us-south.logs.cloud.ibm.com",
+		APIKey:                "super-secret-api-key", // pragma: allowlist secret
+		Region:                "us-south",
+		Timeout:               30 * time.Second,
+		MaxRetries:            3,
+		RetryWaitMin:          1 * time.Second,
+		RetryWaitMax:          30 * time.Second,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		QueryTimeout:          60 * time.Second,
+		BackgroundPollTimeout: 10 * time.Second,
+		BulkOperationTimeout:  120 * time.Second,
+		ShutdownTimeout:       30 * time.Second,
+		LogLevel:              "info",
+		LogFormat:             "json",
+	}
+
+	data, err := json.Marshal(original) // #nosec G117 -- exercising Config.MarshalJSON's redaction; asserted below
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded Config
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.APIKey == original.APIKey { // pragma: allowlist secret
+		t.Error("round-tripped config should not reproduce the raw API key (MarshalJSON must redact it)")
+	}
+
+	durationFields := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"Timeout":               {decoded.Timeout, original.Timeout},
+		"RetryWaitMin":          {decoded.RetryWaitMin, original.RetryWaitMin},
+		"RetryWaitMax":          {decoded.RetryWaitMax, original.RetryWaitMax},
+		"IdleConnTimeout":       {decoded.IdleConnTimeout, original.IdleConnTimeout},
+		"QueryTimeout":          {decoded.QueryTimeout, original.QueryTimeout},
+		"BackgroundPollTimeout": {decoded.BackgroundPollTimeout, original.BackgroundPollTimeout},
+		"BulkOperationTimeout":  {decoded.BulkOperationTimeout, original.BulkOperationTimeout},
+		"ShutdownTimeout":       {decoded.ShutdownTimeout, original.ShutdownTimeout},
+	}
+	for field, d := range durationFields {
+		if d.got != d.want {
+			t.Errorf("%s = %v, want %v", field, d.got, d.want)
+		}
+	}
+
+	if decoded.ServiceURL != original.ServiceURL {
+		t.Errorf("ServiceURL = %q, want %q", decoded.ServiceURL, original.ServiceURL)
+	}
+	if decoded.Region != original.Region {
+		t.Errorf("Region = %q, want %q", decoded.Region, original.Region)
+	}
+	if decoded.MaxRetries != original.MaxRetries {
+		t.Errorf("MaxRetries = %d, want %d", decoded.MaxRetries, original.MaxRetries)
+	}
+}
+
+// TestLoadFromFile_RejectsAPIKey_WithUnmarshalJSON re-guards the api_key
+// file-rejection with a config file that ALSO sets duration fields, so the
+// composition of Fix 1's UnmarshalJSON with loadFromFile's post-unmarshal
+// api_key check is exercised directly (not just each in isolation).
+func TestLoadFromFile_RejectsAPIKey_WithUnmarshalJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	body := `{"api_key":"leaked-key","timeout":"30s"}` // pragma: allowlist secret
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when config file sets api_key, even alongside valid duration fields")
+	}
+	if !strings.Contains(err.Error(), "LOGS_API_KEY") {
+		t.Errorf("error %q should tell the user to use LOGS_API_KEY", err.Error())
 	}
 }
