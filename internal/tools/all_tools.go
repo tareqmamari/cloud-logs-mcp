@@ -92,11 +92,8 @@ func (t *CreateOutgoingWebhookTool) Description() string {
 
 **Related tools:** list_outgoing_webhooks, get_outgoing_webhook, create_alert (connect alerts to webhooks)
 
-**Webhook Types:**
-- generic: Custom HTTP webhook to any endpoint
-- slack: Slack incoming webhook integration
-- pagerduty: PagerDuty integration for incident management
-- ibm_event_notifications: IBM Cloud Event Notifications service`
+**Webhook Type:**
+- ibm_event_notifications: IBM Cloud Event Notifications service (the only type the IBM Cloud Logs API accepts; Slack, PagerDuty, email etc. are configured as destinations inside the Event Notifications instance)`
 }
 
 // InputSchema returns the input schema
@@ -114,8 +111,8 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 					},
 					"type": map[string]interface{}{
 						"type":        "string",
-						"description": "Webhook type: generic, slack, pagerduty, ibm_event_notifications",
-						"enum":        []string{"generic", "slack", "pagerduty", "ibm_event_notifications"},
+						"description": "Webhook type. The API accepts only ibm_event_notifications; route Slack/PagerDuty through Event Notifications destinations",
+						"enum":        []string{"ibm_event_notifications"},
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
@@ -133,16 +130,12 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 		"examples": []interface{}{
 			map[string]interface{}{
 				"webhook": map[string]interface{}{
-					"name": "Slack Alerts",
-					"type": "slack",
-					"url":  "https://hooks.slack.com/services/XXX/YYY/ZZZ",
-				},
-			},
-			map[string]interface{}{
-				"webhook": map[string]interface{}{
-					"name": "PagerDuty Critical",
-					"type": "pagerduty",
-					"url":  "https://events.pagerduty.com/v2/enqueue",
+					"name": "oncall-notifications",
+					"type": "ibm_event_notifications",
+					"ibm_event_notifications": map[string]interface{}{
+						"event_notifications_instance_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+						"region_id":                       "au-syd",
+					},
 				},
 			},
 		},
@@ -176,8 +169,9 @@ func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (
 		Summary: make(map[string]interface{}),
 	}
 
-	// Validate required fields
-	requiredFields := []string{"name", "type", "url"}
+	// Validate required fields (url is optional — the ibm_event_notifications
+	// type connects via instance id + region, not a URL)
+	requiredFields := []string{"name", "type"}
 	for _, field := range requiredFields {
 		if _, ok := wh[field]; !ok {
 			result.Errors = append(result.Errors, "Missing required field: "+field)
@@ -190,19 +184,26 @@ func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (
 		result.Summary["name"] = name
 	}
 
-	// Validate type
-	validTypes := map[string]bool{
-		"generic":                 true,
-		"slack":                   true,
-		"pagerduty":               true,
-		"ibm_event_notifications": true,
-	}
+	// Validate type: the live IBM Cloud Logs API accepts only
+	// ibm_event_notifications (slack/pagerduty/generic are rejected with
+	// "unknown variant" — external targets are Event Notifications destinations)
 	if whType, ok := wh["type"].(string); ok {
-		if !validTypes[whType] {
-			result.Errors = append(result.Errors, "Invalid webhook type: "+whType+". Valid types: generic, slack, pagerduty, ibm_event_notifications")
+		if whType != "ibm_event_notifications" {
+			result.Errors = append(result.Errors, "Invalid webhook type: "+whType+". The API accepts only ibm_event_notifications; configure Slack/PagerDuty as destinations in the Event Notifications instance")
 			result.Valid = false
 		}
 		result.Summary["type"] = whType
+		if cfg, ok := wh["ibm_event_notifications"].(map[string]interface{}); ok {
+			for _, f := range []string{"event_notifications_instance_id", "region_id"} {
+				if _, has := cfg[f]; !has {
+					result.Errors = append(result.Errors, "ibm_event_notifications requires field: "+f)
+					result.Valid = false
+				}
+			}
+		} else if whType == "ibm_event_notifications" {
+			result.Errors = append(result.Errors, "Missing ibm_event_notifications config object (event_notifications_instance_id, region_id)")
+			result.Valid = false
+		}
 	}
 
 	// Validate URL format
