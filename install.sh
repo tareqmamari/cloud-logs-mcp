@@ -136,7 +136,12 @@ echo "Verifying checksum..."
 # as an ordinary character (only *, ?, [...] are special), so it matches
 # ARCHIVE_NAME exactly while still anchoring on the trailing "  <name>".
 CHECKSUM_LINE=""
-while IFS= read -r line; do
+# The `|| [ -n "$line" ]` clause handles a final line with no trailing
+# newline: `read` returns non-zero at EOF but still populates $line with
+# whatever was read, so without this the last line would silently be
+# skipped. checksums.txt is newline-terminated in practice, so this is a
+# defensive no-op today, not a fix for an observed failure.
+while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
         *"  ${ARCHIVE_NAME}")
             CHECKSUM_LINE="$line"
