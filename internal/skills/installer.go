@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -53,11 +54,14 @@ func (inst *Installer) List() ([]SkillInfo, error) {
 
 		info := SkillInfo{
 			Name: entry.Name(),
-			Path: filepath.Join(skillsRoot, entry.Name()),
+			// skillsRoot/entry.Name() index into the embedded FS, whose paths
+			// are always slash-separated (io/fs), never OS paths — use path.Join
+			// so this resolves on Windows too.
+			Path: path.Join(skillsRoot, entry.Name()),
 		}
 
 		// Extract description from SKILL.md frontmatter
-		skillMD, err := fs.ReadFile(inst.fs, filepath.Join(info.Path, "SKILL.md"))
+		skillMD, err := fs.ReadFile(inst.fs, path.Join(info.Path, "SKILL.md"))
 		if err == nil {
 			info.Description = extractDescription(string(skillMD))
 		}
