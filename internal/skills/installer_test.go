@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"testing/fstest"
 )
@@ -87,6 +88,9 @@ func buildTestSkillFS() fstest.MapFS {
 // regular files are 0600, and scripts (.sh/.py) are 0700 - private to the
 // installing user, since skills live under the user's home directory.
 func TestInstall_TightensPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix file-permission bits (0700/0600) are not enforced on Windows; Go's chmod only toggles the read-only bit")
+	}
 	dest := t.TempDir()
 	// Nest the actual install target so we can also assert the skill's own
 	// subdirectories got tightened, not just files.
