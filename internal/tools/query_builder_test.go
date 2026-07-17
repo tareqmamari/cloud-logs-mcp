@@ -343,6 +343,13 @@ func TestFieldToDataPrime_NumericOperandRejectsInjection(t *testing.T) {
 		"1; drop",
 		"", // empty is not a valid number either
 		"0x1f",
+		// Inf/NaN parse successfully via strconv.ParseFloat but are not finite
+		// numeric literals a numeric comparison should accept; they must be
+		// dropped like any other invalid value.
+		"Inf",
+		"-Inf",
+		"+Inf",
+		"NaN",
 	}
 
 	for _, op := range []string{"greater_than", "less_than"} {

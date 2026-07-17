@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -595,8 +596,15 @@ func isNumericFilterValue(s string) bool {
 	if strings.ContainsAny(s, "xXpP") {
 		return false
 	}
-	_, err := strconv.ParseFloat(s, 64)
-	return err == nil
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return false
+	}
+	// ParseFloat happily accepts "Inf"/"NaN" (and their sign/case variants) as
+	// valid float64 literals, but they aren't plain numbers and would
+	// interpolate as the bare words "Inf"/"NaN" into the query - reject them
+	// like any other non-numeric value.
+	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
 // isSafeDataPrimeFieldName reports whether s consists solely of DataPrime
