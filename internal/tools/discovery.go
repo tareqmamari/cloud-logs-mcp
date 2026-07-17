@@ -141,6 +141,14 @@ var baselineKeywordStopwords = map[string]bool{
 // tool in the descriptor table. Keywords are derived from the resource tokens
 // of the tool name; the category comes from the descriptor. Curated entries in
 // registerAllTools overwrite these for the tools that have richer metadata.
+//
+// This reconstructs all 96 tools (via Descriptors()) each time it runs, but
+// it only ever runs once per process: it's reached exclusively through
+// NewToolRegistry, which is itself only called from the sync.Once-guarded
+// GetToolRegistry singleton (see TestGetToolRegistry/
+// TestGetToolRegistry_ConcurrentAccessIsRaceFree). Constructing a second
+// *ToolRegistry directly (as some tests do) pays the cost again by design -
+// that's a deliberately separate, isolated instance, not the shared one.
 func (r *ToolRegistry) registerBaselineToolMetadata() {
 	for _, d := range Descriptors() {
 		tool := d.New(nil, nil)
