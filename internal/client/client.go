@@ -307,7 +307,16 @@ func (c *Client) calculateRetryWait(attempt int, lastResp *Response) time.Durati
 	// Add jitter: random value between 0 and 25% of base wait time
 	// This spreads out retry attempts when multiple clients fail simultaneously
 	jitter := cryptoRandDuration(int64(baseWait) / 4)
-	return baseWait + jitter
+	waitTime := baseWait + jitter
+
+	// baseWait is already clamped to RetryWaitMax, but jitter is added on
+	// top of it, so the sum can still exceed RetryWaitMax. Cap the final
+	// result so RetryWaitMax is a true ceiling on the wait, not just on the
+	// pre-jitter base.
+	if waitTime > c.config.RetryWaitMax {
+		waitTime = c.config.RetryWaitMax
+	}
+	return waitTime
 }
 
 // clampedBackoff computes minWait * 2^shift, clamped to maxWait. The check

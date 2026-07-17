@@ -915,6 +915,27 @@ func TestCalculateRetryWait_ExponentialBackoff(t *testing.T) {
 	}
 }
 
+// TestCalculateRetryWait_JitterNeverExceedsRetryWaitMax guards against Fix
+// H's bug: baseWait is clamped to RetryWaitMax by clampedBackoff, but jitter
+// (up to 25% of baseWait) used to be added ON TOP of that clamped value with
+// no final cap, so the effective wait could exceed RetryWaitMax. With a high
+// attempt count, baseWait is always at the RetryWaitMax ceiling, so any
+// added jitter directly demonstrates the bug across many iterations (jitter
+// is randomized, so a single call could get lucky with ~0 jitter).
+func TestCalculateRetryWait_JitterNeverExceedsRetryWaitMax(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+	// RetryWaitMin=100ms, RetryWaitMax=500ms (see newTestClient). A large
+	// attempt number saturates the exponential backoff at RetryWaitMax.
+	const highAttempt = 20
+
+	for i := 0; i < 200; i++ {
+		waitTime := c.calculateRetryWait(highAttempt, nil)
+		if waitTime > c.config.RetryWaitMax {
+			t.Fatalf("iteration %d: calculateRetryWait(%d, nil) = %v, exceeds RetryWaitMax %v", i, highAttempt, waitTime, c.config.RetryWaitMax)
+		}
+	}
+}
+
 func TestRetryWith429AndRetryAfter(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
