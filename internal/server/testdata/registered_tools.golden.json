@@ -200,38 +200,40 @@
         "definition": {
           "description": "Alert definition configuration",
           "example": {
-            "condition": {
-              "threshold": {
-                "condition": "more_than",
-                "condition_match_type": "any",
-                "group_by_keys": [],
-                "threshold": 100,
-                "time_window_seconds": 300
-              }
-            },
-            "description": "Triggers when error rate exceeds threshold",
+            "description": "Fires when error logs exceed 10% of total logs over 5 minutes",
             "enabled": true,
-            "filter": {
-              "simple_filter": {
-                "query": "severity:\u003e=5"
-              }
+            "logs_ratio_threshold": {
+              "condition_type": "more_than_or_unspecified",
+              "denominator": {
+                "simple_filter": {
+                  "lucene_query": "subsystemname:payment-service"
+                }
+              },
+              "denominator_alias": "total",
+              "group_by_for": "both_or_unspecified",
+              "numerator": {
+                "simple_filter": {
+                  "lucene_query": "subsystemname:payment-service AND severity:error"
+                }
+              },
+              "numerator_alias": "errors",
+              "rules": [
+                {
+                  "condition": {
+                    "condition_type": "more_than_or_unspecified",
+                    "threshold": 0.1,
+                    "time_window": {
+                      "logs_ratio_time_window_specific_value": "minutes_5_or_unspecified"
+                    }
+                  },
+                  "override": {
+                    "priority": "p1"
+                  }
+                }
+              ]
             },
             "name": "High Error Rate Alert",
-            "notification_groups": [
-              {
-                "notifications": [
-                  {
-                    "integration_connection_details": {},
-                    "notify_on": "triggered_only",
-                    "notify_on_resolved": true,
-                    "retriggering_period_seconds": 60,
-                    "webhook_id": "webhook-uuid-here"
-                  }
-                ]
-              }
-            ],
-            "priority": "P2",
-            "type": "logs_threshold"
+            "type": "logs_ratio_threshold"
           },
           "type": "object"
         },
@@ -677,16 +679,12 @@
       "examples": [
         {
           "webhook": {
-            "name": "Slack Alerts",
-            "type": "slack",
-            "url": "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-          }
-        },
-        {
-          "webhook": {
-            "name": "PagerDuty Critical",
-            "type": "pagerduty",
-            "url": "https://events.pagerduty.com/v2/enqueue"
+            "ibm_event_notifications": {
+              "event_notifications_instance_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "region_id": "au-syd"
+            },
+            "name": "oncall-notifications",
+            "type": "ibm_event_notifications"
           }
         }
       ],
@@ -704,11 +702,8 @@
               "type": "string"
             },
             "type": {
-              "description": "Webhook type: generic, slack, pagerduty, ibm_event_notifications",
+              "description": "Webhook type. The API accepts only ibm_event_notifications; route Slack/PagerDuty through Event Notifications destinations",
               "enum": [
-                "generic",
-                "slack",
-                "pagerduty",
                 "ibm_event_notifications"
               ],
               "type": "string"
