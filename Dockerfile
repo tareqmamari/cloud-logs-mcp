@@ -63,17 +63,23 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /build/logs-mcp-server /logs-mcp-server
 
 # Environment configuration
+# MCP_TRANSPORT: "stdio" for local use, "http" for Code Engine deployment
+# MCP_HTTP_PORT: HTTP server port (default: 8080)
 ENV TZ=UTC \
     ENVIRONMENT=production \
     LOG_FORMAT=json \
-    LOG_LEVEL=info
+    LOG_LEVEL=info \
+    MCP_TRANSPORT=http \
+    MCP_HTTP_PORT=8080
 
 # Use non-root user for security (CIS Docker Benchmark 4.1)
 # UBI images use UID 1001 as the default non-root user
 USER 1001:0
 
-# Expose no ports - MCP uses stdio transport
-# EXPOSE is documentation only, not functional
+# Expose HTTP port for Code Engine deployment
+# Port 8080 is used for HTTP transport mode
+# For stdio transport (local use), no port is needed
+EXPOSE 8080
 
 # Set entrypoint
 ENTRYPOINT ["/logs-mcp-server"]
@@ -83,8 +89,9 @@ ENTRYPOINT ["/logs-mcp-server"]
 # https://github.com/opencontainers/image-spec/blob/main/annotations.md
 # ==============================================================================
 LABEL org.opencontainers.image.title="IBM Cloud Logs MCP Server" \
-      org.opencontainers.image.description="Model Context Protocol server for IBM Cloud Logs service" \
+      org.opencontainers.image.description="Model Context Protocol server for IBM Cloud Logs service. Supports stdio (local) and HTTP (cloud) transport modes." \
       org.opencontainers.image.vendor="IBM" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.source="https://github.com/tareqmamari/cloud-logs-mcp" \
-      org.opencontainers.image.base.name="registry.access.redhat.com/ubi9/ubi-micro"
+      org.opencontainers.image.base.name="registry.access.redhat.com/ubi9/ubi-micro" \
+      org.opencontainers.image.documentation="https://github.com/tareqmamari/cloud-logs-mcp/blob/main/README.md"

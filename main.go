@@ -3,20 +3,34 @@
 // This server provides MCP tools for interacting with IBM Cloud Logs service,
 // including operations for alerts, policies, queries, log ingestion, and more.
 //
-// The server communicates using the MCP protocol over stdio, making it compatible
-// with Claude Desktop and other MCP clients.
+// The server supports two transport modes:
 //
-// Configuration is provided through environment variables:
-//   - LOGS_SERVICE_URL: The IBM Cloud Logs service endpoint URL (required)
-//   - LOGS_API_KEY: IBM Cloud API key for authentication (required)  // pragma: allowlist secret
-//   - LOGS_REGION: IBM Cloud region (optional - auto-extracted from service URL)
-//   - LOGS_INSTANCE_NAME: (Optional) Friendly name for the instance
-//   - ENVIRONMENT: (Optional) Set to "production" for production logging
+// 1. Stdio Transport (default): For local MCP clients like Claude Desktop
+//    - Requires LOGS_SERVICE_URL and LOGS_API_KEY environment variables
+//    - Single-tenant: one user's credentials
 //
-// Example usage:
+// 2. HTTP Transport: For multi-tenant deployment (e.g., Code Engine)
+//    - Set MCP_TRANSPORT=http and MCP_HTTP_PORT=8080
+//    - Credentials passed per-request via HTTP headers
+//    - Multi-tenant: each request has different credentials
+//
+// Configuration environment variables:
+//   - MCP_TRANSPORT: "stdio" (default) or "http"
+//   - MCP_HTTP_PORT: HTTP port for multi-tenant mode (default: 8080)
+//   - LOGS_SERVICE_URL: Service URL (required for stdio mode only)
+//   - LOGS_API_KEY: API key (required for stdio mode only)  // pragma: allowlist secret
+//   - ENVIRONMENT: Set to "production" for production logging
+//
+// Example usage (stdio mode):
 //
 //	export LOGS_SERVICE_URL="https://<instance-id>.api.<region>.logs.cloud.ibm.com"
 //	export LOGS_API_KEY="<your-api-key>"
+//	./logs-mcp-server
+//
+// Example usage (HTTP mode for multi-tenant):
+//
+//	export MCP_TRANSPORT=http
+//	export MCP_HTTP_PORT=8080
 //	./logs-mcp-server
 package main
 
@@ -52,6 +66,7 @@ var (
 //
 //	logs-mcp-server                    Start the MCP server (default)
 //	logs-mcp-server --version          Print version information
+//	logs-mcp-server --http             Start in HTTP transport mode (multi-tenant)
 //	logs-mcp-server skills install     Install agent skills to ~/.agents/skills/
 //	logs-mcp-server skills install --project  Install to ./.agents/skills/ (project-level)
 //	logs-mcp-server skills list        List available embedded skills
@@ -63,6 +78,9 @@ func main() {
 		case "--version", "-v", "version":
 			fmt.Printf("logs-mcp-server %s (commit: %s, built by: %s)\n", version, commit, builtBy)
 			return
+		case "--http":
+			// Force HTTP transport mode
+			os.Setenv("MCP_TRANSPORT", "http")
 		case "skills":
 			runSkillsCommand(os.Args[2:])
 			return
@@ -82,6 +100,19 @@ func main() {
 		_ = logger.Sync() // Ignore error on cleanup
 	}()
 
+	// Check transport mode
+	transport := os.Getenv("MCP_TRANSPORT")
+	if transport == "" {
+		transport = "stdio" // default
+	}
+
+	if transport == "http" {
+		// HTTP transport mode - multi-tenant, credentials per-request
+		runHTTPTransport(logger, version)
+		return
+	}
+
+	// Stdio transport mode - single-tenant, credentials from environment
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -97,6 +128,7 @@ func main() {
 		zap.String("version", version),
 		zap.String("commit", commit),
 		zap.String("built_by", builtBy),
+		zap.String("transport", "stdio"),
 		zap.String("endpoint", cfg.ServiceURL),
 	}
 	if cfg.InstanceName != "" {
@@ -153,6 +185,55 @@ func main() {
 
 	// Allow a brief moment for final cleanup
 	time.Sleep(100 * time.Millisecond)
+}
+
+// runHTTPTransport starts the server in HTTP transport mode for multi-tenant deployment.
+func runHTTPTransport(logger *zap.Logger, version string) {
+	port := 8080
+	if portStr := os.Getenv("MCP_HTTP_PORT"); portStr != "" {
+		fmt.Sscanf(portStr, "%d", &port)
+	}
+
+	logger.Info("Starting IBM Cloud Logs MCP Server in HTTP transport mode",
+		zap.String("version", version),
+		zap.String("transport", "http"),
+		zap.Int("port", port),
+		zap.String("mode", "multi-tenant"),
+	)
+
+	httpServer := server.NewHTTPTransportServer(logger, version, port)
+
+	// Setup graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- httpServer.Start(ctx)
+	}()
+
+	// Wait for shutdown signal or server error
+	select {
+	case sig := <-sigChan:
+		logger.Info("Received shutdown signal", zap.String("signal", sig.String()))
+		cancel()
+	case err := <-serverDone:
+		if err != nil {
+			logger.Error("Server error", zap.Error(err))
+		}
+		return
+	}
+
+	// Wait for graceful shutdown
+	select {
+	case <-serverDone:
+		logger.Info("Server shutdown complete")
+	case <-time.After(10 * time.Second):
+		logger.Warn("Shutdown timeout exceeded")
+	}
 }
 
 // runSkillsCommand handles the "skills" subcommand.
