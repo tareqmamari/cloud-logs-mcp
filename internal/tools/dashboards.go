@@ -469,7 +469,13 @@ automatically from the TCO policy that routes the widget's target
 application/subsystem — "archive" for logs kept only in the archive tier,
 "high_unspecified" (Priority Insights / frequent_search) otherwise — so panels
 query the tier where the data actually lives. Set data_mode_type explicitly on
-a widget to override. The chosen tiers are reported under _tier_selection.`
+a widget to override. The chosen tiers are reported under _tier_selection.
+
+**Visualization:** each widget's chart type is checked against its query shape
+(a single value suits a gauge, one breakdown a bar_chart, raw or
+multi-dimensional data a data_table). Clear mismatches are reported under
+_viz_recommendations rather than rewritten, so your explicit choice is always
+kept.`
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
