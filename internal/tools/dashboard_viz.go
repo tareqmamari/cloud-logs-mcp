@@ -70,21 +70,16 @@ func vizAcceptable(currentType, recommended string) bool {
 	return vizAcceptableFor[recommended][currentType]
 }
 
-// advise returns the type the widget should use and whether it changed.
-func (a *vizAdvisor) advise(currentType string, logs map[string]interface{}) (newType string, changed bool) {
+// advise records a recommendation note when a widget's chosen type clearly
+// mismatches its query shape. It is strictly non-destructive: it only appends a
+// note and never changes the caller's type. Auto-building an unspecified type
+// was deliberately dropped, so there is no adoption path.
+func (a *vizAdvisor) advise(currentType string, logs map[string]interface{}) {
 	recommended, reason := recommendWidgetType(logs)
-	if recommended == "" {
-		return currentType, false
-	}
-	if currentType == "" {
-		a.notes = append(a.notes, fmt.Sprintf("widget type set to %s (%s)", recommended, reason))
-		return recommended, true
-	}
-	if vizAcceptable(currentType, recommended) {
-		return currentType, false
+	if recommended == "" || currentType == "" || vizAcceptable(currentType, recommended) {
+		return
 	}
 	a.notes = append(a.notes, fmt.Sprintf("widget uses %s but %s is recommended: %s", currentType, recommended, reason))
-	return currentType, false
 }
 
 // attachVizRecommendations records visualization notes on the API response.

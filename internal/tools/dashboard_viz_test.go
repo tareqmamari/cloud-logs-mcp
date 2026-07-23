@@ -45,32 +45,58 @@ func TestRecommendWidgetType(t *testing.T) {
 }
 
 func TestVizAdvisor_Advise(t *testing.T) {
-	// Unspecified type -> adopt recommendation (auto-build).
+	// line_chart for a single breakdown is acceptable -> no note.
 	a := newVizAdvisor()
-	newType, changed := a.advise("", aggLogs(1, 0))
-	assert.Equal(t, "gauge", newType)
-	assert.True(t, changed)
-
-	// line_chart for a single breakdown is acceptable -> no change, no note.
-	a = newVizAdvisor()
-	newType, changed = a.advise("line_chart", aggLogs(1, 1))
-	assert.Equal(t, "line_chart", newType)
-	assert.False(t, changed)
+	a.advise("line_chart", aggLogs(1, 1))
 	assert.Empty(t, a.notes)
 
-	// Clear mismatch: raw logs in a gauge -> recommend table, do NOT rewrite.
+	// Clear mismatch: raw logs in a gauge -> recommend data_table, non-destructive.
 	a = newVizAdvisor()
-	newType, changed = a.advise("gauge", map[string]interface{}{})
-	assert.Equal(t, "gauge", newType)
-	assert.False(t, changed)
+	a.advise("gauge", map[string]interface{}{})
 	assert.NotEmpty(t, a.notes)
 	assert.Contains(t, a.notes[0], "data_table")
 
-	// Clear mismatch: scalar in a pie -> recommend gauge, do NOT rewrite.
+	// Clear mismatch: scalar in a pie -> recommend gauge, non-destructive.
 	a = newVizAdvisor()
-	_, changed = a.advise("pie_chart", aggLogs(1, 0))
-	assert.False(t, changed)
+	a.advise("pie_chart", aggLogs(1, 0))
 	assert.NotEmpty(t, a.notes)
+	assert.Contains(t, a.notes[0], "gauge")
+
+	// Empty recommendation (nil logs) -> no note.
+	a = newVizAdvisor()
+	a.advise("gauge", nil)
+	assert.Empty(t, a.notes)
+
+	// Acceptable same-type pairs -> no note.
+	a = newVizAdvisor()
+	a.advise("gauge", aggLogs(1, 0))
+	a.advise("data_table", aggLogs(2, 1))
+	assert.Empty(t, a.notes)
+}
+
+func TestAdviseWidgetType_LineChartExempt(t *testing.T) {
+	advisor := newVizAdvisor()
+	// A line_chart whose query would otherwise recommend data_table (two
+	// aggregations) must still get no recommendation — line charts are
+	// intentionally exempt because their time axis validates any shape.
+	definition := map[string]interface{}{
+		"line_chart": map[string]interface{}{
+			"query_definitions": []interface{}{
+				map[string]interface{}{
+					"query": map[string]interface{}{
+						"logs": map[string]interface{}{
+							"aggregations": []interface{}{
+								map[string]interface{}{"count": map[string]interface{}{}},
+								map[string]interface{}{"count": map[string]interface{}{}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	adviseWidgetType(definition, advisor)
+	assert.Empty(t, advisor.notes)
 }
 
 func TestEnsureRequiredDashboardFields_VizRecommendation(t *testing.T) {
