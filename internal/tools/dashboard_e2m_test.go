@@ -22,6 +22,25 @@ func logsAgg(aggType, field string, groupBys []string, lucene string) map[string
 	return logs
 }
 
+func e2mDef(luceneFilter, srcField, aggType, metricName string, labelSrcFields []string) map[string]interface{} {
+	labels := make([]interface{}, len(labelSrcFields))
+	for i, f := range labelSrcFields {
+		labels[i] = map[string]interface{}{"source_field": f, "target_label": f}
+	}
+	return map[string]interface{}{
+		"logs_query":    map[string]interface{}{"lucene": luceneFilter},
+		"metric_labels": labels,
+		"metric_fields": []interface{}{
+			map[string]interface{}{
+				"source_field": srcField,
+				"aggregations": []interface{}{
+					map[string]interface{}{"agg_type": aggType, "target_metric_name": metricName},
+				},
+			},
+		},
+	}
+}
+
 func TestWidgetAggregation(t *testing.T) {
 	// count by application
 	a := widgetAggregation(logsAgg("count", "", []string{"applicationname"}, "severity:error"))
@@ -43,4 +62,37 @@ func TestWidgetAggregation(t *testing.T) {
 	assert.False(t, widgetAggregation(map[string]interface{}{}).eligible)
 	// nil is ineligible
 	assert.False(t, widgetAggregation(nil).eligible)
+}
+
+func TestMatchE2M(t *testing.T) {
+	agg := widgetAgg{aggType: "count", sourceField: "", labels: []string{"applicationname"}, lucene: "severity:error", eligible: true}
+
+	// Exact match (count, same label, broader/equal lucene).
+	e2ms := []interface{}{e2mDef("severity:error", "message", "count", "error_count_total", []string{"applicationname"})}
+	name, ok := matchE2M(agg, e2ms)
+	assert.True(t, ok)
+	assert.Equal(t, "error_count_total", name)
+
+	// Empty E2M lucene = matches all -> still a match.
+	e2ms = []interface{}{e2mDef("", "message", "count", "all_count", []string{"applicationname"})}
+	_, ok = matchE2M(agg, e2ms)
+	assert.True(t, ok)
+
+	// Label-set mismatch -> no match.
+	e2ms = []interface{}{e2mDef("severity:error", "message", "count", "x", []string{"subsystemname"})}
+	_, ok = matchE2M(agg, e2ms)
+	assert.False(t, ok)
+
+	// agg_type mismatch -> no match.
+	e2ms = []interface{}{e2mDef("severity:error", "message", "sum", "x", []string{"applicationname"})}
+	_, ok = matchE2M(agg, e2ms)
+	assert.False(t, ok)
+
+	// sum requires source_field to match.
+	sumAgg := widgetAgg{aggType: "sum", sourceField: "duration", labels: nil, lucene: "", eligible: true}
+	_, ok = matchE2M(sumAgg, []interface{}{e2mDef("", "latency", "sum", "x", nil)})
+	assert.False(t, ok)
+	name, ok = matchE2M(sumAgg, []interface{}{e2mDef("", "duration", "sum", "duration_sum", nil)})
+	assert.True(t, ok)
+	assert.Equal(t, "duration_sum", name)
 }
