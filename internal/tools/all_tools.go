@@ -757,11 +757,40 @@ func (t *CreateE2MTool) InputSchema() interface{} {
 					},
 					"metric_fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Fields to extract as metric values",
+						"description": "What to measure. Each field declares one or more aggregations that each become a named metric.",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"source_field":            map[string]interface{}{"type": "string", "description": "Numeric log field to measure (required even for count; value is ignored for count)."},
+								"target_base_metric_name": map[string]interface{}{"type": "string", "description": "Base name for this measured field (pattern ^[\\w/-]+$)."},
+								"aggregations": map[string]interface{}{
+									"type":        "array",
+									"description": "One entry per aggregation; each produces a metric named by target_metric_name.",
+									"items": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"enabled":            map[string]interface{}{"type": "boolean"},
+											"agg_type":           map[string]interface{}{"type": "string", "enum": []string{"min", "max", "count", "avg", "sum", "histogram", "samples"}},
+											"target_metric_name": map[string]interface{}{"type": "string", "description": "The PromQL metric name produced for this aggregation."},
+										},
+										"required": []string{"agg_type", "target_metric_name"},
+									},
+								},
+							},
+							"required": []string{"source_field", "target_base_metric_name", "aggregations"},
+						},
 					},
 					"metric_labels": map[string]interface{}{
 						"type":        "array",
-						"description": "Fields to use as metric labels",
+						"description": "Group-by dimensions carried onto the resulting metric as Prometheus labels.",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"target_label": map[string]interface{}{"type": "string", "description": "Resulting Prometheus label name (pattern ^[\\w/-]+$)."},
+								"source_field": map[string]interface{}{"type": "string", "description": "Log field the label value is read from, e.g. applicationName."},
+							},
+							"required": []string{"target_label", "source_field"},
+						},
 					},
 				},
 			},
