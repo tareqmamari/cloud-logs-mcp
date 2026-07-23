@@ -1,9 +1,14 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func logsAgg(aggType, field string, groupBys []string, lucene string) map[string]interface{} {
@@ -136,4 +141,35 @@ func TestE2MRecommendations_ArchiveSuggestsCreate(t *testing.T) {
 	notes := e2mRecommendations(layout, nil, session)
 	assert.NotEmpty(t, notes)
 	assert.Contains(t, notes[0], "create_e2m")
+}
+
+func TestCreateDashboard_SurfacesE2MRecommendation(t *testing.T) {
+	mock := client.NewMockClient()
+	// list_e2m (GET /v1/events2metrics) returns a matching metric; the create returns an id.
+	mock.DoFunc = func(_ context.Context, req *client.Request) (*client.Response, error) {
+		if req.Method == "GET" && req.Path == "/v1/events2metrics" {
+			body, _ := json.Marshal(map[string]interface{}{
+				"events2metrics": []interface{}{e2mDef("severity:error", "message", "count", "error_count_total", []string{"applicationname"})},
+			})
+			return &client.Response{StatusCode: 200, Body: body}, nil
+		}
+		body, _ := json.Marshal(map[string]interface{}{"dashboard_id": "d1"})
+		return &client.Response{StatusCode: 200, Body: body}, nil
+	}
+	tool := NewCreateDashboardTool(mock, zap.NewNop())
+	ctx := testCtx(mock)
+
+	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+	layout := map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{"bar_chart": map[string]interface{}{"query": map[string]interface{}{"logs": logs}}},
+				}},
+			}},
+		}},
+	}
+	result, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": layout})
+	assert.NoError(t, err)
+	assert.Contains(t, resultText(t, result), "error_count_total")
 }

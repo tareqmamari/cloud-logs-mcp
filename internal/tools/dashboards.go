@@ -475,7 +475,13 @@ a widget to override. The chosen tiers are reported under _tier_selection.
 (a single value suits a gauge, one breakdown a bar_chart, raw or
 multi-dimensional data a data_table). Clear mismatches are reported under
 _viz_recommendations rather than rewritten, so your explicit choice is always
-kept.`
+kept.
+
+**Metrics (E2M):** for aggregation widgets, the response may include
+_e2m_recommendations — either an existing events-to-metrics metric that matches
+the widget (a metrics-backed widget would query faster) or, for archive-tier
+logs, a suggested create_e2m body. These are advisory only; no metric is created
+and no widget is switched.`
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
