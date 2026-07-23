@@ -50,7 +50,7 @@ type Config struct {
 	MetricsEndpoint bool `json:"metrics_endpoint"` // Enable Prometheus metrics endpoint (default: true)
 
 	// Health & Metrics HTTP Server
-	HealthPort      int           `json:"health_port"`      // Port for health/metrics HTTP server (default: 8080, 0 to disable)
+	HealthPort      int           `json:"health_port"`      // Port for health/metrics HTTP server (default: 0/disabled; set >0 to enable)
 	HealthBindAddr  string        `json:"health_bind_addr"` // Bind address for health server (default: 127.0.0.1 for security)
 	ShutdownTimeout time.Duration `json:"shutdown_timeout"` // Timeout for graceful shutdown (default: 30s)
 
@@ -82,8 +82,15 @@ func Load() (*Config, error) {
 		EnableTracing:   true,
 		EnableAuditLog:  true,
 		MetricsEndpoint: true, // Enabled by default for operational visibility
-		// Health & shutdown defaults
-		HealthPort:      8080,
+		// Health & shutdown defaults.
+		// Opt-in: the health/metrics HTTP server is only started when
+		// HealthPort > 0. Defaulting to 0 avoids binding a TCP port unless
+		// explicitly requested, so multiple instances (e.g. one per
+		// environment under Claude Desktop, which talks to each over stdio)
+		// can run side by side without colliding on a shared health port.
+		// Orchestrated deployments that want liveness/readiness/metrics set
+		// LOGS_HEALTH_PORT (or health_port) explicitly.
+		HealthPort:      0,
 		HealthBindAddr:  "127.0.0.1", // Bind to localhost by default for security
 		ShutdownTimeout: 30 * time.Second,
 	}

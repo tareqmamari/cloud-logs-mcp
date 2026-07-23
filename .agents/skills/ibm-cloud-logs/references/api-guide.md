@@ -14,7 +14,7 @@
 | `LOGS_ENABLE_RATE_LIMIT` | `true` | Enable rate limiting |
 | `LOGS_RATE_LIMIT` | `100` | Requests per second |
 | `LOGS_RATE_LIMIT_BURST` | `20` | Burst size |
-| `LOGS_HEALTH_PORT` | `8080` | Health/metrics HTTP port |
+| `LOGS_HEALTH_PORT` | `0` (disabled) | Health/metrics HTTP port; set >0 to enable |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `LOG_FORMAT` | `json` | Log format: `json` or `console` |
 
