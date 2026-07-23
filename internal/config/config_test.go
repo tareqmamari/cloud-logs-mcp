@@ -88,6 +88,15 @@ func TestConfigDefaults(t *testing.T) {
 	if !cfg.EnableRateLimit {
 		t.Error("Expected EnableRateLimit to be true by default")
 	}
+
+	// The health/metrics HTTP server is opt-in: it is only created when
+	// HealthPort > 0. Defaulting to 0 keeps the server from binding a TCP
+	// port unless explicitly requested, so multiple instances (e.g. one per
+	// environment, launched by Claude Desktop over stdio) can run side by
+	// side without colliding on a shared health port.
+	if cfg.HealthPort != 0 {
+		t.Errorf("Expected default health_port 0 (disabled), got %d", cfg.HealthPort)
+	}
 }
 
 func TestConfigRedact(t *testing.T) {
