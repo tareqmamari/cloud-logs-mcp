@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func aggLogs(aggs, groupBys int) map[string]interface{} {
@@ -89,4 +92,29 @@ func TestEnsureRequiredDashboardFields_VizRecommendation(t *testing.T) {
 	ensureRequiredDashboardFields(layout, nil, advisor)
 	assert.NotEmpty(t, advisor.notes)
 	assert.Contains(t, advisor.notes[0], "data_table")
+}
+
+func TestCreateDashboard_SurfacesVizRecommendation(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.RespondWith(200, map[string]interface{}{"dashboard_id": "d1"})
+	tool := NewCreateDashboardTool(mock, zap.NewNop())
+	ctx := testCtx(mock)
+
+	// A gauge widget over raw logs -> a recommendation to use a data_table.
+	layout := map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{
+						"gauge": map[string]interface{}{
+							"query": map[string]interface{}{"logs": map[string]interface{}{}},
+						},
+					},
+				}},
+			}},
+		}},
+	}
+	result, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": layout})
+	assert.NoError(t, err)
+	assert.Contains(t, resultText(t, result), "data_table")
 }
