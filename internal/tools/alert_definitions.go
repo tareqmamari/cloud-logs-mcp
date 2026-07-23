@@ -119,7 +119,12 @@ func (t *CreateAlertDefinitionTool) Description() string {
 **Label filters** (simple_filter.label_filters.application_name / subsystem_name)
 use an "operation" enum of: is_or_unspecified, includes, ends_with, starts_with.
 Common aliases (is, equals, contains) are auto-normalized to the canonical value;
-run with dry_run: true to preview any normalization before creating.`
+run with dry_run: true to preview any normalization before creating.
+
+**Tier note:** only high- and medium-priority logs are available to alerts. If
+a TCO policy assigns the targeted application/subsystem a low (or unspecified)
+priority, the alert will not fire — dry_run and the create response surface a
+_tier_warnings note when that is the case.`
 }
 
 // InputSchema returns the input schema
@@ -186,7 +191,7 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	// the preview reports which operations would be normalized.
 	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
 	if dryRun {
-		return t.validateAlertDefinition(def)
+		return t.validateAlertDefinition(ctx, def)
 	}
 
 	// Rewrite intuitive label-filter operation aliases (e.g. "is") to the
@@ -199,6 +204,7 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 	attachNormalizationNotes(result, notes)
+	attachTierWarnings(result, alertTierWarnings(def, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "create_alert_definition")
 }
 
@@ -453,9 +459,13 @@ func validateAlertDefinitionConfig(def map[string]interface{}) *ValidationResult
 	return result
 }
 
-// validateAlertDefinition performs dry-run validation
-func (t *CreateAlertDefinitionTool) validateAlertDefinition(def map[string]interface{}) (*mcp.CallToolResult, error) {
-	return FormatDryRunResult(validateAlertDefinitionConfig(def), "Alert Definition", def), nil
+// validateAlertDefinition performs dry-run validation. It also warns when the
+// alert targets logs TCO routes to the archive tier only (such an alert never
+// fires, since alerts evaluate on the frequent_search stream).
+func (t *CreateAlertDefinitionTool) validateAlertDefinition(ctx context.Context, def map[string]interface{}) (*mcp.CallToolResult, error) {
+	result := validateAlertDefinitionConfig(def)
+	result.Warnings = append(result.Warnings, alertTierWarnings(def, sessionAsIs(ctx))...)
+	return FormatDryRunResult(result, "Alert Definition", def), nil
 }
 
 // UpdateAlertDefinitionTool updates an existing alert definition
@@ -504,6 +514,7 @@ func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 	attachNormalizationNotes(result, notes)
+	attachTierWarnings(result, alertTierWarnings(def, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "update_alert_definition")
 }
 
