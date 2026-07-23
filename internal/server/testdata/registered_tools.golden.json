@@ -57,7 +57,7 @@
           "items": {
             "properties": {
               "field": {
-                "description": "Field name. Use prefixes for DataPrime: $l.applicationname (label), $m.severity (metadata), $d.status_code (data). Without prefix, common fields auto-map: applicationname-\u003e$l, severity-\u003e$m, others-\u003e$d",
+                "description": "Field name. Use prefixes for DataPrime: $l.applicationname (label), $m.severity (metadata), $d.status_code (data). Without prefix, common fields auto-map: applicationname->$l, severity->$m, others->$d",
                 "type": "string"
               },
               "operator": {
@@ -317,7 +317,7 @@
                                       }
                                     ],
                                     "lucene_query": {
-                                      "value": "severity:\u003e=5"
+                                      "value": "severity:>=5"
                                     }
                                   }
                                 },
@@ -525,12 +525,79 @@
               "type": "object"
             },
             "metric_fields": {
-              "description": "Fields to extract as metric values",
-              "type": "array"
+              "type": "array",
+              "description": "What to measure. Each field declares one or more aggregations that each become a named metric.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source_field": {
+                    "type": "string",
+                    "description": "Numeric log field to measure (required even for count; value is ignored for count)."
+                  },
+                  "target_base_metric_name": {
+                    "type": "string",
+                    "description": "Base name for this measured field (pattern ^[\\w/-]+$)."
+                  },
+                  "aggregations": {
+                    "type": "array",
+                    "description": "One entry per aggregation; each produces a metric named by target_metric_name.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "agg_type": {
+                          "type": "string",
+                          "enum": [
+                            "min",
+                            "max",
+                            "count",
+                            "avg",
+                            "sum",
+                            "histogram",
+                            "samples"
+                          ]
+                        },
+                        "target_metric_name": {
+                          "type": "string",
+                          "description": "The PromQL metric name produced for this aggregation."
+                        }
+                      },
+                      "required": [
+                        "agg_type",
+                        "target_metric_name"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "source_field",
+                  "target_base_metric_name",
+                  "aggregations"
+                ]
+              }
             },
             "metric_labels": {
-              "description": "Fields to use as metric labels",
-              "type": "array"
+              "type": "array",
+              "description": "Group-by dimensions carried onto the resulting metric as Prometheus labels.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target_label": {
+                    "type": "string",
+                    "description": "Resulting Prometheus label name (pattern ^[\\w/-]+$)."
+                  },
+                  "source_field": {
+                    "type": "string",
+                    "description": "Log field the label value is read from, e.g. applicationName."
+                  }
+                },
+                "required": [
+                  "target_label",
+                  "source_field"
+                ]
+              }
             },
             "name": {
               "description": "Display name for the E2M configuration",
@@ -640,7 +707,7 @@
           "type": "string"
         },
         "dpxl_expression": {
-          "description": "DPXL expression to filter logs (e.g., '\u003cv1\u003econtains(kubernetes.labels.app, \"frontend\")')",
+          "description": "DPXL expression to filter logs (e.g., '<v1>contains(kubernetes.labels.app, \"frontend\")')",
           "type": "string"
         },
         "ibm_event_streams": {
@@ -851,7 +918,7 @@
                     "parameters": {
                       "parse_parameters": {
                         "destination_field": "text.log",
-                        "rule": "(?P\u003ctimestamp\u003e\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(?P\u003clevel\u003e\\w+)\\] (?P\u003cpid\u003e\\d+)#(?P\u003ctid\u003e\\d+): \\*(?P\u003ccid\u003e\\d+) (?P\u003cmessage\u003e.*), client: (?P\u003cclient_ip\u003e[\\d\\.]+), server: (?P\u003cserver\u003e[^,]+)"
+                        "rule": "(?P<timestamp>\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(?P<level>\\w+)\\] (?P<pid>\\d+)#(?P<tid>\\d+): \\*(?P<cid>\\d+) (?P<message>.*), client: (?P<client_ip>[\\d\\.]+), server: (?P<server>[^,]+)"
                       }
                     },
                     "source_field": "text.log"
@@ -999,7 +1066,7 @@
                           "type": "object"
                         },
                         "source_field": {
-                          "description": "Field to apply the rule to. Valid fields:\n- 'text' - Main log message\n- 'text.log' - Nested log field from JSON logs (common for Kubernetes)\n- 'text.\u003cfield\u003e' - Any nested field under text\n- 'json.\u003cfield\u003e' - Custom JSON fields\nNote: Use lowercase for field names.",
+                          "description": "Field to apply the rule to. Valid fields:\n- 'text' - Main log message\n- 'text.log' - Nested log field from JSON logs (common for Kubernetes)\n- 'text.<field>' - Any nested field under text\n- 'json.<field>' - Custom JSON fields\nNote: Use lowercase for field names.",
                           "examples": [
                             "text",
                             "text.log",
@@ -1061,11 +1128,11 @@
           "type": "string"
         },
         "dpxl_expression": {
-          "description": "DPXL expression to filter logs (e.g., '\u003cv1\u003econtains(kubernetes.labels.app, \"frontend\")')",
+          "description": "DPXL expression to filter logs (e.g., '<v1>contains(kubernetes.labels.app, \"frontend\")')",
           "examples": [
-            "\u003cv1\u003econtains(kubernetes.labels.app, \"frontend\")",
-            "\u003cv1\u003eseverity \u003e= 5",
-            "\u003cv1\u003eapplicationname == \"api-gateway\""
+            "<v1>contains(kubernetes.labels.app, \"frontend\")",
+            "<v1>severity >= 5",
+            "<v1>applicationname == \"api-gateway\""
           ],
           "type": "string"
         },
@@ -2153,8 +2220,8 @@
         "query": {
           "description": "The query string to execute (DataPrime or Lucene syntax). Max 4096 characters.",
           "examples": [
-            "source logs | filter $m.severity \u003e= 5",
-            "source logs | filter $l.applicationname == 'api-gateway' \u0026\u0026 $m.severity \u003e= 4",
+            "source logs | filter $m.severity >= 5",
+            "source logs | filter $l.applicationname == 'api-gateway' && $m.severity >= 4",
             "source logs | filter $d.message.contains('timeout') | limit 100"
           ],
           "maxLength": 4096,
