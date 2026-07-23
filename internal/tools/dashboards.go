@@ -708,31 +708,25 @@ func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResol
 // widgetDefinitionKeys are the definition keys that hold a chart widget.
 var widgetDefinitionKeys = []string{"line_chart", "data_table", "pie_chart", "bar_chart", "gauge"}
 
-// adviseWidgetType consults the advisor for a widget definition: it finds the
-// current widget type (if any) and its logs query, then either adopts a type
-// (when none is set) or records a recommendation. Auto-adoption inserts an
-// empty definition map under the recommended key so the existing ensure* funcs
-// fill its required fields. Only the mechanical bar_chart<->pie_chart pair is
-// rewritten in place; other mismatches are recommendation-only.
+// adviseWidgetType records a visualization recommendation for a widget when
+// its chosen chart type clearly mismatches its query shape. It is strictly
+// non-destructive: it never rewrites the caller's widget type. A widget with
+// no chart-type wrapper is skipped — a widget's logs query always lives inside
+// a widget-type definition, so there is no canonical query to classify and no
+// type is synthesized.
 func adviseWidgetType(definition map[string]interface{}, advisor *vizAdvisor) {
 	if advisor == nil {
 		return
 	}
 	current, node := currentWidgetType(definition)
+	if current == "" || node == nil {
+		return
+	}
 	logs := logsQueryOf(node)
-	if logs == nil && current != "" {
+	if logs == nil {
 		return
 	}
-	newType, changed := advisor.advise(current, logs)
-	if !changed || newType == current {
-		return
-	}
-	// Adoption path: caller left the type unspecified.
-	if current == "" {
-		definition[newType] = map[string]interface{}{
-			"query": map[string]interface{}{"logs": map[string]interface{}{}},
-		}
-	}
+	advisor.advise(current, logs)
 }
 
 // currentWidgetType returns the first present chart widget key and its
