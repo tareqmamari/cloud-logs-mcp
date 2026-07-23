@@ -102,6 +102,14 @@ func TestMatchE2M(t *testing.T) {
 	assert.Equal(t, "duration_sum", name)
 }
 
+func TestMatchE2M_LabelCaseInsensitive(t *testing.T) {
+	agg := widgetAgg{aggType: "count", sourceField: "", labels: []string{"applicationname"}, lucene: "", eligible: true}
+	e2ms := []interface{}{e2mDef("", "message", "count", "count_by_app", []string{"applicationName"})}
+	name, ok := matchE2M(agg, e2ms)
+	assert.True(t, ok, "label match must be case-insensitive")
+	assert.Equal(t, "count_by_app", name)
+}
+
 func TestE2MRecommendations_MatchExisting(t *testing.T) {
 	// Widget: count by applicationname, filter severity:error; an existing E2M matches.
 	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
