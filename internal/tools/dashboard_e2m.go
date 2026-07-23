@@ -128,3 +128,101 @@ func luceneValue(logs map[string]interface{}) string {
 	s, _ := lq["value"].(string)
 	return s
 }
+
+// matchE2M returns the target_metric_name of the first existing E2M whose
+// definition computes the same metric as the widget aggregation, or ok=false.
+func matchE2M(agg widgetAgg, e2ms []interface{}) (string, bool) {
+	if !agg.eligible {
+		return "", false
+	}
+	for _, e := range e2ms {
+		e2m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if !e2mFilterCoversWidget(e2m, agg.lucene) {
+			continue
+		}
+		if !stringSetEqual(e2mLabelSourceFields(e2m), agg.labels) {
+			continue
+		}
+		if name, ok := e2mAggMetricName(e2m, agg); ok {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// e2mFilterCoversWidget reports whether the E2M's logs filter is equal-or-broader
+// than the widget's: an empty E2M lucene matches all logs; otherwise require
+// exact string equality.
+func e2mFilterCoversWidget(e2m map[string]interface{}, widgetLucene string) bool {
+	lq, _ := e2m["logs_query"].(map[string]interface{})
+	e2mLucene, _ := lq["lucene"].(string)
+	return e2mLucene == "" || e2mLucene == widgetLucene
+}
+
+// e2mLabelSourceFields returns the set of metric_labels[].source_field values.
+func e2mLabelSourceFields(e2m map[string]interface{}) []string {
+	arr, _ := e2m["metric_labels"].([]interface{})
+	var out []string
+	for _, l := range arr {
+		if m, ok := l.(map[string]interface{}); ok {
+			if s, ok := m["source_field"].(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+// e2mAggMetricName finds an aggregation on the E2M matching the widget's
+// agg_type (and measured field, unless count) and returns its target_metric_name.
+func e2mAggMetricName(e2m map[string]interface{}, agg widgetAgg) (string, bool) {
+	fields, _ := e2m["metric_fields"].([]interface{})
+	for _, f := range fields {
+		mf, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if agg.aggType != "count" {
+			src, _ := mf["source_field"].(string)
+			if !strings.EqualFold(src, agg.sourceField) {
+				continue
+			}
+		}
+		aggs, _ := mf["aggregations"].([]interface{})
+		for _, a := range aggs {
+			am, ok := a.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if t, _ := am["agg_type"].(string); t == agg.aggType {
+				if name, ok := am["target_metric_name"].(string); ok && name != "" {
+					return name, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// stringSetEqual reports set equality (order-independent) of two string slices.
+func stringSetEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, s := range a {
+		seen[s]++
+	}
+	for _, s := range b {
+		seen[s]--
+	}
+	for _, n := range seen {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}
