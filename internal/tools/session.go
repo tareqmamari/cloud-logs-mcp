@@ -1359,6 +1359,28 @@ func (s *SessionContext) GetTierForAppAndSubsystem(appName, subsystemName string
 	return s.getDefaultTierLocked()
 }
 
+// GetPriorityForAppAndSubsystem returns the TCO priority (type_high,
+// type_medium, type_low, type_unspecified) of the first policy matching the
+// given application/subsystem, and whether any policy matched. Unlike the
+// tier (which collapses medium and low into "archive"), the priority
+// distinguishes the levels — needed because alert availability is a
+// priority-level rule (only high and medium logs are alertable), not a
+// tier-level one.
+func (s *SessionContext) GetPriorityForAppAndSubsystem(appName, subsystemName string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.TCOConfig == nil {
+		return "", false
+	}
+	for _, policy := range s.TCOConfig.Policies {
+		if matchesTCOPolicy(policy, appName, subsystemName) {
+			return policy.Priority, true
+		}
+	}
+	return "", false
+}
+
 // getDefaultTierLocked returns default tier (caller must hold lock)
 func (s *SessionContext) getDefaultTierLocked() string {
 	if s.TCOConfig == nil {

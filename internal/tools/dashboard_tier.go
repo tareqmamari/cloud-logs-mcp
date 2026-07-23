@@ -20,12 +20,28 @@ import (
 // skipped; any fetch error is non-fatal and simply leaves the resolver to
 // fall back to default-tier behavior.
 func resolverFromContext(ctx context.Context, c client.Doer, logger *zap.Logger) *widgetTierResolver {
+	return newWidgetTierResolver(sessionForTCO(ctx, c, logger))
+}
+
+// sessionForTCO returns the session whose cached TCO policies drive tier
+// decisions, defensively refreshing the cache first (a no-op when already
+// fresh). A fetch error is non-fatal — callers fall back to default-tier
+// behavior. Use this where the tier drives correctness (dashboard tier
+// selection); prefer sessionAsIs for best-effort guidance on hot paths.
+func sessionForTCO(ctx context.Context, c client.Doer, logger *zap.Logger) *SessionContext {
 	_ = FetchAndCacheTCOConfig(ctx, c, logger)
-	session := GetSessionFromContext(ctx)
-	if session == nil {
-		session = GetSession()
+	return sessionAsIs(ctx)
+}
+
+// sessionAsIs returns the current session without refreshing the TCO cache,
+// so it issues no API call. Callers that only need best-effort tier guidance
+// (e.g. alert archive-only warnings) use this and simply skip the guidance
+// when TCO policies were never loaded.
+func sessionAsIs(ctx context.Context) *SessionContext {
+	if session := GetSessionFromContext(ctx); session != nil {
+		return session
 	}
-	return newWidgetTierResolver(session)
+	return GetSession()
 }
 
 // attachTierSelection records the per-widget tier decisions on the API
