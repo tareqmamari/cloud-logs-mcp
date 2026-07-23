@@ -728,6 +728,14 @@ func adviseWidgetType(definition map[string]interface{}, advisor *vizAdvisor) {
 	if current == "" || node == nil {
 		return
 	}
+	// line_chart is intentionally exempt from viz advice. Its query lives under
+	// query_definitions[] rather than node["query"], and more importantly its
+	// implicit time axis makes any aggregation shape a valid trend over time, so
+	// gauge/bar/table recommendations would be false positives. (A line chart
+	// with no aggregation is already rejected by validateDashboardStructure.)
+	if current == "line_chart" {
+		return
+	}
 	logs := logsQueryOf(node)
 	if logs == nil {
 		return
