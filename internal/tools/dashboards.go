@@ -462,7 +462,14 @@ func (t *CreateDashboardTool) Description() string {
 **Dashboard Structure:**
 - sections: Array of dashboard sections (logical groupings)
 - rows: Horizontal containers within sections (each has height)
-- widgets: Visualizations (line_chart, bar_chart, pie_chart, data_table, gauge, markdown)`
+- widgets: Visualizations (line_chart, bar_chart, pie_chart, data_table, gauge, markdown)
+
+**Tier selection:** each widget's data_mode_type (the query tier) is chosen
+automatically from the TCO policy that routes the widget's target
+application/subsystem — "archive" for logs kept only in the archive tier,
+"high_unspecified" (Priority Insights / frequent_search) otherwise — so panels
+query the tier where the data actually lives. Set data_mode_type explicitly on
+a widget to override. The chosen tiers are reported under _tier_selection.`
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
@@ -605,7 +612,18 @@ func ensureUUIDID(m map[string]interface{}) {
 	m["id"] = map[string]interface{}{"value": uuid.NewString()}
 }
 
-func ensureRequiredDashboardFields(layout interface{}) {
+// logsQueryOf returns the "logs" query map nested under a node's "query"
+// field (node["query"]["logs"]), or nil when the node has no logs query.
+func logsQueryOf(node map[string]interface{}) map[string]interface{} {
+	query, ok := node["query"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	logs, _ := query["logs"].(map[string]interface{})
+	return logs
+}
+
+func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResolver) {
 	layoutMap, ok := layout.(map[string]interface{})
 	if !ok {
 		return
@@ -663,19 +681,19 @@ func ensureRequiredDashboardFields(layout interface{}) {
 
 				// Handle different widget types
 				if lineChart, ok := definition["line_chart"].(map[string]interface{}); ok {
-					ensureLineChartFields(lineChart)
+					ensureLineChartFields(lineChart, resolver)
 				}
 				if dataTable, ok := definition["data_table"].(map[string]interface{}); ok {
-					ensureDataTableFields(dataTable)
+					ensureDataTableFields(dataTable, resolver)
 				}
 				if pieChart, ok := definition["pie_chart"].(map[string]interface{}); ok {
-					ensureChartFields(pieChart)
+					ensureChartFields(pieChart, resolver)
 				}
 				if barChart, ok := definition["bar_chart"].(map[string]interface{}); ok {
-					ensureChartFields(barChart)
+					ensureChartFields(barChart, resolver)
 				}
 				if gauge, ok := definition["gauge"].(map[string]interface{}); ok {
-					ensureGaugeFields(gauge)
+					ensureGaugeFields(gauge, resolver)
 				}
 			}
 		}
@@ -762,7 +780,7 @@ func validateDashboardStructure(layout interface{}) []string {
 }
 
 // ensureLineChartFields ensures line chart has all required fields
-func ensureLineChartFields(lineChart map[string]interface{}) {
+func ensureLineChartFields(lineChart map[string]interface{}, resolver *widgetTierResolver) {
 	// Ensure legend
 	if _, hasLegend := lineChart["legend"]; !hasLegend {
 		lineChart["legend"] = map[string]interface{}{
@@ -788,19 +806,26 @@ func ensureLineChartFields(lineChart map[string]interface{}) {
 	if queryDefs, ok := lineChart["query_definitions"].([]interface{}); ok {
 		for _, qd := range queryDefs {
 			if qdMap, ok := qd.(map[string]interface{}); ok {
-				ensureQueryDefinitionFields(qdMap)
+				ensureQueryDefinitionFields(qdMap, resolver)
 				ensureQueryDefinitionUUID(qdMap)
 			}
 		}
 	}
 }
 
-// ensureDataTableFields ensures data table has required fields
-func ensureDataTableFields(dataTable map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := dataTable["data_mode_type"]; !hasDataMode {
-		dataTable["data_mode_type"] = "high_unspecified"
+// ensureDataModeType fills in a node's data_mode_type from the TCO-derived
+// tier for its logs query, but only when the caller did not set it — an
+// explicit value always wins.
+func ensureDataModeType(node map[string]interface{}, resolver *widgetTierResolver) {
+	if _, hasDataMode := node["data_mode_type"]; hasDataMode {
+		return
 	}
+	node["data_mode_type"] = resolver.dataModeTypeFor(logsQueryOf(node))
+}
+
+// ensureDataTableFields ensures data table has required fields
+func ensureDataTableFields(dataTable map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(dataTable, resolver)
 
 	// Ensure query has filters array
 	if query, ok := dataTable["query"].(map[string]interface{}); ok {
@@ -809,11 +834,8 @@ func ensureDataTableFields(dataTable map[string]interface{}) {
 }
 
 // ensureChartFields ensures pie/bar charts have required fields
-func ensureChartFields(chart map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := chart["data_mode_type"]; !hasDataMode {
-		chart["data_mode_type"] = "high_unspecified"
-	}
+func ensureChartFields(chart map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(chart, resolver)
 
 	// Ensure query has filters array
 	if query, ok := chart["query"].(map[string]interface{}); ok {
@@ -822,11 +844,8 @@ func ensureChartFields(chart map[string]interface{}) {
 }
 
 // ensureGaugeFields ensures gauge has required fields
-func ensureGaugeFields(gauge map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := gauge["data_mode_type"]; !hasDataMode {
-		gauge["data_mode_type"] = "high_unspecified"
-	}
+func ensureGaugeFields(gauge map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(gauge, resolver)
 
 	// Ensure query has filters array
 	if query, ok := gauge["query"].(map[string]interface{}); ok {
@@ -835,16 +854,14 @@ func ensureGaugeFields(gauge map[string]interface{}) {
 }
 
 // ensureQueryDefinitionFields ensures query definition has all required fields
-func ensureQueryDefinitionFields(queryDef map[string]interface{}) {
+func ensureQueryDefinitionFields(queryDef map[string]interface{}, resolver *widgetTierResolver) {
 	// Ensure is_visible
 	if _, hasVisible := queryDef["is_visible"]; !hasVisible {
 		queryDef["is_visible"] = true
 	}
 
-	// Ensure data_mode_type
-	if _, hasDataMode := queryDef["data_mode_type"]; !hasDataMode {
-		queryDef["data_mode_type"] = "high_unspecified"
-	}
+	// Ensure data_mode_type (tier) from TCO policy for the query's app/subsystem
+	ensureDataModeType(queryDef, resolver)
 
 	// Ensure scale_type
 	if _, hasScale := queryDef["scale_type"]; !hasScale {
@@ -913,8 +930,12 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// Check for dry-run mode
 	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
 
-	// Ensure all required fields are present in the layout
-	ensureRequiredDashboardFields(layout)
+	// Ensure all required fields are present in the layout. The resolver
+	// selects each widget's tier (data_mode_type) from the TCO policy that
+	// routes the widget's target application/subsystem, so panels query the
+	// tier where those logs actually live.
+	resolver := resolverFromContext(ctx, t.client, t.logger)
+	ensureRequiredDashboardFields(layout, resolver)
 
 	// Check structural constraints the API enforces beyond JSON shape
 	structureErrors := validateDashboardStructure(layout)
@@ -987,6 +1008,7 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError(err.Error()), nil
 	}
 
+	attachTierSelection(result, resolver)
 	return t.FormatResponseWithSuggestions(result, "create_dashboard")
 }
 
@@ -1167,6 +1189,12 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError("layout is required"), nil
 	}
 
+	// Normalize the layout and select each widget's tier (data_mode_type)
+	// from the TCO policy for its target application/subsystem, mirroring
+	// create so an updated dashboard queries the tier where its logs live.
+	resolver := resolverFromContext(ctx, t.client, t.logger)
+	ensureRequiredDashboardFields(layout, resolver)
+
 	// Extract and validate all queries from the layout before updating the dashboard
 	queries := extractQueriesFromLayout(layout)
 	if len(queries) > 0 {
@@ -1204,6 +1232,7 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError(err.Error()), nil
 	}
 
+	attachTierSelection(result, resolver)
 	return t.FormatResponseWithSuggestions(result, "update_dashboard")
 }
 
