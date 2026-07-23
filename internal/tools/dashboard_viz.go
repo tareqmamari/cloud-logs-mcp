@@ -86,3 +86,11 @@ func (a *vizAdvisor) advise(currentType string, logs map[string]interface{}) (ne
 	a.notes = append(a.notes, fmt.Sprintf("widget uses %s but %s is recommended: %s", currentType, recommended, reason))
 	return currentType, false
 }
+
+// attachVizRecommendations records visualization notes on the API response.
+func attachVizRecommendations(result map[string]interface{}, advisor *vizAdvisor) {
+	if advisor == nil || len(advisor.notes) == 0 || result == nil {
+		return
+	}
+	result["_viz_recommendations"] = advisor.notes
+}

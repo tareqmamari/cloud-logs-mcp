@@ -101,12 +101,12 @@ func TestEnsureRequiredDashboardFields_TierFromTCO(t *testing.T) {
 	resolver := newWidgetTierResolver(session)
 
 	layout := lineChartLayout("applicationname:payment-service", nil)
-	ensureRequiredDashboardFields(layout, resolver)
+	ensureRequiredDashboardFields(layout, resolver, nil)
 	assert.Equal(t, "archive", firstQueryDefDataMode(t, layout))
 
 	// Explicit data_mode_type must win over TCO inference.
 	explicit := lineChartLayout("applicationname:payment-service", map[string]interface{}{"data_mode_type": "high_unspecified"})
-	ensureRequiredDashboardFields(explicit, newWidgetTierResolver(session))
+	ensureRequiredDashboardFields(explicit, newWidgetTierResolver(session), nil)
 	assert.Equal(t, "high_unspecified", firstQueryDefDataMode(t, explicit))
 }
 

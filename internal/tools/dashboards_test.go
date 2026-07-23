@@ -441,7 +441,7 @@ func TestEnsureRequiredDashboardFields(t *testing.T) {
 			},
 		}
 
-		ensureRequiredDashboardFields(layout, nil)
+		ensureRequiredDashboardFields(layout, nil, nil)
 
 		// Verify sections exist
 		sections, ok := layout["sections"].([]interface{})
@@ -493,7 +493,7 @@ func TestEnsureRequiredDashboardFields(t *testing.T) {
 
 	t.Run("handles empty layout", func(t *testing.T) {
 		layout := map[string]interface{}{}
-		ensureRequiredDashboardFields(layout, nil)
+		ensureRequiredDashboardFields(layout, nil, nil)
 		assert.NotNil(t, layout, "layout should still be valid after processing")
 	})
 
@@ -501,7 +501,7 @@ func TestEnsureRequiredDashboardFields(t *testing.T) {
 		layout := map[string]interface{}{
 			"sections": nil,
 		}
-		ensureRequiredDashboardFields(layout, nil)
+		ensureRequiredDashboardFields(layout, nil, nil)
 		assert.NotNil(t, layout, "layout should still be valid after processing")
 	})
 }
@@ -546,7 +546,7 @@ func TestEnsureDashboardIDs_GeneratesUUIDs(t *testing.T) {
 	layout := demoLayout(map[string]interface{}{"value": "section-1"}, []interface{}{
 		map[string]interface{}{"count": map[string]interface{}{}},
 	})
-	ensureRequiredDashboardFields(layout, nil)
+	ensureRequiredDashboardFields(layout, nil, nil)
 
 	section := layout["sections"].([]interface{})[0].(map[string]interface{})
 	idVal := section["id"].(map[string]interface{})["value"].(string)
@@ -593,7 +593,7 @@ func TestEnsureDashboardIDs_QueryDefinitionIDs(t *testing.T) {
 	widget := layout["sections"].([]interface{})[0].(map[string]interface{})["rows"].([]interface{})[0].(map[string]interface{})["widgets"].([]interface{})[0].(map[string]interface{})
 	qd := widget["definition"].(map[string]interface{})["line_chart"].(map[string]interface{})["query_definitions"].([]interface{})[0].(map[string]interface{})
 	qd["id"] = "qd-1" // API rejects non-UUID query definition ids
-	ensureRequiredDashboardFields(layout, nil)
+	ensureRequiredDashboardFields(layout, nil, nil)
 	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, qd["id"],
 		"non-UUID query_definitions[].id must be replaced with a UUID")
 }

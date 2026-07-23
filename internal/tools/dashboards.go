@@ -623,7 +623,7 @@ func logsQueryOf(node map[string]interface{}) map[string]interface{} {
 	return logs
 }
 
-func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResolver) {
+func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResolver, advisor *vizAdvisor) {
 	layoutMap, ok := layout.(map[string]interface{})
 	if !ok {
 		return
@@ -679,6 +679,11 @@ func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResol
 					continue
 				}
 
+				// Advise/adopt the visualization type from the query shape
+				// before the per-type field defaults run. adviseWidgetType is
+				// a no-op when advisor is nil or the widget has no logs query.
+				adviseWidgetType(definition, advisor)
+
 				// Handle different widget types
 				if lineChart, ok := definition["line_chart"].(map[string]interface{}); ok {
 					ensureLineChartFields(lineChart, resolver)
@@ -698,6 +703,47 @@ func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResol
 			}
 		}
 	}
+}
+
+// widgetDefinitionKeys are the definition keys that hold a chart widget.
+var widgetDefinitionKeys = []string{"line_chart", "data_table", "pie_chart", "bar_chart", "gauge"}
+
+// adviseWidgetType consults the advisor for a widget definition: it finds the
+// current widget type (if any) and its logs query, then either adopts a type
+// (when none is set) or records a recommendation. Auto-adoption inserts an
+// empty definition map under the recommended key so the existing ensure* funcs
+// fill its required fields. Only the mechanical bar_chart<->pie_chart pair is
+// rewritten in place; other mismatches are recommendation-only.
+func adviseWidgetType(definition map[string]interface{}, advisor *vizAdvisor) {
+	if advisor == nil {
+		return
+	}
+	current, node := currentWidgetType(definition)
+	logs := logsQueryOf(node)
+	if logs == nil && current != "" {
+		return
+	}
+	newType, changed := advisor.advise(current, logs)
+	if !changed || newType == current {
+		return
+	}
+	// Adoption path: caller left the type unspecified.
+	if current == "" {
+		definition[newType] = map[string]interface{}{
+			"query": map[string]interface{}{"logs": map[string]interface{}{}},
+		}
+	}
+}
+
+// currentWidgetType returns the first present chart widget key and its
+// definition node, or ("", nil) if none is set.
+func currentWidgetType(definition map[string]interface{}) (string, map[string]interface{}) {
+	for _, key := range widgetDefinitionKeys {
+		if node, ok := definition[key].(map[string]interface{}); ok {
+			return key, node
+		}
+	}
+	return "", nil
 }
 
 // aggregationsNeedingField are logs-aggregation types the API requires an
@@ -935,7 +981,8 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// routes the widget's target application/subsystem, so panels query the
 	// tier where those logs actually live.
 	resolver := resolverFromContext(ctx, t.client, t.logger)
-	ensureRequiredDashboardFields(layout, resolver)
+	advisor := newVizAdvisor()
+	ensureRequiredDashboardFields(layout, resolver, advisor)
 
 	// Check structural constraints the API enforces beyond JSON shape
 	structureErrors := validateDashboardStructure(layout)
@@ -1009,6 +1056,7 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	}
 
 	attachTierSelection(result, resolver)
+	attachVizRecommendations(result, advisor)
 	return t.FormatResponseWithSuggestions(result, "create_dashboard")
 }
 
@@ -1193,7 +1241,8 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// from the TCO policy for its target application/subsystem, mirroring
 	// create so an updated dashboard queries the tier where its logs live.
 	resolver := resolverFromContext(ctx, t.client, t.logger)
-	ensureRequiredDashboardFields(layout, resolver)
+	advisor := newVizAdvisor()
+	ensureRequiredDashboardFields(layout, resolver, advisor)
 
 	// Extract and validate all queries from the layout before updating the dashboard
 	queries := extractQueriesFromLayout(layout)
@@ -1233,6 +1282,7 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	}
 
 	attachTierSelection(result, resolver)
+	attachVizRecommendations(result, advisor)
 	return t.FormatResponseWithSuggestions(result, "update_dashboard")
 }
 

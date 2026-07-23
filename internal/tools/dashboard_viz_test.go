@@ -69,3 +69,24 @@ func TestVizAdvisor_Advise(t *testing.T) {
 	assert.False(t, changed)
 	assert.NotEmpty(t, a.notes)
 }
+
+func TestEnsureRequiredDashboardFields_VizRecommendation(t *testing.T) {
+	advisor := newVizAdvisor()
+	// A gauge widget whose query is raw logs (no aggregation) -> mismatch note.
+	layout := map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{
+						"gauge": map[string]interface{}{
+							"query": map[string]interface{}{"logs": map[string]interface{}{}},
+						},
+					},
+				}},
+			}},
+		}},
+	}
+	ensureRequiredDashboardFields(layout, nil, advisor)
+	assert.NotEmpty(t, advisor.notes)
+	assert.Contains(t, advisor.notes[0], "data_table")
+}
