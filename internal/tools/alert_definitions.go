@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -113,7 +114,12 @@ func (t *CreateAlertDefinitionTool) Description() string {
 - logs_threshold: Triggered when count exceeds threshold over time window
 - logs_ratio: Triggered when ratio between two queries exceeds threshold
 - logs_anomaly: Triggered on anomaly detection
-- logs_new_value: Triggered when a new value appears in logs`
+- logs_new_value: Triggered when a new value appears in logs
+
+**Label filters** (simple_filter.label_filters.application_name / subsystem_name)
+use an "operation" enum of: is_or_unspecified, includes, ends_with, starts_with.
+Common aliases (is, equals, contains) are auto-normalized to the canonical value;
+run with dry_run: true to preview any normalization before creating.`
 }
 
 // InputSchema returns the input schema
@@ -176,16 +182,23 @@ func (t *CreateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 		return NewToolResultError(err.Error()), nil
 	}
 
-	// Check for dry-run mode
+	// Check for dry-run mode. Validation runs against the raw definition so
+	// the preview reports which operations would be normalized.
 	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
 	if dryRun {
 		return t.validateAlertDefinition(def)
 	}
 
+	// Rewrite intuitive label-filter operation aliases (e.g. "is") to the
+	// API's canonical enum ("is_or_unspecified") before sending, so the
+	// request is not rejected for a predictable vocabulary mismatch.
+	notes := normalizeAlertDefinition(def)
+
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "POST", Path: "/v1/alert_definitions", Body: def})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+	attachNormalizationNotes(result, notes)
 	return t.FormatResponseWithSuggestions(result, "create_alert_definition")
 }
 
@@ -204,6 +217,122 @@ var validAlertDefTypes = []string{
 }
 
 var validAlertDefPriorities = []string{"p5_or_unspecified", "p4", "p3", "p2", "p1"}
+
+// validLabelFilterOperations lists the canonical enum values the live API
+// accepts for a label filter's "operation" field
+// (ApisAlertDefinitionLogFilterOperationType). Note the API uses
+// "is_or_unspecified" rather than a plain "is".
+var validLabelFilterOperations = []string{"is_or_unspecified", "includes", "ends_with", "starts_with"}
+
+// labelFilterOperationAliases maps intuitive-but-wrong operation values a
+// caller is likely to send onto the API's canonical enum. Every canonical
+// value also maps to itself so lookups are total. The alias set is kept
+// deliberately small and unambiguous — anything not listed here is left
+// untouched for the validator to reject rather than silently guessed at.
+var labelFilterOperationAliases = map[string]string{
+	// canonical -> itself
+	"is_or_unspecified": "is_or_unspecified",
+	"includes":          "includes",
+	"ends_with":         "ends_with",
+	"starts_with":       "starts_with",
+	// friendly aliases -> canonical
+	"is":         "is_or_unspecified",
+	"equals":     "is_or_unspecified",
+	"eq":         "is_or_unspecified",
+	"contains":   "includes",
+	"include":    "includes",
+	"startswith": "starts_with",
+	"endswith":   "ends_with",
+}
+
+// labelFilterKeys are the label_filters sub-arrays whose items carry an
+// "operation" field. "severities" is intentionally excluded — it is a plain
+// enum array, not a {value, operation} filter.
+var labelFilterKeys = []string{"application_name", "subsystem_name"}
+
+// normalizeAlertDefinition walks an alert definition in place and rewrites
+// label-filter "operation" values that use a known alias (e.g. "is") to the
+// API's canonical variant (e.g. "is_or_unspecified"). It returns a note for
+// each rewrite it performed so callers can surface what changed. Unknown
+// operation values are left untouched — normalization corrects predictable
+// vocabulary mismatches, it does not invent values; the validator reports
+// anything genuinely invalid.
+func normalizeAlertDefinition(def map[string]interface{}) []string {
+	var notes []string
+	walkLabelFilters(def, func(filter map[string]interface{}) {
+		op, ok := filter["operation"].(string)
+		if !ok {
+			return
+		}
+		canonical, known := labelFilterOperationAliases[op]
+		if known && canonical != op {
+			filter["operation"] = canonical
+			notes = append(notes, fmt.Sprintf("label filter operation %q normalized to %q", op, canonical))
+		}
+	})
+	return notes
+}
+
+// attachNormalizationNotes records any normalization notes on the API
+// response so the caller can see which values were rewritten. It is a no-op
+// when nothing was normalized or the response is not a JSON object.
+func attachNormalizationNotes(result map[string]interface{}, notes []string) {
+	if len(notes) == 0 || result == nil {
+		return
+	}
+	result["_normalizations"] = notes
+}
+
+// walkLabelFilters recursively descends an alert definition and invokes fn
+// for every label filter object (an item of a label_filters.application_name
+// or .subsystem_name array), regardless of how deeply the label_filters map
+// is nested (numerator/denominator, logs_filter, simple_filter, etc.).
+func walkLabelFilters(node interface{}, fn func(filter map[string]interface{})) {
+	switch n := node.(type) {
+	case map[string]interface{}:
+		if lf, ok := n["label_filters"].(map[string]interface{}); ok {
+			for _, key := range labelFilterKeys {
+				if arr, ok := lf[key].([]interface{}); ok {
+					for _, item := range arr {
+						if filter, ok := item.(map[string]interface{}); ok {
+							fn(filter)
+						}
+					}
+				}
+			}
+		}
+		for _, v := range n {
+			walkLabelFilters(v, fn)
+		}
+	case []interface{}:
+		for _, v := range n {
+			walkLabelFilters(v, fn)
+		}
+	}
+}
+
+// validateLabelFilterOperations inspects every label-filter operation in the
+// definition. A canonical value passes silently; a known alias produces a
+// warning noting the rewrite that create/update will apply; an unrecognized
+// value is a hard error listing the valid variants.
+func validateLabelFilterOperations(def map[string]interface{}, result *ValidationResult) {
+	walkLabelFilters(def, func(filter map[string]interface{}) {
+		op, ok := filter["operation"].(string)
+		if !ok {
+			return
+		}
+		canonical, known := labelFilterOperationAliases[op]
+		switch {
+		case !known:
+			result.Errors = append(result.Errors,
+				fmt.Sprintf("Invalid label filter operation %q. Valid values: %s", op, joinStrings(validLabelFilterOperations, ", ")))
+			result.Valid = false
+		case canonical != op:
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Label filter operation %q will be normalized to %q", op, canonical))
+		}
+	})
+}
 
 // alertTypeConfigKey returns the definition key that must hold the config
 // object for a given alert type. For every type except the immediate default,
@@ -309,6 +438,8 @@ func validateAlertDefinitionConfig(def map[string]interface{}) *ValidationResult
 		}
 	}
 
+	validateLabelFilterOperations(def, result)
+
 	if result.Valid {
 		result.Suggestions = append(result.Suggestions, "Alert definition configuration is valid")
 		result.Suggestions = append(result.Suggestions, "Remove dry_run parameter to create the alert definition")
@@ -367,10 +498,12 @@ func (t *UpdateAlertDefinitionTool) Execute(ctx context.Context, arguments map[s
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+	notes := normalizeAlertDefinition(def)
 	result, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/alert_definitions", id), Body: def})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
+	attachNormalizationNotes(result, notes)
 	return t.FormatResponseWithSuggestions(result, "update_alert_definition")
 }
 
