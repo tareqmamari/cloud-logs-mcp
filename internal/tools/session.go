@@ -134,8 +134,10 @@ type TCOPolicyRule struct {
 	// SubsystemRule matches by subsystem name
 	SubsystemRule *TCOMatchRule `json:"subsystem_rule,omitempty"`
 
-	// Tier is the target tier for logs matching this rule
-	// "frequent_search" for type_high/type_medium, "archive" for type_low
+	// Tier is the QUERY tier for logs matching this rule (where to read them):
+	// "frequent_search" for type_high, "archive" for type_medium and type_low.
+	// This is not alert availability — high and medium logs are alertable, low
+	// logs are not; that rule keys off Priority below, not this tier.
 	Tier string `json:"tier"`
 
 	// Priority is the original policy priority (type_high, type_medium, type_low)

@@ -73,12 +73,14 @@ type testAPIError struct{ msg string }
 
 func (e *testAPIError) Error() string { return e.msg }
 
-// TestDetermineTier pins the IBM Cloud Logs TCO priority-to-tier mapping.
-// type_high fans out to both frequent_search and archive; type_medium and
-// type_low both land in archive only (type_low is IBM's low-priority
-// store-and-search tier, not a "blocked/dropped" pipeline outcome - that
-// used to be documented incorrectly on determineTier even though the code
-// itself was already correct).
+// TestDetermineTier pins the IBM Cloud Logs TCO priority-to-QUERY-tier
+// mapping. type_high fans out to both frequent_search and archive; type_medium
+// and type_low both land in archive for querying. This is only about where to
+// read logs for queries — it is NOT alert availability: high and medium logs
+// are alertable, low logs are not (that rule keys off priority, not this
+// tier; see determineTier's doc and GetPriorityForAppAndSubsystem). type_low
+// is IBM's low-priority store-and-search tier, not a "blocked/dropped"
+// pipeline outcome.
 func TestDetermineTier(t *testing.T) {
 	tests := []struct {
 		priority         string
