@@ -170,20 +170,32 @@ func checkArchiveRetention(config *TCOConfig, policy map[string]interface{}) {
 	}
 }
 
-// determineTier determines the tier based on priority
-// IBM Cloud Logs TCO priority levels:
-//   - type_high: Logs go to Priority Insights (frequent_search) AND archive
-//   - type_medium: Logs go to archive ONLY (not frequent_search)
-//   - type_low: Logs go to archive ONLY (store-and-search / low-priority
-//     tier). "Blocked/dropped" is a separate TCO pipeline outcome (a policy
-//     with no matching priority tier at all), not what type_low means.
+// determineTier returns the QUERY tier for a priority — i.e. which store to
+// read when querying these logs (dashboards, ad-hoc queries). It is NOT a
+// statement about alert availability, which is a separate priority-based rule
+// (see below and GetPriorityForAppAndSubsystem).
+//
+// IBM Cloud Logs TCO priority levels, by query tier:
+//   - type_high: Priority Insights (frequent_search) AND archive.
+//   - type_medium: archive for querying. Note medium logs are still ALERTABLE
+//     (only high and medium priorities reach the alert-evaluation stream);
+//     "archive" here is only about where to read them for queries, not a
+//     claim that medium is second-class for alerts.
+//   - type_low: archive only, and NOT alertable — an alert scoped to
+//     low-priority logs never fires. "Blocked/dropped" is a separate TCO
+//     pipeline outcome (a policy with no matching priority tier at all), not
+//     what type_low means.
+//
+// Because both type_medium and type_low map to "archive" here, the tier alone
+// cannot express alert availability — callers that need it must inspect the
+// priority itself, not this tier.
 func determineTier(config *TCOConfig, priority string) string {
 	switch priority {
 	case "type_high":
 		config.HasFrequentSearch = true
 		return "frequent_search"
 	case "type_medium":
-		// Medium priority logs only go to archive, not frequent_search
+		// Query tier is archive; medium logs remain alertable (see doc above).
 		return "archive"
 	case "type_low", "type_unspecified", "":
 		return "archive"
