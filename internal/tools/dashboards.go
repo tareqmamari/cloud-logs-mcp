@@ -1065,6 +1065,8 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	attachTierSelection(result, resolver)
 	attachVizRecommendations(result, advisor)
+	e2ms := fetchE2MList(ctx, t.client, t.logger)
+	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "create_dashboard")
 }
 
@@ -1291,6 +1293,8 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	attachTierSelection(result, resolver)
 	attachVizRecommendations(result, advisor)
+	e2ms := fetchE2MList(ctx, t.client, t.logger)
+	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "update_dashboard")
 }
 

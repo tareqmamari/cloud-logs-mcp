@@ -4,8 +4,16 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
+
+	"go.uber.org/zap"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 )
 
 // widgetAgg is the normalized single aggregation a widget computes, expressed
@@ -225,4 +233,142 @@ func stringSetEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// e2mRecommendations walks a dashboard layout and returns one advisory note per
+// eligible aggregation widget: a match against an existing metric, or (for
+// archive-tier logs) a suggestion to create an E2M. Purely advisory.
+func e2mRecommendations(layout interface{}, e2ms []interface{}, session *SessionContext) []string {
+	var notes []string
+	forEachWidgetLogsQuery(layout, func(logs map[string]interface{}) {
+		agg := widgetAggregation(logs)
+		if !agg.eligible {
+			return
+		}
+		if name, ok := matchE2M(agg, e2ms); ok {
+			notes = append(notes, fmt.Sprintf(
+				"widget aggregation matches existing metric %q — a metrics-backed widget (query.metrics.promql_query) would query faster than logs.", name))
+			return
+		}
+		if session == nil {
+			return
+		}
+		app, subsystem := extractAppSubsystem(logs)
+		if app == "" && subsystem == "" {
+			return
+		}
+		if session.GetTierForAppAndSubsystem(app, subsystem) != "archive" {
+			return
+		}
+		body, _ := json.Marshal(map[string]interface{}{"e2m": buildCreateE2MBody(agg)})
+		notes = append(notes, fmt.Sprintf(
+			"widget aggregates archive-tier logs; a metrics-backed widget would be faster. Suggested create_e2m body: %s", string(body)))
+	})
+	return notes
+}
+
+// forEachWidgetLogsQuery invokes fn with each widget's logs query (definition
+// key's node["query"]["logs"], and every line_chart query_definitions[].query.logs).
+func forEachWidgetLogsQuery(layout interface{}, fn func(logs map[string]interface{})) {
+	lm, ok := layout.(map[string]interface{})
+	if !ok {
+		return
+	}
+	sections, _ := lm["sections"].([]interface{})
+	for _, s := range sections {
+		sm, _ := s.(map[string]interface{})
+		rows, _ := sm["rows"].([]interface{})
+		for _, r := range rows {
+			rm, _ := r.(map[string]interface{})
+			widgets, _ := rm["widgets"].([]interface{})
+			for _, w := range widgets {
+				wm, _ := w.(map[string]interface{})
+				def, _ := wm["definition"].(map[string]interface{})
+				for _, node := range def {
+					nm, ok := node.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if logs := logsQueryOf(nm); logs != nil {
+						fn(logs)
+					}
+					if qds, ok := nm["query_definitions"].([]interface{}); ok {
+						for _, qd := range qds {
+							if qdm, ok := qd.(map[string]interface{}); ok {
+								if logs := logsQueryOf(qdm); logs != nil {
+									fn(logs)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// buildCreateE2MBody derives a suggested create_e2m body from a widget aggregation.
+func buildCreateE2MBody(agg widgetAgg) map[string]interface{} {
+	labels := make([]interface{}, 0, len(agg.labels))
+	for _, l := range agg.labels {
+		labels = append(labels, map[string]interface{}{"target_label": l, "source_field": l})
+	}
+	base := "widget_metric"
+	if agg.sourceField != "" {
+		base = agg.sourceField
+	}
+	return map[string]interface{}{
+		"name":          "dashboard_" + agg.aggType + "_" + base,
+		"type":          "logs2metrics",
+		"logs_query":    map[string]interface{}{"lucene": agg.lucene},
+		"metric_labels": labels,
+		"metric_fields": []interface{}{map[string]interface{}{
+			"source_field":            firstNonEmpty(agg.sourceField, "message"),
+			"target_base_metric_name": base,
+			"aggregations": []interface{}{map[string]interface{}{
+				"enabled": true, "agg_type": agg.aggType,
+				"target_metric_name": base + "_" + agg.aggType,
+			}},
+		}},
+	}
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// attachE2MRecommendations records advisory E2M notes on the API response.
+func attachE2MRecommendations(result map[string]interface{}, notes []string) {
+	if len(notes) == 0 || result == nil {
+		return
+	}
+	result["_e2m_recommendations"] = notes
+}
+
+// fetchE2MList best-effort GETs the E2M list; returns the events2metrics array
+// or nil on any error (E2M recommendations are optional, never fatal).
+func fetchE2MList(ctx context.Context, c client.Doer, logger *zap.Logger) []interface{} {
+	if c == nil {
+		return nil
+	}
+	resp, err := c.Do(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics"})
+	if err != nil {
+		if logger != nil {
+			logger.Debug("Failed to fetch E2M list for dashboard recommendations",
+				zap.String("error", security.SanitizeError(err)))
+		}
+		return nil
+	}
+	if resp == nil || resp.StatusCode >= 400 {
+		return nil
+	}
+	var parsed map[string]interface{}
+	if json.Unmarshal(resp.Body, &parsed) != nil {
+		return nil
+	}
+	arr, _ := parsed["events2metrics"].([]interface{})
+	return arr
 }
