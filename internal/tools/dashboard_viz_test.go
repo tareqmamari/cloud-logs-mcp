@@ -40,3 +40,32 @@ func TestRecommendWidgetType(t *testing.T) {
 	got, _ := recommendWidgetType(nil)
 	assert.Equal(t, "", got)
 }
+
+func TestVizAdvisor_Advise(t *testing.T) {
+	// Unspecified type -> adopt recommendation (auto-build).
+	a := newVizAdvisor()
+	newType, changed := a.advise("", aggLogs(1, 0))
+	assert.Equal(t, "gauge", newType)
+	assert.True(t, changed)
+
+	// line_chart for a single breakdown is acceptable -> no change, no note.
+	a = newVizAdvisor()
+	newType, changed = a.advise("line_chart", aggLogs(1, 1))
+	assert.Equal(t, "line_chart", newType)
+	assert.False(t, changed)
+	assert.Empty(t, a.notes)
+
+	// Clear mismatch: raw logs in a gauge -> recommend table, do NOT rewrite.
+	a = newVizAdvisor()
+	newType, changed = a.advise("gauge", map[string]interface{}{})
+	assert.Equal(t, "gauge", newType)
+	assert.False(t, changed)
+	assert.NotEmpty(t, a.notes)
+	assert.Contains(t, a.notes[0], "data_table")
+
+	// Clear mismatch: scalar in a pie -> recommend gauge, do NOT rewrite.
+	a = newVizAdvisor()
+	_, changed = a.advise("pie_chart", aggLogs(1, 0))
+	assert.False(t, changed)
+	assert.NotEmpty(t, a.notes)
+}

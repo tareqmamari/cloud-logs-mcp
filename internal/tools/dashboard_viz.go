@@ -3,6 +3,8 @@
 // from the shape of its logs query (aggregations and group-bys).
 package tools
 
+import "fmt"
+
 // logsAggregationCount returns the number of aggregations on a widget logs query.
 func logsAggregationCount(logs map[string]interface{}) int {
 	aggs, _ := logs["aggregations"].([]interface{})
@@ -39,4 +41,48 @@ func recommendWidgetType(logs map[string]interface{}) (widgetType string, reason
 	default:
 		return "bar_chart", "single aggregation broken down by one dimension; a bar chart compares categories"
 	}
+}
+
+// vizAdvisor decides each widget's visualization type from its query shape and
+// accumulates human-readable notes describing auto-adopted types and
+// non-destructive recommendations, surfaced to the caller as
+// _viz_recommendations.
+type vizAdvisor struct {
+	notes []string
+}
+
+func newVizAdvisor() *vizAdvisor { return &vizAdvisor{} }
+
+// vizAcceptableFor lists, for each recommended type, the caller-chosen types
+// that are considered a fine fit (so no recommendation is emitted).
+var vizAcceptableFor = map[string]map[string]bool{
+	// A single breakdown is validly shown as a bar, line, or pie.
+	"bar_chart": {"bar_chart": true, "line_chart": true, "pie_chart": true},
+	// A scalar is validly a gauge (single stat).
+	"gauge": {"gauge": true},
+	// Raw / multi-dimensional data belongs in a table.
+	"data_table": {"data_table": true},
+}
+
+// vizAcceptable reports whether the caller's type is an acceptable fit for the
+// recommended type.
+func vizAcceptable(currentType, recommended string) bool {
+	return vizAcceptableFor[recommended][currentType]
+}
+
+// advise returns the type the widget should use and whether it changed.
+func (a *vizAdvisor) advise(currentType string, logs map[string]interface{}) (newType string, changed bool) {
+	recommended, reason := recommendWidgetType(logs)
+	if recommended == "" {
+		return currentType, false
+	}
+	if currentType == "" {
+		a.notes = append(a.notes, fmt.Sprintf("widget type set to %s (%s)", recommended, reason))
+		return recommended, true
+	}
+	if vizAcceptable(currentType, recommended) {
+		return currentType, false
+	}
+	a.notes = append(a.notes, fmt.Sprintf("widget uses %s but %s is recommended: %s", currentType, recommended, reason))
+	return currentType, false
 }
