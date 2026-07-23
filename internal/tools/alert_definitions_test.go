@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 )
 
 func TestGetAlertDefinitionTool_InputSchema(t *testing.T) {
@@ -150,4 +153,92 @@ func TestValidateAlertDefinition_RequiresConfigLevelConditionType(t *testing.T) 
 	result := validateAlertDefinitionConfig(def)
 	assert.False(t, result.Valid)
 	assert.Contains(t, joinStrings(result.Errors, "\n"), "condition_type")
+}
+
+// thresholdDefWithLabelFilterOp builds a logs_threshold definition whose
+// simple_filter carries an application_name label filter with the given
+// operation, mirroring the nesting the live API reported in the 400:
+// logs_threshold.logs_filter.simple_filter.label_filters.application_name[0].operation
+func thresholdDefWithLabelFilterOp(op string) map[string]interface{} {
+	return map[string]interface{}{
+		"name": "App filtered alert",
+		"type": "logs_threshold",
+		"logs_threshold": map[string]interface{}{
+			"condition_type": "more_than_or_unspecified",
+			"logs_filter": map[string]interface{}{
+				"simple_filter": map[string]interface{}{
+					"label_filters": map[string]interface{}{
+						"application_name": []interface{}{
+							map[string]interface{}{"value": "payment-service", "operation": op},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func labelFilterOp(def map[string]interface{}) string {
+	return def["logs_threshold"].(map[string]interface{})["logs_filter"].(map[string]interface{})["simple_filter"].(map[string]interface{})["label_filters"].(map[string]interface{})["application_name"].([]interface{})[0].(map[string]interface{})["operation"].(string)
+}
+
+func TestNormalizeAlertDefinition_RewritesLabelFilterIsAlias(t *testing.T) {
+	def := thresholdDefWithLabelFilterOp("is")
+	notes := normalizeAlertDefinition(def)
+	assert.Equal(t, "is_or_unspecified", labelFilterOp(def), "operation \"is\" must be rewritten to the API's canonical variant")
+	assert.NotEmpty(t, notes, "a normalization note should record the rewrite")
+	assert.Contains(t, joinStrings(notes, "\n"), "is_or_unspecified")
+}
+
+func TestNormalizeAlertDefinition_RewritesContainsAlias(t *testing.T) {
+	def := thresholdDefWithLabelFilterOp("contains")
+	normalizeAlertDefinition(def)
+	assert.Equal(t, "includes", labelFilterOp(def))
+}
+
+func TestNormalizeAlertDefinition_LeavesCanonicalAndUnknownUntouched(t *testing.T) {
+	canonical := thresholdDefWithLabelFilterOp("starts_with")
+	notes := normalizeAlertDefinition(canonical)
+	assert.Equal(t, "starts_with", labelFilterOp(canonical))
+	assert.Empty(t, notes, "canonical values need no rewrite")
+
+	unknown := thresholdDefWithLabelFilterOp("no_such_op")
+	normalizeAlertDefinition(unknown)
+	assert.Equal(t, "no_such_op", labelFilterOp(unknown), "unknown values are left for the validator to reject, not silently changed")
+}
+
+func TestValidateAlertDefinition_WarnsOnLabelFilterAlias(t *testing.T) {
+	result := validateAlertDefinitionConfig(thresholdDefWithLabelFilterOp("is"))
+	assert.True(t, result.Valid, "a known alias is not an error; errors: %v", result.Errors)
+	assert.Contains(t, joinStrings(result.Warnings, "\n"), "is_or_unspecified")
+}
+
+func TestValidateAlertDefinition_RejectsUnknownLabelFilterOperation(t *testing.T) {
+	result := validateAlertDefinitionConfig(thresholdDefWithLabelFilterOp("no_such_op"))
+	assert.False(t, result.Valid)
+	errs := joinStrings(result.Errors, "\n")
+	assert.Contains(t, errs, "no_such_op")
+	assert.Contains(t, errs, "is_or_unspecified")
+}
+
+// TestCreateAlertDefinition_SendsNormalizedOperation drives the full Execute
+// path with a mock client and asserts the request body that actually reaches
+// the API carries the canonical operation, reproducing the live 400 fix
+// end-to-end rather than only unit-testing the helper.
+func TestCreateAlertDefinition_SendsNormalizedOperation(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.RespondWith(200, map[string]interface{}{"id": "abc", "name": "App filtered alert"})
+
+	tool := NewCreateAlertDefinitionTool(mock, zap.NewNop())
+	ctx := testCtx(mock)
+
+	_, err := tool.Execute(ctx, map[string]interface{}{
+		"definition": thresholdDefWithLabelFilterOp("is"),
+	})
+	assert.NoError(t, err)
+
+	sent, ok := mock.LastRequest().Body.(map[string]interface{})
+	assert.True(t, ok, "request body should be the definition map")
+	assert.Equal(t, "is_or_unspecified", labelFilterOp(sent),
+		"the body sent to the API must carry the canonical operation, not the alias")
 }
