@@ -96,3 +96,44 @@ func TestMatchE2M(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "duration_sum", name)
 }
+
+func TestE2MRecommendations_MatchExisting(t *testing.T) {
+	// Widget: count by applicationname, filter severity:error; an existing E2M matches.
+	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+	layout := map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{
+						"bar_chart": map[string]interface{}{"query": map[string]interface{}{"logs": logs}},
+					},
+				}},
+			}},
+		}},
+	}
+	e2ms := []interface{}{e2mDef("severity:error", "message", "count", "error_count_total", []string{"applicationname"})}
+
+	notes := e2mRecommendations(layout, e2ms, nil)
+	assert.NotEmpty(t, notes)
+	assert.Contains(t, notes[0], "error_count_total")
+}
+
+func TestE2MRecommendations_ArchiveSuggestsCreate(t *testing.T) {
+	session := sessionRoutingAppToPriority("payment-service", "type_low") // archive tier (helper from alert_tier_test.go)
+	logs := logsAgg("count", "", []string{"applicationname"}, "applicationname:payment-service")
+	layout := map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{
+						"bar_chart": map[string]interface{}{"query": map[string]interface{}{"logs": logs}},
+					},
+				}},
+			}},
+		}},
+	}
+	// No existing E2M -> archive-tier widget should suggest creating one.
+	notes := e2mRecommendations(layout, nil, session)
+	assert.NotEmpty(t, notes)
+	assert.Contains(t, notes[0], "create_e2m")
+}

@@ -126,9 +126,26 @@ func TestCreateDashboard_SendsArchiveTierFromTCO(t *testing.T) {
 	_, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": layout})
 	assert.NoError(t, err)
 
-	sent, ok := mock.LastRequest().Body.(map[string]interface{})
+	// Find the dashboard create request specifically: Execute also issues a
+	// best-effort trailing GET /v1/events2metrics for E2M recommendations, so
+	// the create POST is no longer necessarily mock.LastRequest().
+	createReq := findRequest(t, mock, "POST", "/v1/dashboards")
+	sent, ok := createReq.Body.(map[string]interface{})
 	assert.True(t, ok)
 	assert.Equal(t, "archive", firstQueryDefDataMode(t, sent["layout"]))
+}
+
+// findRequest returns the first recorded mock request matching method and
+// path, or fails the test if none is found.
+func findRequest(t *testing.T, mock *client.MockClient, method, path string) *client.Request {
+	t.Helper()
+	for _, req := range mock.Requests {
+		if req.Method == method && req.Path == path {
+			return req
+		}
+	}
+	t.Fatalf("no recorded request found for %s %s", method, path)
+	return nil
 }
 
 // lineChartLayout builds a minimal one-widget line-chart dashboard layout
