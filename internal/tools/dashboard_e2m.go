@@ -151,7 +151,7 @@ func matchE2M(agg widgetAgg, e2ms []interface{}) (string, bool) {
 		if !e2mFilterCoversWidget(e2m, agg.lucene) {
 			continue
 		}
-		if !stringSetEqual(e2mLabelSourceFields(e2m), agg.labels) {
+		if !stringSetEqual(lowerAll(e2mLabelSourceFields(e2m)), lowerAll(agg.labels)) {
 			continue
 		}
 		if name, ok := e2mAggMetricName(e2m, agg); ok {
@@ -213,6 +213,19 @@ func e2mAggMetricName(e2m map[string]interface{}, agg widgetAgg) (string, bool) 
 		}
 	}
 	return "", false
+}
+
+// lowerAll returns a copy of ss with every element lowercased, so label-set
+// matching is case-insensitive — E2M metric_labels source_field values are
+// user-authored and often camelCase (e.g. applicationName) while dashboard
+// group-by keypaths are lowercase (e.g. applicationname). This aligns label
+// matching with the case-insensitive (strings.EqualFold) measured-field match.
+func lowerAll(ss []string) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = strings.ToLower(s)
+	}
+	return out
 }
 
 // stringSetEqual reports set equality (order-independent) of two string slices.
