@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -361,13 +362,33 @@ func attachE2MRecommendations(result map[string]interface{}, notes []string) {
 	result["_e2m_recommendations"] = notes
 }
 
+// e2mFetchTimeout bounds the advisory list_e2m lookup. The recommendations
+// are optional, so a slow or retrying E2M endpoint must never stall a
+// dashboard create/update for more than this.
+const e2mFetchTimeout = 5 * time.Second
+
+// e2mFetchCacheKey scopes the advisory fetch's cache entry under the
+// "list_e2m" tool namespace, so the existing create/update/delete_e2m
+// invalidation hooks clear it too.
+const e2mFetchCacheKey = "dashboard_advisory"
+
 // fetchE2MList best-effort GETs the E2M list; returns the events2metrics array
 // or nil on any error (E2M recommendations are optional, never fatal).
+// Successful results are cached per session under the list_e2m TTL so repeated
+// dashboard edits don't refetch, and the request carries a short deadline.
 func fetchE2MList(ctx context.Context, c client.Doer, logger *zap.Logger) []interface{} {
 	if c == nil {
 		return nil
 	}
-	resp, err := c.Do(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics"})
+	cacheHelper := GetCacheHelperFromContext(ctx)
+	if cached, ok := cacheHelper.Get("list_e2m", e2mFetchCacheKey); ok {
+		if arr, ok := cached.([]interface{}); ok {
+			return arr
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, e2mFetchTimeout)
+	defer cancel()
+	resp, err := c.Do(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics", Timeout: e2mFetchTimeout})
 	if err != nil {
 		if logger != nil {
 			logger.Debug("Failed to fetch E2M list for dashboard recommendations",
@@ -383,5 +404,8 @@ func fetchE2MList(ctx context.Context, c client.Doer, logger *zap.Logger) []inte
 		return nil
 	}
 	arr, _ := parsed["events2metrics"].([]interface{})
+	if arr != nil {
+		cacheHelper.Set("list_e2m", e2mFetchCacheKey, arr)
+	}
 	return arr
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -149,6 +150,115 @@ func TestE2MRecommendations_ArchiveSuggestsCreate(t *testing.T) {
 	notes := e2mRecommendations(layout, nil, session)
 	assert.NotEmpty(t, notes)
 	assert.Contains(t, notes[0], "create_e2m")
+}
+
+// barChartLayout wraps a logs query in a minimal one-widget dashboard layout.
+func barChartLayout(logs map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"sections": []interface{}{map[string]interface{}{
+			"rows": []interface{}{map[string]interface{}{
+				"widgets": []interface{}{map[string]interface{}{
+					"definition": map[string]interface{}{"bar_chart": map[string]interface{}{"query": map[string]interface{}{"logs": logs}}},
+				}},
+			}},
+		}},
+	}
+}
+
+func TestFetchE2MList_UsesContextClientAndDeadline(t *testing.T) {
+	// The advisory fetch must resolve the client the same way the main request
+	// path does (context first) and must carry a short deadline so a slow E2M
+	// endpoint cannot stall dashboard creation.
+	ctxMock := client.NewMockClient()
+	var e2mDeadline time.Time
+	var hadDeadline bool
+	start := time.Now()
+	ctxMock.DoFunc = func(ctx context.Context, req *client.Request) (*client.Response, error) {
+		if req.Method == "GET" && req.Path == "/v1/events2metrics" {
+			e2mDeadline, hadDeadline = ctx.Deadline()
+			return &client.Response{StatusCode: 200, Body: []byte(`{"events2metrics":[]}`)}, nil
+		}
+		return &client.Response{StatusCode: 200, Body: []byte(`{"dashboard_id":"d1"}`)}, nil
+	}
+	constructorMock := client.NewMockClient()
+
+	tool := NewCreateDashboardTool(constructorMock, zap.NewNop())
+	ctx := testCtx(ctxMock)
+
+	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+	result, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": barChartLayout(logs)})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.True(t, hadDeadline, "advisory E2M fetch must carry a deadline")
+	if hadDeadline {
+		assert.LessOrEqual(t, e2mDeadline.Sub(start), 10*time.Second,
+			"advisory E2M fetch deadline must be short")
+	}
+	assert.Zero(t, constructorMock.RequestCount(),
+		"context-injected client must take precedence over the constructor client")
+}
+
+func TestFetchE2MList_CachedAcrossCalls(t *testing.T) {
+	mock := client.NewMockClient()
+	var e2mGETs int
+	mock.DoFunc = func(_ context.Context, req *client.Request) (*client.Response, error) {
+		if req.Method == "GET" && req.Path == "/v1/events2metrics" {
+			e2mGETs++
+			body, _ := json.Marshal(map[string]interface{}{
+				"events2metrics": []interface{}{e2mDef("severity:error", "message", "count", "error_count_total", []string{"applicationname"})},
+			})
+			return &client.Response{StatusCode: 200, Body: body}, nil
+		}
+		return &client.Response{StatusCode: 200, Body: []byte(`{"dashboard_id":"d1"}`)}, nil
+	}
+	tool := NewCreateDashboardTool(mock, zap.NewNop())
+	ctx := testCtx(mock) // one session, so both calls share one cache scope
+
+	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+	for i := 0; i < 2; i++ {
+		result, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": barChartLayout(logs)})
+		assert.NoError(t, err)
+		assert.Contains(t, resultText(t, result), "error_count_total")
+	}
+	assert.Equal(t, 1, e2mGETs, "second create should reuse the cached list_e2m result")
+}
+
+func TestCreateDashboard_E2MFetchIsBestEffort(t *testing.T) {
+	// Every failure mode of the advisory fetch must leave the dashboard create
+	// untouched: success response, no _e2m_recommendations, no error.
+	cases := []struct {
+		name    string
+		respond func() (*client.Response, error)
+	}{
+		{"transport error", func() (*client.Response, error) {
+			return nil, context.DeadlineExceeded
+		}},
+		{"server error", func() (*client.Response, error) {
+			return &client.Response{StatusCode: 500, Body: []byte(`boom`)}, nil
+		}},
+		{"malformed JSON", func() (*client.Response, error) {
+			return &client.Response{StatusCode: 200, Body: []byte(`{not json`)}, nil
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := client.NewMockClient()
+			mock.DoFunc = func(_ context.Context, req *client.Request) (*client.Response, error) {
+				if req.Method == "GET" && req.Path == "/v1/events2metrics" {
+					return tc.respond()
+				}
+				return &client.Response{StatusCode: 200, Body: []byte(`{"dashboard_id":"d1"}`)}, nil
+			}
+			tool := NewCreateDashboardTool(mock, zap.NewNop())
+			ctx := testCtx(mock)
+
+			logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+			result, err := tool.Execute(ctx, map[string]interface{}{"name": "d", "layout": barChartLayout(logs)})
+			assert.NoError(t, err)
+			assert.False(t, result.IsError, "E2M fetch failure must never fail the create")
+			assert.NotContains(t, resultText(t, result), "_e2m_recommendations")
+		})
+	}
 }
 
 func TestCreateDashboard_SurfacesE2MRecommendation(t *testing.T) {
