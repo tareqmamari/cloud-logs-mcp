@@ -68,6 +68,13 @@ func TestWidgetAggregation(t *testing.T) {
 	assert.False(t, widgetAggregation(map[string]interface{}{}).eligible)
 	// nil is ineligible
 	assert.False(t, widgetAggregation(nil).eligible)
+	// a malformed aggregation object carrying two keys is ineligible (the
+	// contract is exactly one aggregation; map iteration order must never
+	// decide which one wins)
+	multi := map[string]interface{}{"aggregations": []interface{}{
+		map[string]interface{}{"count": map[string]interface{}{}, "sum": map[string]interface{}{}},
+	}}
+	assert.False(t, widgetAggregation(multi).eligible)
 }
 
 func TestMatchE2M(t *testing.T) {

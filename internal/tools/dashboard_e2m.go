@@ -41,7 +41,9 @@ func widgetAggregation(logs map[string]interface{}) widgetAgg {
 		return widgetAgg{}
 	}
 	aggObj, ok := singleAggregation(logs)
-	if !ok {
+	if !ok || len(aggObj) != 1 {
+		// A well-formed aggregation object has exactly one key (its type);
+		// anything else is malformed and map iteration order must not pick.
 		return widgetAgg{}
 	}
 	var key string
