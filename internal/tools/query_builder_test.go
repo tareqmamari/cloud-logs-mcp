@@ -488,6 +488,8 @@ func TestEscapeLuceneValue(t *testing.T) {
 		{name: "plus bang caret tilde slash escaped", input: "+!^~/", want: `\+\!\^\~\/`},
 		{name: "whitespace escaped", input: "a b", want: `a\ b`},
 		{name: "boolean-via-space neutralized", input: "a OR b", want: `a\ OR\ b`},
+		{name: "range operators escaped", input: ">100", want: `\>100`},
+		{name: "less-than escaped", input: "<=5", want: `\<=5`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
