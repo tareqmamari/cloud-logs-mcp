@@ -268,6 +268,33 @@ func TestCreateDashboard_E2MFetchIsBestEffort(t *testing.T) {
 	}
 }
 
+func TestUpdateDashboard_SurfacesE2MRecommendation(t *testing.T) {
+	// Pins the update-path wiring: create and update attach the same advisory
+	// notes, so a regression in UpdateDashboardTool.Execute must fail here.
+	mock := client.NewMockClient()
+	mock.DoFunc = func(_ context.Context, req *client.Request) (*client.Response, error) {
+		if req.Method == "GET" && req.Path == "/v1/events2metrics" {
+			body, _ := json.Marshal(map[string]interface{}{
+				"events2metrics": []interface{}{e2mDef("severity:error", "message", "count", "error_count_total", []string{"applicationname"})},
+			})
+			return &client.Response{StatusCode: 200, Body: body}, nil
+		}
+		return &client.Response{StatusCode: 200, Body: []byte(`{"dashboard_id":"d1"}`)}, nil
+	}
+	tool := NewUpdateDashboardTool(mock, zap.NewNop())
+	ctx := testCtx(mock)
+
+	logs := logsAgg("count", "", []string{"applicationname"}, "severity:error")
+	result, err := tool.Execute(ctx, map[string]interface{}{
+		"dashboard_id": "d1",
+		"name":         "d",
+		"layout":       barChartLayout(logs),
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "error_count_total")
+}
+
 func TestCreateDashboard_SurfacesE2MRecommendation(t *testing.T) {
 	mock := client.NewMockClient()
 	// list_e2m (GET /v1/events2metrics) returns a matching metric; the create returns an id.
