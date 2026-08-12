@@ -650,7 +650,9 @@ func isSafeDataPrimeFieldRef(s string) bool {
 // whitespace-separated OR operator).
 //
 // It escapes the standard Apache Lucene reserved set
-// (\ + - ! ( ) : ^ [ ] " { } ~ * ? | & /) — escaping '&'/'|' individually
+// (\ + - ! ( ) : ^ [ ] " { } ~ * ? | & /) plus '<'/'>' (ES-dialect range
+// operators, so "field:>100" stays a literal instead of drifting to
+// greater-than) — escaping '&'/'|' individually
 // also covers the two-char '&&'/'||' operators — plus whitespace, so a
 // value spanning multiple tokens collapses into a single escaped term and
 // boolean keywords (AND/OR/NOT) inside it can no longer act as operators.
@@ -664,7 +666,7 @@ func escapeLuceneValue(s string) string {
 	b.Grow(len(s) * 2)
 	for _, r := range s {
 		switch r {
-		case '\\', '+', '-', '!', '(', ')', ':', '^', '[', ']', '"', '{', '}', '~', '*', '?', '|', '&', '/':
+		case '\\', '+', '-', '!', '(', ')', ':', '^', '[', ']', '"', '{', '}', '~', '*', '?', '|', '&', '/', '<', '>':
 			b.WriteByte('\\')
 			b.WriteRune(r)
 		default:
