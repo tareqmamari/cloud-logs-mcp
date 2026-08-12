@@ -97,3 +97,22 @@ func TestQueryTemplatesHaveUseCases(t *testing.T) {
 		})
 	}
 }
+
+// TestSubstituteTemplateParams_EscapesInjection ensures caller-supplied
+// parameter values cannot break out of the DataPrime string literal the
+// placeholder sits in.
+func TestSubstituteTemplateParams_EscapesInjection(t *testing.T) {
+	tmpl := QueryTemplate{Query: "source logs | filter $l.applicationname == '{APPLICATION}' | limit 100"}
+
+	breakout := `x' || true || '`
+	got := substituteTemplateParams(tmpl, breakout, "")
+	if want := `'x\' || true || \''`; !contains(got.Query, want) {
+		t.Errorf("quote breakout not escaped:\n  got:  %s\n  want substring: %s", got.Query, want)
+	}
+
+	trailing := `foo\`
+	got = substituteTemplateParams(tmpl, trailing, "")
+	if want := `'foo\\'`; !contains(got.Query, want) {
+		t.Errorf("trailing backslash not escaped:\n  got:  %s\n  want substring: %s", got.Query, want)
+	}
+}
