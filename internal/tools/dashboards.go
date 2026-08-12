@@ -994,7 +994,10 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// selects each widget's tier (data_mode_type) from the TCO policy that
 	// routes the widget's target application/subsystem, so panels query the
 	// tier where those logs actually live.
-	resolver := resolverFromContext(ctx, t.client, t.logger)
+	// Resolve the client like the main request path does (context first);
+	// tier resolution is best-effort, so a resolution failure means defaults.
+	tierClient, _ := t.GetClient(ctx)
+	resolver := resolverFromContext(ctx, tierClient, t.logger)
 	advisor := newVizAdvisor()
 	ensureRequiredDashboardFields(layout, resolver, advisor)
 
@@ -1071,7 +1074,10 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	attachTierSelection(result, resolver)
 	attachVizRecommendations(result, advisor)
-	e2ms := fetchE2MList(ctx, t.client, t.logger)
+	// Best-effort advisory fetch: resolve the client like the main request
+	// path does (context first); a resolution failure just skips the notes.
+	e2mClient, _ := t.GetClient(ctx)
+	e2ms := fetchE2MList(ctx, e2mClient, t.logger)
 	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "create_dashboard")
 }
@@ -1256,7 +1262,10 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// Normalize the layout and select each widget's tier (data_mode_type)
 	// from the TCO policy for its target application/subsystem, mirroring
 	// create so an updated dashboard queries the tier where its logs live.
-	resolver := resolverFromContext(ctx, t.client, t.logger)
+	// Resolve the client like the main request path does (context first);
+	// tier resolution is best-effort, so a resolution failure means defaults.
+	tierClient, _ := t.GetClient(ctx)
+	resolver := resolverFromContext(ctx, tierClient, t.logger)
 	advisor := newVizAdvisor()
 	ensureRequiredDashboardFields(layout, resolver, advisor)
 
@@ -1299,7 +1308,10 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	attachTierSelection(result, resolver)
 	attachVizRecommendations(result, advisor)
-	e2ms := fetchE2MList(ctx, t.client, t.logger)
+	// Best-effort advisory fetch: resolve the client like the main request
+	// path does (context first); a resolution failure just skips the notes.
+	e2mClient, _ := t.GetClient(ctx)
+	e2ms := fetchE2MList(ctx, e2mClient, t.logger)
 	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "update_dashboard")
 }
