@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// validUserIDPattern matches valid user IDs (16 hex characters from SHA256 hash)
-var validUserIDPattern = regexp.MustCompile(`^[a-f0-9]{16}$`)
+// validUserIDPattern matches valid user IDs (32 hex characters from SHA256 hash)
+var validUserIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 // SessionContext maintains conversational state across tool calls.
 // This enables LLMs to reference previous results and maintain context.
@@ -59,6 +59,16 @@ type SessionContext struct {
 
 	// TCOConfig holds TCO policy configuration discovered at session start
 	TCOConfig *TCOConfig `json:"tco_config,omitempty"`
+
+	// resultOrder tracks a strictly increasing "touch" sequence for each entry
+	// in LastResults, so CacheResult can evict the true least-recently-used
+	// entry rather than an arbitrary one. A monotonic counter is used instead
+	// of wall-clock time because rapid successive touches can read an identical
+	// time.Now() on coarse-resolution clocks (notably Windows, ~15ms), which
+	// would leave the oldest-entry choice ambiguous. Unexported: not persisted,
+	// and lazily populated for entries loaded from disk (see CacheResult).
+	resultOrder map[string]uint64
+	resultSeq   uint64
 }
 
 // LearnedPatterns stores patterns that persist across sessions
@@ -124,8 +134,10 @@ type TCOPolicyRule struct {
 	// SubsystemRule matches by subsystem name
 	SubsystemRule *TCOMatchRule `json:"subsystem_rule,omitempty"`
 
-	// Tier is the target tier for logs matching this rule
-	// "frequent_search" for type_high/type_medium, "archive" for type_low
+	// Tier is the QUERY tier for logs matching this rule (where to read them):
+	// "frequent_search" for type_high, "archive" for type_medium and type_low.
+	// This is not alert availability — high and medium logs are alertable, low
+	// logs are not; that rule keys off Priority below, not this tier.
 	Tier string `json:"tier"`
 
 	// Priority is the original policy priority (type_high, type_medium, type_low)
@@ -208,8 +220,41 @@ type SessionManager struct {
 var (
 	globalSessionManager     *SessionManager
 	globalSessionManagerOnce sync.Once
-	currentUserID            string // set during initialization
 )
+
+// currentUserID identifies the "current" user for the backward-compatible,
+// process-wide session accessors (GetSession, SaveCurrentSession, etc.).
+//
+// IMPORTANT ASSUMPTION: this server currently supports a single logical user
+// per process, which holds for the stdio transport (one process per client
+// connection). It is NOT safe to reuse as-is for a transport that multiplexes
+// multiple concurrent identities over one process (e.g. an HTTP transport
+// serving several clients/requests at once) - in that case "current user"
+// becomes ambiguous and requests can observe each other's identity. Fixing
+// that requires threading identity through request-scoped context instead of
+// a package global, which is a larger refactor tracked separately and is not
+// done here.
+//
+// All access must go through currentUserIDValue/setCurrentUserID below; do
+// not read or write this variable directly.
+var (
+	currentUserIDMu sync.RWMutex
+	currentUserID   string
+)
+
+// setCurrentUserID race-safely sets the package-global "current user" id.
+func setCurrentUserID(userID string) {
+	currentUserIDMu.Lock()
+	currentUserID = userID
+	currentUserIDMu.Unlock()
+}
+
+// currentUserIDValue race-safely reads the package-global "current user" id.
+func currentUserIDValue() string {
+	currentUserIDMu.RLock()
+	defer currentUserIDMu.RUnlock()
+	return currentUserID
+}
 
 // GetSessionManager returns the global session manager
 func GetSessionManager() *SessionManager {
@@ -237,7 +282,7 @@ func NewSessionManager(dataDir string) *SessionManager {
 // SetCurrentUser sets the current user context (called during initialization)
 // Uses hashed API key + instance ID as fallback when JWT is not available
 func SetCurrentUser(apiKey, instanceID string) {
-	currentUserID = GenerateUserID(apiKey, instanceID)
+	setCurrentUserID(GenerateUserID(apiKey, instanceID))
 	// Pre-load or create session for this user
 	GetSessionManager().GetOrCreateSession(apiKey, instanceID)
 }
@@ -247,30 +292,33 @@ func SetCurrentUser(apiKey, instanceID string) {
 func SetCurrentUserFromJWT(jwtSubject, instanceID string) {
 	// Use the JWT subject directly as the user ID (it's already unique)
 	// Hash it to create a safe filename for persistence
-	currentUserID = GenerateUserIDFromSubject(jwtSubject, instanceID)
+	userID := GenerateUserIDFromSubject(jwtSubject, instanceID)
+	setCurrentUserID(userID)
 	// Pre-load or create session for this user
-	GetSessionManager().GetOrCreateSessionByID(currentUserID, instanceID)
+	GetSessionManager().GetOrCreateSessionByID(userID, instanceID)
 }
 
 // GenerateUserIDFromSubject creates a user ID from JWT subject and instance ID
 func GenerateUserIDFromSubject(subject, instanceID string) string {
 	h := sha256.New()
 	h.Write([]byte(subject + ":" + instanceID))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
 // GenerateUserID creates a unique user identifier from API key and instance ID
 func GenerateUserID(apiKey, instanceID string) string {
-	// Use first 8 chars of SHA256 hash for privacy (don't store full key)
+	// Use first 16 bytes (32 hex chars) of the SHA256 hash - enough entropy to
+	// make collisions and brute-forcing impractical while still not storing
+	// the raw key.
 	h := sha256.New()
 	h.Write([]byte(apiKey + ":" + instanceID))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
 // GetSession returns the session for the current user (backward compatible)
 func GetSession() *SessionContext {
-	if currentUserID != "" {
-		return GetSessionManager().GetSessionByID(currentUserID)
+	if userID := currentUserIDValue(); userID != "" {
+		return GetSessionManager().GetSessionByID(userID)
 	}
 	// Fallback: return a default session if no user set
 	return GetSessionManager().GetOrCreateSession("", "default")
@@ -279,10 +327,12 @@ func GetSession() *SessionContext {
 // GetSession implements SessionProvider by returning the session for the
 // current user, or the first available session if no current user is set.
 func (m *SessionManager) GetSession() *SessionContext {
+	userID := currentUserIDValue()
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if session, exists := m.sessions[currentUserID]; exists {
+	if session, exists := m.sessions[userID]; exists {
 		return session
 	}
 	// Fallback: return first available session
@@ -358,7 +408,7 @@ func (m *SessionManager) GetSessionByID(userID string) *SessionContext {
 }
 
 // isValidUserID validates that a user ID is safe for use in file paths.
-// User IDs must be exactly 16 lowercase hex characters (from SHA256 hash).
+// User IDs must be exactly 32 lowercase hex characters (from SHA256 hash).
 // This prevents path traversal attacks and other injection attempts.
 func isValidUserID(userID string) bool {
 	return validUserIDPattern.MatchString(userID)
@@ -432,10 +482,12 @@ func (m *SessionManager) SaveSession(userID string) error {
 		return err
 	}
 
-	session.mu.RLock()
+	// Write lock: this mutates UpdatedAt, so a read lock (which permits other
+	// concurrent readers/writers of the same field) is not sufficient here.
+	session.mu.Lock()
 	session.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(session, "", "  ")
-	session.mu.RUnlock()
+	session.mu.Unlock()
 
 	if err != nil {
 		return err
@@ -447,10 +499,11 @@ func (m *SessionManager) SaveSession(userID string) error {
 
 // SaveCurrentSession saves the current user's session
 func SaveCurrentSession() error {
-	if currentUserID == "" {
+	userID := currentUserIDValue()
+	if userID == "" {
 		return nil
 	}
-	return GetSessionManager().SaveSession(currentUserID)
+	return GetSessionManager().SaveSession(userID)
 }
 
 // ListSessions returns all active session IDs
@@ -559,36 +612,94 @@ func (s *SessionContext) ClearSession() {
 	s.UpdatedAt = time.Now()
 }
 
-// CacheResult stores a tool result for later reference
+// maxCachedResults is the number of tool results CacheResult retains; the
+// least-recently-used entry (by insertion/access time) is evicted beyond this.
+const maxCachedResults = 5
+
+// CacheResult stores a tool result for later reference. It keeps at most
+// maxCachedResults entries, evicting the true least-recently-used one (by
+// insertion or last access time via GetCachedResult) when the cache overflows.
 func (s *SessionContext) CacheResult(toolName string, result map[string]interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Store with tool name as key, limit cache size
-	s.LastResults[toolName] = result
+	if s.resultOrder == nil {
+		s.resultOrder = make(map[string]uint64, len(s.LastResults))
+	}
 
-	// Limit cache to last 5 tool results
-	if len(s.LastResults) > 5 {
-		// Remove oldest (simple approach - just clear one arbitrary entry)
-		for k := range s.LastResults {
-			if k != toolName {
-				delete(s.LastResults, k)
-				break
-			}
+	s.LastResults[toolName] = result
+	s.resultSeq++
+	s.resultOrder[toolName] = s.resultSeq
+
+	for len(s.LastResults) > maxCachedResults {
+		oldestKey := s.oldestResultKeyLocked()
+		if oldestKey == "" {
+			break
 		}
+		delete(s.LastResults, oldestKey)
+		delete(s.resultOrder, oldestKey)
 	}
 }
 
-// GetCachedResult retrieves a cached tool result
-func (s *SessionContext) GetCachedResult(toolName string) map[string]interface{} {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if result, ok := s.LastResults[toolName]; ok {
-		if m, ok := result.(map[string]interface{}); ok {
-			return m
+// oldestResultKeyLocked returns the key in LastResults with the lowest touch
+// sequence, evicting entries with no tracked sequence first (e.g. sessions
+// loaded from disk before resultOrder existed). Caller must hold s.mu.
+func (s *SessionContext) oldestResultKeyLocked() string {
+	oldestKey := ""
+	var oldestSeq uint64
+	haveOldest := false
+
+	for k := range s.LastResults {
+		seq, tracked := s.resultOrder[k]
+		if !tracked {
+			// No recorded sequence at all - treat as oldest and evict it first.
+			return k
+		}
+		if !haveOldest || seq < oldestSeq {
+			oldestKey = k
+			oldestSeq = seq
+			haveOldest = true
 		}
 	}
-	return nil
+	return oldestKey
+}
+
+// GetCachedResult retrieves a cached tool result, updating its last-accessed
+// time so it counts as recently used for CacheResult's eviction policy.
+//
+// This takes the full write lock even though it's a read of LastResults,
+// because it also mutates resultOrder[toolName] on every call. A design
+// that stores per-entry last-access as an atomic.Int64 (updated under RLock
+// instead) was considered, but it would require eagerly materializing an
+// atomic pointer for every entry in resultOrder whenever a session is
+// loaded from disk (LastResults can be populated from JSON with no
+// corresponding resultOrder entries - see the lazy-nil-check below and
+// CacheResult), adding a second invariant ("every LastResults key has a
+// resultOrder entry before any GetCachedResult call") that's easy to
+// violate silently and hard to verify. Given maxCachedResults caps this at
+// 5 entries per session and calls are infrequent (bounded by tool-call
+// rate, not request volume), the write lock is a deliberate, low-risk
+// tradeoff over that added complexity.
+func (s *SessionContext) GetCachedResult(toolName string) map[string]interface{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result, ok := s.LastResults[toolName]
+	if !ok {
+		return nil
+	}
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if s.resultOrder == nil {
+		s.resultOrder = make(map[string]uint64, len(s.LastResults))
+	}
+	s.resultSeq++
+	s.resultOrder[toolName] = s.resultSeq
+
+	return m
 }
 
 // RecordToolUse records a tool invocation
@@ -1248,6 +1359,28 @@ func (s *SessionContext) GetTierForAppAndSubsystem(appName, subsystemName string
 	}
 
 	return s.getDefaultTierLocked()
+}
+
+// GetPriorityForAppAndSubsystem returns the TCO priority (type_high,
+// type_medium, type_low, type_unspecified) of the first policy matching the
+// given application/subsystem, and whether any policy matched. Unlike the
+// tier (which collapses medium and low into "archive"), the priority
+// distinguishes the levels — needed because alert availability is a
+// priority-level rule (only high and medium logs are alertable), not a
+// tier-level one.
+func (s *SessionContext) GetPriorityForAppAndSubsystem(appName, subsystemName string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.TCOConfig == nil {
+		return "", false
+	}
+	for _, policy := range s.TCOConfig.Policies {
+		if matchesTCOPolicy(policy, appName, subsystemName) {
+			return policy.Priority, true
+		}
+	}
+	return "", false
 }
 
 // getDefaultTierLocked returns default tier (caller must hold lock)

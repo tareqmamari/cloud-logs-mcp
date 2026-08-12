@@ -7,10 +7,20 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/IBM/go-sdk-core/v5/core"
 	"go.uber.org/zap"
 )
+
+// defaultIAMClientTimeout bounds the HTTP client the IamAuthenticator uses
+// for token requests. Without this, the SDK lazily builds an *http.Client
+// with no timeout, so a hung/unreachable IAM endpoint can block a token
+// round trip forever. server.go's boundedGetUserIdentity races
+// GetUserIdentity() against a context deadline, but the goroutine it spawns
+// keeps running past that deadline until the underlying HTTP call returns -
+// this timeout is what bounds that leaked goroutine's actual lifetime.
+const defaultIAMClientTimeout = 30 * time.Second
 
 // JWTClaims represents the claims from an IBM Cloud IAM JWT token
 type JWTClaims struct {
@@ -37,9 +47,12 @@ func New(apiKey string, iamURL string, logger *zap.Logger) (*Authenticator, erro
 		return nil, fmt.Errorf("API key is required")
 	}
 
-	// Create IBM Cloud IAM authenticator
+	// Create IBM Cloud IAM authenticator with a bounded HTTP client (see
+	// defaultIAMClientTimeout) so a token-request round trip can never hang
+	// forever.
 	authenticator := &core.IamAuthenticator{
 		ApiKey: apiKey, // pragma: allowlist secret
+		Client: &http.Client{Timeout: defaultIAMClientTimeout},
 	}
 
 	// Set custom IAM URL if provided (for staging/dev environments)

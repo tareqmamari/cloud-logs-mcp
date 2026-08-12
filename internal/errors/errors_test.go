@@ -237,6 +237,14 @@ func TestFromHTTPStatus(t *testing.T) {
 			if err.Message == "" {
 				t.Error("Message should not be empty")
 			}
+
+			if err.StatusCode != tt.statusCode {
+				t.Errorf("StatusCode = %d, want %d", err.StatusCode, tt.statusCode)
+			}
+
+			if !contains(err.Message, tt.body) {
+				t.Errorf("Message should contain response body snippet %q, got %q", tt.body, err.Message)
+			}
 		})
 	}
 }

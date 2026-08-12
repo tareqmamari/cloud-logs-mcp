@@ -3,7 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -352,11 +355,11 @@ func (t *BuildQueryTool) buildDataPrimeQuery(textSearch, excludeText string, app
 	// Applications filter
 	if len(applications) > 0 {
 		if len(applications) == 1 {
-			filters = append(filters, fmt.Sprintf(`$l.applicationname == '%s'`, applications[0]))
+			filters = append(filters, fmt.Sprintf(`$l.applicationname == '%s'`, escapeDataPrimeString(applications[0])))
 		} else {
 			appParts := make([]string, len(applications))
 			for i, app := range applications {
-				appParts[i] = fmt.Sprintf(`$l.applicationname == '%s'`, app)
+				appParts[i] = fmt.Sprintf(`$l.applicationname == '%s'`, escapeDataPrimeString(app))
 			}
 			filters = append(filters, fmt.Sprintf("(%s)", strings.Join(appParts, " || ")))
 		}
@@ -365,11 +368,11 @@ func (t *BuildQueryTool) buildDataPrimeQuery(textSearch, excludeText string, app
 	// Subsystems filter
 	if len(subsystems) > 0 {
 		if len(subsystems) == 1 {
-			filters = append(filters, fmt.Sprintf(`$l.subsystemname == '%s'`, subsystems[0]))
+			filters = append(filters, fmt.Sprintf(`$l.subsystemname == '%s'`, escapeDataPrimeString(subsystems[0])))
 		} else {
 			subParts := make([]string, len(subsystems))
 			for i, sub := range subsystems {
-				subParts[i] = fmt.Sprintf(`$l.subsystemname == '%s'`, sub)
+				subParts[i] = fmt.Sprintf(`$l.subsystemname == '%s'`, escapeDataPrimeString(sub))
 			}
 			filters = append(filters, fmt.Sprintf("(%s)", strings.Join(subParts, " || ")))
 		}
@@ -484,20 +487,36 @@ func severityToInt(severity string) int {
 
 // fieldToLucene converts a field filter to Lucene syntax
 func fieldToLucene(f fieldFilter) string {
+	// f.Field is interpolated unquoted into the Lucene expression in every
+	// branch below, so a caller-supplied field name containing Lucene syntax
+	// (spaces, ':', '*', boolean operators, ...) would inject into the query.
+	// Drop the filter unless the field name is a safe reference.
+	if !isSafeDataPrimeFieldRef(f.Field) {
+		return ""
+	}
+
 	switch f.Operator {
 	case "equals":
-		return fmt.Sprintf("%s:%s", f.Field, f.Value)
+		return fmt.Sprintf("%s:%s", f.Field, escapeLuceneValue(f.Value))
 	case "not_equals":
-		return fmt.Sprintf("NOT %s:%s", f.Field, f.Value)
+		return fmt.Sprintf("NOT %s:%s", f.Field, escapeLuceneValue(f.Value))
 	case "contains":
-		return fmt.Sprintf("%s:*%s*", f.Field, f.Value)
+		// Wrapping '*' wildcards are added by us and stay live; the user's own
+		// value is escaped (including any '*'/'?' it contains).
+		return fmt.Sprintf("%s:*%s*", f.Field, escapeLuceneValue(f.Value))
 	case "starts_with":
-		return fmt.Sprintf("%s:%s*", f.Field, f.Value)
+		return fmt.Sprintf("%s:%s*", f.Field, escapeLuceneValue(f.Value))
 	case "ends_with":
-		return fmt.Sprintf("%s:*%s", f.Field, f.Value)
+		return fmt.Sprintf("%s:*%s", f.Field, escapeLuceneValue(f.Value))
 	case "greater_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s:>%s", f.Field, f.Value)
 	case "less_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s:<%s", f.Field, f.Value)
 	case "exists":
 		return fmt.Sprintf("%s:*", f.Field)
@@ -514,23 +533,43 @@ func fieldToDataPrime(f fieldFilter) string {
 	// Convert field name to DataPrime reference
 	dpField := toDataPrimeField(f.Field)
 
+	// The resolved field name is interpolated UNQUOTED in every branch below,
+	// and toDataPrimeField passes $d./$l./$m.-prefixed inputs through
+	// verbatim. Since f.Field is caller-supplied, an unsafe field name would
+	// inject raw DataPrime expression syntax through the field position (which
+	// value-escaping can't prevent). Drop the filter unless the field name is
+	// a safe reference.
+	if !isSafeDataPrimeFieldRef(dpField) {
+		return ""
+	}
+
 	switch f.Operator {
 	case "equals":
-		return fmt.Sprintf("%s == '%s'", dpField, f.Value)
+		return fmt.Sprintf("%s == '%s'", dpField, escapeDataPrimeString(f.Value))
 	case "not_equals":
-		return fmt.Sprintf("%s != '%s'", dpField, f.Value)
+		return fmt.Sprintf("%s != '%s'", dpField, escapeDataPrimeString(f.Value))
 	case "contains":
 		// Use contains() function - works on all field types
-		return fmt.Sprintf("%s.contains('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.contains('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "starts_with":
 		// Use startsWith() function - works on all field types
-		return fmt.Sprintf("%s.startsWith('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.startsWith('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "ends_with":
 		// Use endsWith() function - works on all field types
-		return fmt.Sprintf("%s.endsWith('%s')", dpField, f.Value)
+		return fmt.Sprintf("%s.endsWith('%s')", dpField, escapeDataPrimeString(f.Value))
 	case "greater_than":
+		// Numeric comparison operands are interpolated UNQUOTED, so a
+		// non-numeric value would inject raw DataPrime expression syntax
+		// (escaping only protects inside '...'). Drop the filter unless the
+		// value is a valid number.
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s > %s", dpField, f.Value)
 	case "less_than":
+		if !isNumericFilterValue(f.Value) {
+			return ""
+		}
 		return fmt.Sprintf("%s < %s", dpField, f.Value)
 	case "exists":
 		return fmt.Sprintf("%s != null", dpField)
@@ -539,6 +578,105 @@ func fieldToDataPrime(f fieldFilter) string {
 	default:
 		return ""
 	}
+}
+
+// isNumericFilterValue reports whether s is a valid numeric literal that is
+// safe to interpolate unquoted into a numeric comparison. DataPrime/Lucene
+// numeric operators (>, <) place the operand into the query without quotes,
+// so anything that isn't a plain number (e.g. "0 || $d.secret.contains('x')")
+// would be parsed as query syntax rather than data. Requiring a parseable
+// float64 neutralizes that injection vector. Values like "0x1f" or "1e999"
+// that ParseFloat rejects (or that aren't finite) are treated as unsafe.
+func isNumericFilterValue(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Reject hex/other prefixes and anything ParseFloat's base-10 grammar
+	// wouldn't accept as a bare number.
+	if strings.ContainsAny(s, "xXpP") {
+		return false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return false
+	}
+	// ParseFloat happily accepts "Inf"/"NaN" (and their sign/case variants) as
+	// valid float64 literals, but they aren't plain numbers and would
+	// interpolate as the bare words "Inf"/"NaN" into the query - reject them
+	// like any other non-numeric value.
+	return !math.IsInf(f, 0) && !math.IsNaN(f)
+}
+
+// isSafeDataPrimeFieldName reports whether s consists solely of DataPrime
+// field-name characters (ASCII letters, digits, underscore, dot). Field names
+// are interpolated unquoted into queries, so any character outside this set
+// could inject query syntax. Empty strings are unsafe.
+func isSafeDataPrimeFieldName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// isSafeDataPrimeFieldRef reports whether s is a safe field reference to
+// interpolate unquoted into a query. It is like isSafeDataPrimeFieldName but
+// additionally permits a single leading DataPrime scope prefix ($d./$l./$m.),
+// which toDataPrimeField produces for resolved field references. Everything
+// after the optional prefix must still be a bare field-name token, so a
+// caller-supplied field like "$d.x=='a'||$d.secret.contains('y'" (which
+// toDataPrimeField would pass through verbatim) is rejected instead of
+// injecting raw expression syntax through the field position.
+func isSafeDataPrimeFieldRef(s string) bool {
+	if len(s) >= 3 && s[0] == '$' && (s[1] == 'd' || s[1] == 'l' || s[1] == 'm') && s[2] == '.' {
+		s = s[3:]
+	}
+	return isSafeDataPrimeFieldName(s)
+}
+
+// escapeLuceneValue backslash-escapes the characters that are reserved in
+// Lucene query syntax so a caller-supplied value is treated as inert data
+// rather than query structure. Without this, a value like "a OR bar:*" placed
+// after "field:" would split into a new clause (via ':' and the
+// whitespace-separated OR operator).
+//
+// It escapes the standard Apache Lucene reserved set
+// (\ + - ! ( ) : ^ [ ] " { } ~ * ? | & /) plus '<'/'>' (ES-dialect range
+// operators, so "field:>100" stays a literal instead of drifting to
+// greater-than) — escaping '&'/'|' individually
+// also covers the two-char '&&'/'||' operators — plus whitespace, so a
+// value spanning multiple tokens collapses into a single escaped term and
+// boolean keywords (AND/OR/NOT) inside it can no longer act as operators.
+//
+// Callers that add their own wildcards (contains/starts_with/ends_with wrap
+// the value in '*') must call this on the value BEFORE adding the wrapping
+// '*', so the user's own '*'/'?' are escaped while the builder's wildcards
+// stay live.
+func escapeLuceneValue(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) * 2)
+	for _, r := range s {
+		switch r {
+		case '\\', '+', '-', '!', '(', ')', ':', '^', '[', ']', '"', '{', '}', '~', '*', '?', '|', '&', '/', '<', '>':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			if unicode.IsSpace(r) {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // toDataPrimeField converts a field name to DataPrime reference format
@@ -601,10 +739,43 @@ func toDataPrimeField(field string) string {
 	return "$d." + field
 }
 
-// escapeDataPrimeString escapes special characters in DataPrime strings
+// escapeDataPrimeString escapes special characters in DataPrime single-quoted
+// string literals so caller-supplied values cannot break out of the literal
+// or inject additional query syntax.
+//
+// Backslashes are escaped first (conceptually) by processing the input one
+// rune at a time rather than doing sequential strings.ReplaceAll passes: a
+// naive "escape ' then escape \" (or vice versa via two ReplaceAll calls)
+// either mangles existing backslashes or re-escapes backslashes it just
+// inserted. Scanning once and classifying each rune avoids both problems.
+//
+// A trailing backslash (e.g. `foo\`) is a real-world regression case: with
+// only "'" escaped, the lone backslash would sit directly before the closing
+// quote and, depending on parser behavior, could be read as escaping (i.e.
+// consuming) that quote — leaving the literal unterminated and the rest of
+// the crafted input parsed as query syntax.
+//
+// ASCII control characters (including newlines) are stripped rather than
+// escaped: DataPrime has no defined escape for them, and a raw newline could
+// otherwise be used to smuggle what looks like a second statement into the
+// query.
 func escapeDataPrimeString(s string) string {
-	s = strings.ReplaceAll(s, "'", "\\'")
-	return s
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\'':
+			b.WriteString(`\'`)
+		case r < 0x20 || r == 0x7f:
+			// Strip ASCII control characters (including \n, \r, \t, NUL).
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // escapeJSON escapes special characters for JSON string

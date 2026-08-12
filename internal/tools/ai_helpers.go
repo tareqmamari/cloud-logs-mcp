@@ -12,7 +12,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/audit"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 )
 
 // ExplainQueryTool explains the structure and meaning of a DataPrime or Lucene query
@@ -853,7 +855,9 @@ func (t *GetAuditLogTool) Name() string { return "get_audit_log" }
 
 // Description returns the tool description
 func (t *GetAuditLogTool) Description() string {
-	return `Retrieve audit log entries showing recent tool executions and operations.
+	return `Retrieve audit log entries showing recent tool executions and operations, read from
+the server's in-memory audit ring buffer (the same entries recorded by the "audit" zap
+logger, but queryable here without shelling into server logs).
 
 **Use Cases:**
 - Review what actions have been performed
@@ -861,7 +865,10 @@ func (t *GetAuditLogTool) Description() string {
 - Understand usage patterns
 - Verify operations completed successfully
 
-Note: Audit logs are stored in memory and are cleared on server restart.`
+Note: Audit logs are stored in memory and are cleared on server restart. If audit
+logging is disabled (LOGS_ENABLE_AUDIT_LOG=false), this tool returns an empty result
+explaining how to enable it. Error messages in returned entries are masked the same
+way tool-execution errors are (credentials/secrets never appear here).`
 }
 
 // InputSchema returns the input schema
@@ -888,33 +895,176 @@ func (t *GetAuditLogTool) InputSchema() interface{} {
 	}
 }
 
-// Execute executes the tool - note: this requires integration with the audit logger
-func (t *GetAuditLogTool) Execute(_ context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
-	// This tool requires access to the audit logger which is initialized at server level
-	// For now, return a placeholder message explaining how to access audit logs
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{
-				Text: `Audit logging is enabled. To view audit logs:
-
-1. Check the server logs with log level 'debug' for detailed audit entries
-2. Look for log entries with logger name "audit"
-3. Each entry includes: timestamp, trace_id, tool name, operation, success status, duration
-
-Example audit log entry:
-{
-  "level": "info",
-  "logger": "audit",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "trace_id": "abc123...",
-  "tool": "query_logs",
-  "operation": "query",
-  "success": true,
-  "duration": "1.234s"
+// auditLogEntryView is the JSON shape returned for each audit entry. It
+// mirrors audit.Entry but re-declares ErrorMsg so json.Marshal always emits
+// the (masked) field name "error_message" even when empty, making it clear
+// to callers that masking was applied rather than the field being absent.
+type auditLogEntryView struct {
+	Timestamp   string                 `json:"timestamp"`
+	TraceID     string                 `json:"trace_id,omitempty"`
+	Tool        string                 `json:"tool"`
+	Operation   string                 `json:"operation"`
+	Resource    string                 `json:"resource,omitempty"`
+	ResourceID  string                 `json:"resource_id,omitempty"`
+	Success     bool                   `json:"success"`
+	DurationMS  int64                  `json:"duration_ms"`
+	ErrorMsg    string                 `json:"error_message,omitempty"`
+	InputHash   string                 `json:"input_hash,omitempty"`
+	ResultCount int                    `json:"result_count,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
-To enable verbose audit logging, set LOG_LEVEL=debug in your environment.`,
-			},
+// auditLogResponse is the top-level JSON payload returned by GetAuditLogTool.
+type auditLogResponse struct {
+	Enabled bool                `json:"audit_logging_enabled"`
+	Count   int                 `json:"count"`
+	Note    string              `json:"note,omitempty"`
+	Entries []auditLogEntryView `json:"entries"`
+}
+
+// toAuditLogEntryView converts an audit.Entry for the tool response,
+// re-sanitizing ErrorMsg via security.SanitizeError. LogToolExecution (the
+// only writer of audit entries today) already masks ErrorMsg before storing
+// it, so this is a defensive second pass - SanitizeError is idempotent on
+// already-masked text - matching how the tool-execution chokepoint treats
+// masking as a hard boundary rather than trusting a single call site.
+//
+// Resource, ResourceID, and each Metadata value get the same defensive
+// treatment: no current writer populates them, so this is inert today, but
+// masking-as-a-hard-boundary means the view must not trust that a future
+// writer will always pre-mask them itself. Metadata keys are field names
+// (not user/API data) and are left untouched; only values are masked, and
+// only string values - a non-string value (e.g. a count) can't carry masked
+// text and is passed through unchanged. InputHash is a hash of the input,
+// not free text, and is intentionally left untouched.
+func toAuditLogEntryView(e audit.Entry) auditLogEntryView {
+	view := auditLogEntryView{
+		Timestamp:   e.Timestamp.UTC().Format("2006-01-02T15:04:05.000Z07:00"),
+		TraceID:     e.TraceID,
+		Tool:        e.Tool,
+		Operation:   e.Operation,
+		Resource:    security.MaskSensitiveData(e.Resource),
+		ResourceID:  security.MaskSensitiveData(e.ResourceID),
+		Success:     e.Success,
+		DurationMS:  e.Duration.Milliseconds(),
+		InputHash:   e.InputHash,
+		ResultCount: e.ResultCount,
+		Metadata:    maskMetadataValues(e.Metadata),
+	}
+	if e.ErrorMsg != "" {
+		view.ErrorMsg = security.MaskSensitiveData(e.ErrorMsg)
+	}
+	return view
+}
+
+// maskMetadataValues returns a copy of metadata with every string value
+// masked via security.MaskSensitiveData. Keys are left untouched (they're
+// field names, not data); non-string values are copied through unchanged
+// since MaskSensitiveData operates on strings. Returns nil for nil input so
+// the "omitempty" json tag on auditLogEntryView.Metadata still applies.
+func maskMetadataValues(metadata map[string]interface{}) map[string]interface{} {
+	if metadata == nil {
+		return nil
+	}
+	masked := make(map[string]interface{}, len(metadata))
+	for k, v := range metadata {
+		if s, ok := v.(string); ok {
+			masked[k] = security.MaskSensitiveData(s)
+		} else {
+			masked[k] = v
+		}
+	}
+	return masked
+}
+
+// Execute returns recent audit entries from the server's in-memory audit
+// ring buffer (see Server.AuditLogger / audit.Logger.GetRecentEntries),
+// filtered by the optional "tool" and "trace_id" arguments and capped by
+// "limit". If no audit logger is available in context (e.g. audit logging is
+// disabled) it returns an honest empty result explaining why, rather than
+// the static placeholder text this tool used to always return regardless of
+// input.
+func (t *GetAuditLogTool) Execute(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	limit, err := GetIntParam(args, "limit", false)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	toolFilter, err := GetStringParam(args, "tool", false)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+	traceID, err := GetStringParam(args, "trace_id", false)
+	if err != nil {
+		return NewToolResultError(err.Error()), nil
+	}
+
+	auditLogger, ok := GetAuditLoggerFromContext(ctx)
+	if !ok || !auditLogger.IsEnabled() {
+		resp := auditLogResponse{
+			Enabled: false,
+			Count:   0,
+			Note: "Audit logging is not available: either it is disabled " +
+				"(set LOGS_ENABLE_AUDIT_LOG=true and restart) or this tool " +
+				"was invoked without the server's audit logger in context. " +
+				"When enabled, entries are also emitted via the \"audit\" " +
+				"zap logger at info level for external log aggregation.",
+			Entries: []auditLogEntryView{},
+		}
+		body, marshalErr := json.MarshalIndent(resp, "", "  ")
+		if marshalErr != nil {
+			return NewToolResultError(fmt.Sprintf("Failed to format audit log response: %v", marshalErr)), nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(body)}}}, nil
+	}
+
+	var entries []audit.Entry
+	switch {
+	case traceID != "":
+		entries = auditLogger.GetEntriesByTraceID(traceID)
+		if toolFilter != "" {
+			filtered := entries[:0]
+			for _, e := range entries {
+				if e.Tool == toolFilter {
+					filtered = append(filtered, e)
+				}
+			}
+			entries = filtered
+		}
+		if len(entries) > limit {
+			entries = entries[:limit]
+		}
+	case toolFilter != "":
+		entries = auditLogger.GetEntriesByTool(toolFilter, limit)
+	default:
+		entries = auditLogger.GetRecentEntries(limit)
+	}
+
+	views := make([]auditLogEntryView, 0, len(entries))
+	for _, e := range entries {
+		views = append(views, toAuditLogEntryView(e))
+	}
+
+	resp := auditLogResponse{
+		Enabled: true,
+		Count:   len(views),
+		Entries: views,
+	}
+
+	body, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		return NewToolResultError(fmt.Sprintf("Failed to format audit log response: %v", err)), nil
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(body)},
 		},
 	}, nil
 }

@@ -17,13 +17,13 @@ This project provides two complementary ways to work with IBM Cloud Logs through
 
 | | MCP Server | Agent Skills |
 |---|---|---|
-| **What** | Running Go server with 88 tools via JSON-RPC | 8 portable instruction bundles (markdown + JSON) |
+| **What** | Running Go server with 96 tools via JSON-RPC | 8 portable instruction bundles (markdown + JSON) |
 | **When** | Real-time log queries, CRUD operations, live monitoring | Query writing, architecture guidance, offline reference |
 | **Requires** | Binary + API key + network | Nothing — loaded on-demand by your agent |
 | **Works with** | Claude Desktop, any MCP client | Claude Code, Cursor, Gemini CLI, GitHub Copilot, 30+ agents |
 
 **Key Features:**
-- Complete IBM Cloud Logs API coverage (88 tools)
+- Complete IBM Cloud Logs API coverage (96 tools)
 - 8 embedded Agent Skills following the [agentskills.io](https://agentskills.io) open standard
 - IBM Cloud IAM authentication with automatic token refresh
 - Retry logic with exponential backoff
@@ -61,7 +61,7 @@ make deps && make build
 
 1. **Get IBM Cloud credentials**:
    - API Key: https://cloud.ibm.com/iam/apikeys
-   - Service URL: `https://[instance-id].api.[region].logs.cloud.ibm.com`
+   - Service URL: `https://your-instance-id.api.your-region.logs.cloud.ibm.com`
    - Region: `us-south`, `eu-de`, `au-syd`, etc.
 
 #### For Claude Desktop
@@ -74,7 +74,7 @@ make deps && make build
     "ibm-cloud-logs": {
       "command": "logs-mcp-server",
       "env": {
-        "LOGS_SERVICE_URL": "https://[your-instance-id].api.[region].logs.cloud.ibm.com",
+        "LOGS_SERVICE_URL": "https://your-instance-id.api.your-region.logs.cloud.ibm.com",
         "LOGS_API_KEY": "your-ibm-cloud-api-key"
       }
     }
@@ -97,7 +97,7 @@ make deps && make build
 
 ```powershell
 # PowerShell (Windows)
-$env:LOGS_SERVICE_URL = "https://[your-instance-id].api.[region].logs.cloud.ibm.com"
+$env:LOGS_SERVICE_URL = "https://your-instance-id.api.your-region.logs.cloud.ibm.com"
 $env:LOGS_API_KEY = "your-ibm-cloud-api-key"
 
 # Run the server
@@ -133,18 +133,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 
 ### Tools
 
-88 tools organized by functionality:
+96 tools organized by functionality (categories mirror the `ToolCategory`
+values in [`internal/tools/descriptors.go`](internal/tools/descriptors.go),
+the single source of truth for the registered tool set):
 
-#### Query Operations (5 tools)
-- `query_logs`, `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
+#### Query & Analysis (11 tools)
+- `query_logs`, `build_query`, `validate_query`, `estimate_query_cost`
+- `submit_background_query`, `get_background_query_status`, `get_background_query_data`, `cancel_background_query`
+- `get_query_templates`, `get_dataprime_reference`, `get_audit_log`
+
+#### AI Helpers (2 tools)
+- `explain_query` - explain a DataPrime query in plain language
+- `suggest_alert` - **SRE-grade alert recommendations** (see [Alert Intelligence](#alert-intelligence) below)
 
 #### Log Ingestion (1 tool)
 - `ingest_logs`
 
-#### Alert Management (11 tools)
+#### Alert Management (10 tools)
 - `list_alerts`, `get_alert`, `create_alert`, `update_alert`, `delete_alert`
 - `list_alert_definitions`, `get_alert_definition`, `create_alert_definition`, `update_alert_definition`, `delete_alert_definition`
-- `suggest_alert` - **SRE-grade alert recommendations** (see [Alert Intelligence](#alert-intelligence) below)
 
 #### Dashboard Management (14 tools)
 - `list_dashboards`, `get_dashboard`, `create_dashboard`, `update_dashboard`, `delete_dashboard`
@@ -167,13 +174,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions for Cline, program
 - `list_data_access_rules`, `get_data_access_rule`, `create_data_access_rule`, `update_data_access_rule`, `delete_data_access_rule`
 
 #### Enrichments (5 tools)
-- `list_enrichments`, `get_enrichment`, `create_enrichment`, `update_enrichment`, `delete_enrichment`
+- `list_enrichments`, `get_enrichments`, `create_enrichment`, `update_enrichment`, `delete_enrichment`
 
-#### Streams (5 tools)
+#### Streams (9 tools)
 - `list_streams`, `get_stream`, `create_stream`, `update_stream`, `delete_stream`
+- `get_event_stream_targets`, `create_event_stream_target`, `update_event_stream_target`, `delete_event_stream_target`
 
-#### Views (5 tools)
+#### Views (10 tools)
 - `list_views`, `get_view`, `create_view`, `replace_view`, `delete_view`
+- `list_view_folders`, `get_view_folder`, `create_view_folder`, `replace_view_folder`, `delete_view_folder`
+
+#### Data Usage & Cost (2 tools)
+- `export_data_usage`, `update_data_usage_metrics_export_status`
+
+#### Workflow & Health (2 tools)
+- `health_check`, `investigate_incident`
+
+#### Discovery & Meta (5 tools)
+- `discover_tools`, `describe_tools`, `search_tools`, `list_tool_categories`, `session_context`
+
+Subtotals: 11 (Query & Analysis) + 2 (AI Helpers) + 1 (Log Ingestion) + 10 (Alert Management) + 14 (Dashboard Management) + 5 (Policies) + 5 (Webhooks) + 5 (E2M) + 5 (Rule Groups) + 5 (Data Access Rules) + 5 (Enrichments) + 9 (Streams) + 10 (Views) + 2 (Data Usage & Cost) + 2 (Workflow & Health) + 5 (Discovery & Meta) = **96**, matching `GetToolCount()`. Every tool above appears in exactly one category.
 
 ### Resources
 
@@ -284,7 +304,7 @@ The binary embeds 8 Agent Skills following the [agentskills.io](https://agentski
 | `ibm-cloud-logs-cost-optimization` | TCO policies, data tier selection, and Events-to-Metrics |
 | `ibm-cloud-logs-ingestion` | Log ingestion, parsing rules, and enrichments |
 | `ibm-cloud-logs-access-control` | Data access rules, audit logging, and compliance patterns |
-| `ibm-cloud-logs-api-reference` | Full API reference for all 88 tool endpoints |
+| `ibm-cloud-logs-api-reference` | Full API reference for all 96 tool endpoints |
 
 ### Installing Skills
 
@@ -468,7 +488,7 @@ make lint      # Run linters
 │   ├── auth/                  # IBM Cloud IAM authentication
 │   ├── client/                # HTTP client with retry/rate limiting
 │   ├── config/                # Configuration management
-│   ├── tools/                 # MCP tool implementations (88 tools)
+│   ├── tools/                 # MCP tool implementations (96 tools)
 │   ├── skills/                # Skill installer
 │   ├── server/                # MCP server
 │   ├── health/                # Health checks

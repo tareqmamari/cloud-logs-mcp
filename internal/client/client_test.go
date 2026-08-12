@@ -29,8 +29,10 @@ func newTestClient(serverURL string, version string) *Client {
 	cfg := newTestConfig(serverURL)
 	logger := newTestLogger()
 
+	// Match production (New()): no blanket client-wide timeout, deadlines
+	// enforced exclusively via per-request contexts in doRequest.
 	httpClient := &http.Client{
-		Timeout: cfg.Timeout,
+		Timeout: 0,
 	}
 
 	return &Client{
@@ -60,6 +62,25 @@ func newTestConfig(serverURL string) *config.Config {
 		MaxIdleConns:    10,
 		IdleConnTimeout: 30 * time.Second,
 		EnableRateLimit: false,
+	}
+}
+
+// TestNewWithAuthenticator_UsesInjectedAuthenticator verifies that
+// NewWithAuthenticator wires the client to the caller-supplied authenticator
+// instead of constructing its own. This is what lets server wiring share a
+// single authenticator (and thus a single IAM token cache) between the API
+// client and health checks.
+func TestNewWithAuthenticator_UsesInjectedAuthenticator(t *testing.T) {
+	cfg := newTestConfig("https://example.com")
+	logger := newTestLogger()
+	authenticator := &mockAuthenticator{}
+
+	c, err := NewWithAuthenticator(cfg, logger, "test", authenticator)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+
+	if c.authenticator != Authenticator(authenticator) {
+		t.Error("expected client to use the injected authenticator instance, got a different one")
 	}
 }
 
@@ -582,6 +603,118 @@ func TestCustomHeaders(t *testing.T) {
 	assert.Equal(t, "another-value", capturedHeaders.Get("X-Another"))
 }
 
+// TestCallerAuthorizationHeaderCannotClobberAuthentication verifies that a
+// caller-supplied Authorization header is rejected/ignored so it cannot
+// override the authenticator's own credentials. Caller headers are applied
+// before Authenticate runs, so authentication always has the final say.
+func TestCallerAuthorizationHeaderCannotClobberAuthentication(t *testing.T) {
+	var capturedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method: "GET",
+		Path:   "/v1/test",
+		Headers: map[string]string{
+			"Authorization": "Bearer attacker-supplied-token",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	// mockAuthenticator always sets "Bearer test-token" — the caller-supplied
+	// value must never win.
+	assert.Equal(t, "Bearer test-token", capturedAuth)
+}
+
+// TestCallerHeadersCannotClobberIdempotencyKey verifies that caller-supplied
+// Idempotency-Key / X-Request-ID headers are rejected: the retry machinery
+// depends on the RequestID-derived Idempotency-Key staying stable across
+// attempts, so callers must use Request.RequestID, not raw headers.
+func TestCallerHeadersCannotClobberIdempotencyKey(t *testing.T) {
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method:    "POST",
+		Path:      "/v1/alerts",
+		RequestID: "real-request-id",
+		Headers: map[string]string{
+			"Idempotency-Key": "attacker-key",
+			"X-Request-ID":    "spoofed-id",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "real-request-id", capturedHeaders.Get("Idempotency-Key"),
+		"caller headers must not clobber the RequestID-derived Idempotency-Key")
+	assert.Equal(t, "real-request-id", capturedHeaders.Get("X-Request-ID"),
+		"caller headers must not clobber the RequestID-derived X-Request-ID")
+}
+
+// TestCustomHeadersAppliedBeforeAuthentication verifies that non-Authorization
+// caller headers are still applied (ordering change should not drop them).
+func TestCustomHeadersAppliedBeforeAuthentication(t *testing.T) {
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c := newTestClient(server.URL, "test")
+
+	req := &Request{
+		Method: "GET",
+		Path:   "/v1/test",
+		Headers: map[string]string{
+			"X-Custom-Header": "custom-value",
+		},
+	}
+
+	ctx := context.Background()
+	_, err := c.doRequest(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
+	assert.Equal(t, "Bearer test-token", capturedHeaders.Get("Authorization"))
+}
+
+// TestTransportTuning_MaxIdleConnsPerHost verifies the transport sets
+// MaxIdleConnsPerHost to match MaxIdleConns, avoiding needless connection
+// churn against a single host (the common case for this client).
+func TestTransportTuning_MaxIdleConnsPerHost(t *testing.T) {
+	cfg := newTestConfig("http://example.invalid")
+	logger := newTestLogger()
+
+	c, err := New(cfg, logger, "test")
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	transport, ok := c.httpClient.Transport.(*http.Transport)
+	require.True(t, ok, "expected *http.Transport")
+	assert.Equal(t, cfg.MaxIdleConns, transport.MaxIdleConnsPerHost)
+}
+
 func TestContextCancellation(t *testing.T) {
 	// Server that delays response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -779,6 +912,27 @@ func TestCalculateRetryWait_ExponentialBackoff(t *testing.T) {
 
 		prevWait = waitTime
 		_ = prevWait // silence unused warning
+	}
+}
+
+// TestCalculateRetryWait_JitterNeverExceedsRetryWaitMax guards against Fix
+// H's bug: baseWait is clamped to RetryWaitMax by clampedBackoff, but jitter
+// (up to 25% of baseWait) used to be added ON TOP of that clamped value with
+// no final cap, so the effective wait could exceed RetryWaitMax. With a high
+// attempt count, baseWait is always at the RetryWaitMax ceiling, so any
+// added jitter directly demonstrates the bug across many iterations (jitter
+// is randomized, so a single call could get lucky with ~0 jitter).
+func TestCalculateRetryWait_JitterNeverExceedsRetryWaitMax(t *testing.T) {
+	c := newTestClient("http://localhost", "test")
+	// RetryWaitMin=100ms, RetryWaitMax=500ms (see newTestClient). A large
+	// attempt number saturates the exponential backoff at RetryWaitMax.
+	const highAttempt = 20
+
+	for i := 0; i < 200; i++ {
+		waitTime := c.calculateRetryWait(highAttempt, nil)
+		if waitTime > c.config.RetryWaitMax {
+			t.Fatalf("iteration %d: calculateRetryWait(%d, nil) = %v, exceeds RetryWaitMax %v", i, highAttempt, waitTime, c.config.RetryWaitMax)
+		}
 	}
 }
 

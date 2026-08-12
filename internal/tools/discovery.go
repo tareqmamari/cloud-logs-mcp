@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -97,13 +98,20 @@ type ToolMatch struct {
 }
 
 // Global tool registry
-var globalRegistry *ToolRegistry
+var (
+	globalRegistry     *ToolRegistry
+	globalRegistryOnce sync.Once
+)
 
-// GetToolRegistry returns the global tool registry
+// GetToolRegistry returns the global tool registry, lazily initializing it on
+// first call. Guarded by sync.Once (matching globalSessionManagerOnce in
+// session.go) so concurrent first calls - e.g. two requests racing at server
+// startup - can't data-race on the check-then-set, and all callers are
+// guaranteed to observe the same singleton instance.
 func GetToolRegistry() *ToolRegistry {
-	if globalRegistry == nil {
+	globalRegistryOnce.Do(func() {
 		globalRegistry = NewToolRegistry()
-	}
+	})
 	return globalRegistry
 }
 
@@ -119,8 +127,58 @@ func NewToolRegistry() *ToolRegistry {
 	return r
 }
 
-// registerAllTools registers metadata for all tools
+// baselineKeywordStopwords are generic CRUD/action verbs stripped from
+// name-derived baseline keywords so baseline tools match on their resource
+// (e.g. "enrichment", "dashboard") rather than on ubiquitous verbs.
+var baselineKeywordStopwords = map[string]bool{
+	"get": true, "list": true, "create": true, "update": true,
+	"delete": true, "replace": true, "set": true, "move": true,
+	"pin": true, "unpin": true, "submit": true, "cancel": true,
+	"export": true, "to": true, "default": true,
+}
+
+// registerBaselineToolMetadata seeds a minimal ToolMetadata entry for every
+// tool in the descriptor table. Keywords are derived from the resource tokens
+// of the tool name; the category comes from the descriptor. Curated entries in
+// registerAllTools overwrite these for the tools that have richer metadata.
+//
+// This reconstructs all 96 tools (via Descriptors()) each time it runs, but
+// it only ever runs once per process: it's reached exclusively through
+// NewToolRegistry, which is itself only called from the sync.Once-guarded
+// GetToolRegistry singleton (see TestGetToolRegistry/
+// TestGetToolRegistry_ConcurrentAccessIsRaceFree). Constructing a second
+// *ToolRegistry directly (as some tests do) pays the cost again by design -
+// that's a deliberately separate, isolated instance, not the shared one.
+func (r *ToolRegistry) registerBaselineToolMetadata() {
+	for _, d := range Descriptors() {
+		tool := d.New(nil, nil)
+		name := tool.Name()
+
+		var keywords []string
+		for _, tok := range strings.Split(name, "_") {
+			if tok == "" || baselineKeywordStopwords[tok] {
+				continue
+			}
+			keywords = append(keywords, tok)
+		}
+
+		r.tools[name] = &ToolMetadata{
+			Categories: []ToolCategory{d.Category},
+			Keywords:   keywords,
+			Complexity: ComplexitySimple,
+		}
+	}
+}
+
+// registerAllTools registers metadata for all tools.
+//
+// It first seeds a baseline metadata entry for EVERY tool in the descriptor
+// table (so discover_tools is not blind to the majority of tools), then the
+// hand-written blocks below overwrite the baseline for the ~24 tools that have
+// richer, curated metadata.
 func (r *ToolRegistry) registerAllTools() {
+	r.registerBaselineToolMetadata()
+
 	// Query tools
 	r.tools["query_logs"] = &ToolMetadata{
 		Categories:    []ToolCategory{CategoryQuery, CategoryObservability},
@@ -461,7 +519,7 @@ func (r *ToolRegistry) registerAllTools() {
 	}
 
 	// Query templates
-	r.tools["query_templates"] = &ToolMetadata{
+	r.tools["get_query_templates"] = &ToolMetadata{
 		Categories:    []ToolCategory{CategoryQuery, CategoryAIHelper},
 		Keywords:      []string{"templates", "examples", "patterns", "best practice"},
 		Complexity:    ComplexitySimple,
@@ -584,9 +642,9 @@ func (r *ToolRegistry) registerToolChains() {
 		{
 			Name:        "query_learning",
 			Description: "Learn and build queries step by step",
-			Trigger:     "query_templates",
+			Trigger:     "get_query_templates",
 			Condition:   "New to DataPrime",
-			Sequence:    []string{"query_templates", "build_query", "explain_query", "query_logs"},
+			Sequence:    []string{"get_query_templates", "build_query", "explain_query", "query_logs"},
 			UseCases:    []string{"Learning DataPrime", "Query building"},
 		},
 		{
@@ -674,7 +732,7 @@ func (r *ToolRegistry) buildIntentIndex() {
 		"look for":       {"query_logs", "build_query"},
 		"show me":        {"query_logs", "list_dashboards"},
 		"get logs":       {"query_logs"},
-		"query":          {"query_logs", "build_query", "query_templates"},
+		"query":          {"query_logs", "build_query", "get_query_templates"},
 		"filter logs":    {"query_logs", "build_query"},
 		"search for":     {"query_logs", "build_query"},
 		"find all":       {"query_logs"},
@@ -811,14 +869,14 @@ func (r *ToolRegistry) buildIntentIndex() {
 		"compliance":          {"list_policies", "list_data_access_rules"},
 
 		// ==================== Learning Intents ====================
-		"learn dataprime":          {"query_templates", "build_query", "explain_query"},
-		"how to query":             {"query_templates", "build_query", "explain_query"},
-		"help with query":          {"build_query", "explain_query", "query_templates"},
-		"query examples":           {"query_templates"},
-		"teach me":                 {"query_templates", "explain_query"},
-		"dataprime syntax":         {"query_templates", "explain_query"},
-		"dataprime tutorial":       {"query_templates", "explain_query"},
-		"query syntax":             {"explain_query", "query_templates"},
+		"learn dataprime":          {"get_query_templates", "build_query", "explain_query"},
+		"how to query":             {"get_query_templates", "build_query", "explain_query"},
+		"help with query":          {"build_query", "explain_query", "get_query_templates"},
+		"query examples":           {"get_query_templates"},
+		"teach me":                 {"get_query_templates", "explain_query"},
+		"dataprime syntax":         {"get_query_templates", "explain_query"},
+		"dataprime tutorial":       {"get_query_templates", "explain_query"},
+		"query syntax":             {"explain_query", "get_query_templates"},
 		"how does this query work": {"explain_query"},
 		"explain this query":       {"explain_query"},
 		"what does this query do":  {"explain_query"},
@@ -828,10 +886,10 @@ func (r *ToolRegistry) buildIntentIndex() {
 		"write query":              {"build_query"},
 		"generate query":           {"build_query"},
 		"query for":                {"build_query", "query_logs"},
-		"sample queries":           {"query_templates"},
-		"common queries":           {"query_templates"},
-		"useful queries":           {"query_templates"},
-		"query best practices":     {"query_templates", "explain_query"},
+		"sample queries":           {"get_query_templates"},
+		"common queries":           {"get_query_templates"},
+		"useful queries":           {"get_query_templates"},
+		"query best practices":     {"get_query_templates", "explain_query"},
 		"optimize query":           {"explain_query", "validate_query"},
 		"fix query":                {"explain_query", "validate_query"},
 		"query error":              {"explain_query", "validate_query"},
@@ -924,9 +982,9 @@ func (r *ToolRegistry) buildIntentIndex() {
 		"tool help":       {"discover_tools"},
 		"capabilities":    {"discover_tools"},
 		"features":        {"discover_tools"},
-		"getting started": {"discover_tools", "query_templates"},
+		"getting started": {"discover_tools", "get_query_templates"},
 		"help":            {"discover_tools"},
-		"how to use":      {"discover_tools", "query_templates"},
+		"how to use":      {"discover_tools", "get_query_templates"},
 		"my session":      {"session_context"},
 		"session state":   {"session_context"},
 		"recent queries":  {"session_context"},

@@ -5,15 +5,17 @@ package cache
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // Entry represents a cached item with metadata
 type Entry struct {
-	Value     interface{} `json:"value"`
-	ExpiresAt time.Time   `json:"expires_at"`
-	CreatedAt time.Time   `json:"created_at"`
-	HitCount  int         `json:"hit_count"`
+	Value        interface{} `json:"value"`
+	ExpiresAt    time.Time   `json:"expires_at"`
+	CreatedAt    time.Time   `json:"created_at"`
+	LastAccessed time.Time   `json:"last_accessed"`
+	HitCount     int         `json:"hit_count"`
 }
 
 // IsExpired checks if the cache entry has expired
@@ -21,11 +23,33 @@ func (e *Entry) IsExpired() bool {
 	return time.Now().After(e.ExpiresAt)
 }
 
+// defaultSweepInterval bounds how often Set performs a full expired-entry
+// scan (see UserCache.sweepInterval / evictExpiredLocked). 30s is short
+// enough that expired entries in a cache that's never read again don't
+// linger meaningfully, but long enough that a burst of Set calls (the common
+// case: many tool calls in quick succession) pays the O(n) scan cost once
+// per burst rather than once per call.
+const defaultSweepInterval = 30 * time.Second
+
 // UserCache holds cached data for a specific user+instance combination
 type UserCache struct {
 	mu      sync.RWMutex
 	entries map[string]*Entry
 	maxSize int
+
+	// lastSweep and sweepInterval throttle the opportunistic full scan in
+	// Set (see evictExpiredLocked): a scan only runs if at least
+	// sweepInterval has elapsed since the previous one, bounding the O(n)
+	// cost to once per interval instead of once per Set. Lazy per-Get
+	// eviction and the at-capacity LRU eviction path are unaffected - they
+	// still run unconditionally.
+	lastSweep     time.Time
+	sweepInterval time.Duration
+
+	// sweepRuns counts how many times the throttled sweep in Set actually
+	// executed (as opposed to being skipped because the interval hadn't
+	// elapsed). Test-only observability hook.
+	sweepRuns int
 }
 
 // NewUserCache creates a new user-specific cache
@@ -34,8 +58,9 @@ func NewUserCache(maxSize int) *UserCache {
 		maxSize = 100 // Default max entries
 	}
 	return &UserCache{
-		entries: make(map[string]*Entry),
-		maxSize: maxSize,
+		entries:       make(map[string]*Entry),
+		maxSize:       maxSize,
+		sweepInterval: defaultSweepInterval,
 	}
 }
 
@@ -56,9 +81,10 @@ func (c *UserCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	// Update hit count (needs write lock)
+	// Update hit count and last-accessed time (needs write lock)
 	c.mu.Lock()
 	entry.HitCount++
+	entry.LastAccessed = time.Now()
 	c.mu.Unlock()
 
 	return entry.Value, true
@@ -69,9 +95,20 @@ func (c *UserCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Evict expired entries if at capacity
-	if len(c.entries) >= c.maxSize {
+	// Opportunistically sweep expired entries on Set, throttled to at most
+	// once per sweepInterval. This is a bounded full scan (capped by maxSize
+	// entries) that keeps expired data from lingering indefinitely in caches
+	// that are never read from again, rather than relying solely on lazy
+	// eviction from Get or at-capacity Set - but running that scan on every
+	// single Set made Set O(n) unconditionally, so it's throttled here. The
+	// interval bounds how stale the cache can get without a read: expired
+	// entries are still guaranteed to be swept within sweepInterval of
+	// becoming eligible, even with zero Get calls.
+	now := time.Now()
+	if now.Sub(c.lastSweep) >= c.sweepInterval {
 		c.evictExpiredLocked()
+		c.lastSweep = now
+		c.sweepRuns++
 	}
 
 	// If still at capacity, evict least recently used
@@ -80,10 +117,11 @@ func (c *UserCache) Set(key string, value interface{}, ttl time.Duration) {
 	}
 
 	c.entries[key] = &Entry{
-		Value:     value,
-		ExpiresAt: time.Now().Add(ttl),
-		CreatedAt: time.Now(),
-		HitCount:  0,
+		Value:        value,
+		ExpiresAt:    now.Add(ttl),
+		CreatedAt:    now,
+		LastAccessed: now,
+		HitCount:     0,
 	}
 }
 
@@ -164,9 +202,9 @@ func (c *UserCache) evictLRULocked() {
 	first := true
 
 	for key, entry := range c.entries {
-		if first || entry.CreatedAt.Before(oldestTime) {
+		if first || entry.LastAccessed.Before(oldestTime) {
 			oldestKey = key
-			oldestTime = entry.CreatedAt
+			oldestTime = entry.LastAccessed
 			first = false
 		}
 	}
@@ -178,9 +216,10 @@ func (c *UserCache) evictLRULocked() {
 
 // Manager manages per-user caches with instance isolation
 type Manager struct {
-	mu     sync.RWMutex
-	caches map[string]*UserCache // keyed by userID:instanceID
-	config *Config
+	mu      sync.RWMutex
+	caches  map[string]*UserCache // keyed by userID:instanceID
+	config  *Config
+	enabled atomic.Bool // mirrors config.Enabled; the only mutable field of config after construction
 }
 
 // Config holds cache configuration
@@ -194,7 +233,9 @@ type Config struct {
 	// TTLByTool allows custom TTLs for specific tools
 	TTLByTool map[string]time.Duration
 
-	// Enabled controls whether caching is active
+	// Enabled controls whether caching is active. This is only the initial
+	// value used when constructing a Manager; the live state is tracked by
+	// Manager.enabled and mutated via Manager.SetEnabled.
 	Enabled bool
 }
 
@@ -248,10 +289,12 @@ func NewManager(config *Config) *Manager {
 	if config == nil {
 		config = DefaultConfig()
 	}
-	return &Manager{
+	m := &Manager{
 		caches: make(map[string]*UserCache),
 		config: config,
 	}
+	m.enabled.Store(config.Enabled)
+	return m
 }
 
 // cacheKey generates the key for a user+instance combination
@@ -286,7 +329,7 @@ func (m *Manager) GetUserCache(userID, instanceID string) *UserCache {
 
 // Get retrieves a cached value for a user
 func (m *Manager) Get(userID, instanceID, toolName string, cacheKey string) (interface{}, bool) {
-	if !m.config.Enabled {
+	if !m.enabled.Load() {
 		return nil, false
 	}
 
@@ -297,7 +340,7 @@ func (m *Manager) Get(userID, instanceID, toolName string, cacheKey string) (int
 
 // Set stores a value in the user's cache
 func (m *Manager) Set(userID, instanceID, toolName string, cacheKey string, value interface{}) {
-	if !m.config.Enabled {
+	if !m.enabled.Load() {
 		return
 	}
 
@@ -385,7 +428,7 @@ func (m *Manager) Stats(userID, instanceID string) map[string]interface{} {
 	stats := cache.Stats()
 	stats["user_id"] = userID
 	stats["instance_id"] = instanceID
-	stats["enabled"] = m.config.Enabled
+	stats["enabled"] = m.enabled.Load()
 	return stats
 }
 
@@ -407,16 +450,16 @@ func (m *Manager) GlobalStats() map[string]interface{} {
 		"user_cache_count": len(m.caches),
 		"total_entries":    totalSize,
 		"total_hits":       totalHits,
-		"enabled":          m.config.Enabled,
+		"enabled":          m.enabled.Load(),
 	}
 }
 
 // SetEnabled enables or disables caching
 func (m *Manager) SetEnabled(enabled bool) {
-	m.config.Enabled = enabled
+	m.enabled.Store(enabled)
 }
 
 // IsEnabled returns whether caching is enabled
 func (m *Manager) IsEnabled() bool {
-	return m.config.Enabled
+	return m.enabled.Load()
 }

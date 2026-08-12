@@ -4,13 +4,15 @@
 package tools
 
 import (
+	"fmt"
 	"math/rand/v2"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ========================================================================
@@ -22,19 +24,23 @@ import (
 // ========================================================================
 
 // TestMetamorphic_LogClusteringShuffleInvariance verifies that log clustering
-// produces the same clusters regardless of input order.
+// produces the same clusters regardless of input order. This exercises the
+// production ClusterLogs (internal/tools/response.go), not a test stub.
 // MR1: shuffle(input) → same_clusters(output)
 func TestMetamorphic_LogClusteringShuffleInvariance(t *testing.T) {
 	// Generate test data
 	events := generateMetamorphicTestEvents(100)
 
-	// Get baseline clusters
-	baselineClusters := clusterLogsForTest(events)
+	// Get baseline clusters from the production clustering function
+	baselineClusters := ClusterLogs(events)
+	if len(baselineClusters) == 0 {
+		t.Fatal("expected at least one cluster from generated test events")
+	}
 
 	// Run multiple shuffle iterations
 	for i := 0; i < 10; i++ {
 		shuffled := shuffleEventsForTest(events)
-		shuffledClusters := clusterLogsForTest(shuffled)
+		shuffledClusters := ClusterLogs(shuffled)
 
 		// Verify same number of clusters
 		if len(baselineClusters) != len(shuffledClusters) {
@@ -43,7 +49,8 @@ func TestMetamorphic_LogClusteringShuffleInvariance(t *testing.T) {
 			continue
 		}
 
-		// Verify cluster contents are equivalent (order-independent)
+		// Verify cluster contents are equivalent (order-independent): the same
+		// pattern/count/severity multiset must come out regardless of input order.
 		if !clustersEquivalent(baselineClusters, shuffledClusters) {
 			t.Errorf("Iteration %d: clusters are not equivalent after shuffle", i)
 		}
@@ -178,7 +185,7 @@ func TestMetamorphic_ResponseFormattingDeterminism(t *testing.T) {
 		}
 		if len(formatted.Content) > 0 {
 			// Extract text content for comparison
-			outputs[i] = formatContentToString(formatted)
+			outputs[i] = formatContentToString(t, formatted)
 		}
 	}
 
@@ -187,6 +194,38 @@ func TestMetamorphic_ResponseFormattingDeterminism(t *testing.T) {
 		if outputs[i] != outputs[0] {
 			t.Errorf("Non-deterministic formatting detected:\n  Attempt 0: %s...\n  Attempt %d: %s...",
 				truncateForTest(outputs[0], 100), i, truncateForTest(outputs[i], 100))
+		}
+	}
+}
+
+// TestMetamorphic_LogClusteringOrderDeterminism verifies that ClusterLogs
+// returns clusters in a fully deterministic order (not just an equivalent
+// set) regardless of input order, including ties in Count. Rewriting
+// TestMetamorphic_LogClusteringShuffleInvariance to call the production
+// ClusterLogs (instead of the local stub it previously tested) surfaced a
+// real bug: sort.Slice is not stable, and clusters with equal counts fell
+// back to first-encounter order in the input slice, so shuffling the input
+// could reorder tied clusters in the output. ClusterLogs now breaks ties by
+// Pattern (see internal/tools/response.go), which this test locks in.
+func TestMetamorphic_LogClusteringOrderDeterminism(t *testing.T) {
+	events := generateMetamorphicTestEvents(100)
+	baseline := ClusterLogs(events)
+	if len(baseline) == 0 {
+		t.Fatal("expected at least one cluster from generated test events")
+	}
+
+	for i := 0; i < 10; i++ {
+		shuffled := shuffleEventsForTest(events)
+		got := ClusterLogs(shuffled)
+
+		if len(got) != len(baseline) {
+			t.Fatalf("iteration %d: cluster count mismatch - baseline: %d, shuffled: %d", i, len(baseline), len(got))
+		}
+		for idx := range baseline {
+			if baseline[idx].Pattern != got[idx].Pattern || baseline[idx].Count != got[idx].Count {
+				t.Errorf("iteration %d: cluster order not deterministic at index %d: baseline=%q(%d) got=%q(%d)",
+					i, idx, baseline[idx].Pattern, baseline[idx].Count, got[idx].Pattern, got[idx].Count)
+			}
 		}
 	}
 }
@@ -298,9 +337,26 @@ func TestProperty_ValidationResultConsistency(t *testing.T) {
 // RACE DETECTION TESTS
 // ========================================================================
 
-// TestConcurrent_SessionAccess verifies thread-safety of session operations
+// TestConcurrent_SessionAccess verifies thread-safety of session operations.
+// -race is the primary guard against data races here; the post-conditions
+// below additionally verify no writes were silently lost under concurrency
+// (which -race alone would not catch, since a lost update from a correctly
+// locked-but-buggy method isn't a race).
 func TestConcurrent_SessionAccess(t *testing.T) {
-	SetCurrentUser("test-user", "test-instance")
+	// A fixed identity here would let one `go test -count>1` iteration's
+	// session state (e.g. leftover LearnedPatterns) leak into the next via
+	// the global SessionManager singleton (see testCtxSeq in
+	// execute_test.go). The delta-based assertions below happen to tolerate
+	// that, but mint a unique identity anyway for the same isolation Task 11
+	// established for testCtx().
+	n := testCtxSeq.Add(1)
+	SetCurrentUser(fmt.Sprintf("test-user-%d", n), fmt.Sprintf("test-instance-%d", n))
+	session := GetSession()
+
+	// TotalToolCalls is incremented once per RecordToolUse call (unlike
+	// RecentTools, which is capped at 20 entries), so it's a reliable counter
+	// for "did every concurrent write actually land".
+	before := session.LearnedPatterns.TotalToolCalls
 
 	// Run concurrent operations
 	done := make(chan bool, 100)
@@ -327,9 +383,27 @@ func TestConcurrent_SessionAccess(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		<-done
 	}
+
+	// Post-condition: all 100 RecordToolUse calls must be reflected exactly
+	// once each - a lost update here would mean the mutex isn't actually
+	// protecting TotalToolCalls end-to-end.
+	if got, want := session.LearnedPatterns.TotalToolCalls-before, 100; got != want {
+		t.Errorf("expected TotalToolCalls to increase by %d after 100 concurrent RecordToolUse calls, got %d", want, got)
+	}
+
+	// Post-condition: the last SetLastQuery call (whichever goroutine won the
+	// race) must have actually landed - not been dropped or corrupted.
+	lastQuery := session.GetLastQuery()
+	if !strings.HasPrefix(lastQuery, "test query ") {
+		t.Errorf("expected LastQuery to be one of the concurrently-written \"test query N\" values, got %q", lastQuery)
+	}
 }
 
-// TestConcurrent_CacheAccess verifies thread-safety of cache operations
+// TestConcurrent_CacheAccess verifies thread-safety of cache operations.
+// -race is the primary guard; the post-condition below additionally checks
+// that every key written by the 100 concurrent goroutines is still present
+// and well-formed afterward (a lost or corrupted entry wouldn't necessarily
+// race but would still be a real bug).
 func TestConcurrent_CacheAccess(t *testing.T) {
 	cacheHelper := GetCacheHelper()
 
@@ -351,11 +425,36 @@ func TestConcurrent_CacheAccess(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		<-done
 	}
+
+	// Post-condition: all 10 distinct keys (id%10) written across the 100
+	// goroutines must still be retrievable and hold a well-formed value.
+	for i := 0; i < 10; i++ {
+		key := "key_" + string(rune('0'+i))
+		val, ok := cacheHelper.Get("test_tool", key)
+		if !ok {
+			t.Errorf("expected key %q to be present after concurrent writes, but it was missing", key)
+			continue
+		}
+		m, ok := val.(map[string]interface{})
+		if !ok {
+			t.Errorf("expected value for key %q to be a map[string]interface{}, got %T", key, val)
+			continue
+		}
+		if _, hasID := m["id"]; !hasID {
+			t.Errorf("expected value for key %q to contain an \"id\" field, got %v", key, m)
+		}
+	}
 }
 
 // TestConcurrent_ToolRegistryAccess verifies thread-safety of tool registry
+// reads. The registry is populated once at startup and treated as read-only
+// thereafter, so every concurrent caller must observe identical results;
+// -race guards against a hidden write, and the post-condition below checks
+// that concurrent reads didn't observe a torn/partial view of the maps.
 func TestConcurrent_ToolRegistryAccess(t *testing.T) {
 	done := make(chan bool, 50)
+	nameCounts := make(chan int, 50)
+	toolCounts := make(chan int, 50)
 
 	for i := 0; i < 50; i++ {
 		go func() {
@@ -368,12 +467,40 @@ func TestConcurrent_ToolRegistryAccess(t *testing.T) {
 			if len(tools) == 0 {
 				t.Error("expected at least one query tool")
 			}
+			nameCounts <- len(names)
+			toolCounts <- len(tools)
 			done <- true
 		}()
 	}
 
 	for i := 0; i < 50; i++ {
 		<-done
+	}
+	close(nameCounts)
+	close(toolCounts)
+
+	// Post-condition: every concurrent caller must see the same counts. The
+	// registry is never mutated after init, so any divergence here would mean
+	// a caller observed a torn/partial read of the underlying maps/slices.
+	first := -1
+	for n := range nameCounts {
+		if first == -1 {
+			first = n
+			continue
+		}
+		if n != first {
+			t.Errorf("GetAllToolNames returned inconsistent counts under concurrency: %d vs %d", first, n)
+		}
+	}
+	firstTools := -1
+	for n := range toolCounts {
+		if firstTools == -1 {
+			firstTools = n
+			continue
+		}
+		if n != firstTools {
+			t.Errorf("GetToolsByCategory returned inconsistent counts under concurrency: %d vs %d", firstTools, n)
+		}
 	}
 }
 
@@ -416,20 +543,23 @@ func shuffleEventsForTest(events []interface{}) []interface{} {
 	return shuffled
 }
 
-func clustersEquivalent(a, b []testLogCluster) bool {
+// clustersEquivalent compares two ClusterLogs results as sets, ignoring
+// slice order: the same Pattern/Count/Severity multiset must be present in
+// both, regardless of what order ClusterLogs happened to return them in.
+func clustersEquivalent(a, b []LogCluster) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
 	// Sort clusters by pattern for comparison
-	sortClusters := func(clusters []testLogCluster) {
+	sortClusters := func(clusters []LogCluster) {
 		sort.Slice(clusters, func(i, j int) bool {
 			return clusters[i].Pattern < clusters[j].Pattern
 		})
 	}
 
-	aCopy := make([]testLogCluster, len(a))
-	bCopy := make([]testLogCluster, len(b))
+	aCopy := make([]LogCluster, len(a))
+	bCopy := make([]LogCluster, len(b))
 	copy(aCopy, a)
 	copy(bCopy, b)
 
@@ -437,7 +567,7 @@ func clustersEquivalent(a, b []testLogCluster) bool {
 	sortClusters(bCopy)
 
 	for i := range aCopy {
-		if aCopy[i].Pattern != bCopy[i].Pattern || aCopy[i].Count != bCopy[i].Count {
+		if aCopy[i].Pattern != bCopy[i].Pattern || aCopy[i].Count != bCopy[i].Count || aCopy[i].Severity != bCopy[i].Severity {
 			return false
 		}
 	}
@@ -499,34 +629,26 @@ func filterBySeverity(result map[string]interface{}, minSeverity float64) map[st
 	return map[string]interface{}{"events": filtered}
 }
 
-func formatContentToString(result interface{}) string {
-	// Use reflection to extract text content from MCP CallToolResult
-	v := reflect.ValueOf(result)
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
+// formatContentToString extracts the text of an MCP CallToolResult's content
+// items, failing the test outright if a content item isn't the
+// *mcp.TextContent shape every FormatResponse* helper in this package
+// produces. The previous implementation used reflection and silently
+// returned "" on any shape mismatch, which meant a caller could compare two
+// empty strings and see a spurious pass instead of a failure.
+func formatContentToString(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+
+	if result == nil {
+		t.Fatal("formatContentToString: result is nil")
 	}
-	if v.Kind() != reflect.Struct {
-		return ""
-	}
-	contentField := v.FieldByName("Content")
-	if !contentField.IsValid() || contentField.IsNil() {
-		return ""
-	}
+
 	var sb strings.Builder
-	for i := 0; i < contentField.Len(); i++ {
-		item := contentField.Index(i)
-		if item.Kind() == reflect.Interface {
-			item = item.Elem()
+	for i, item := range result.Content {
+		textContent, ok := item.(*mcp.TextContent)
+		if !ok {
+			t.Fatalf("formatContentToString: content[%d] has unexpected type %T; want *mcp.TextContent", i, item)
 		}
-		if item.Kind() == reflect.Pointer {
-			item = item.Elem()
-		}
-		if item.Kind() == reflect.Struct {
-			textField := item.FieldByName("Text")
-			if textField.IsValid() && textField.Kind() == reflect.String {
-				sb.WriteString(textField.String())
-			}
-		}
+		sb.WriteString(textContent.Text)
 	}
 	return sb.String()
 }
@@ -536,28 +658,4 @@ func truncateForTest(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
-}
-
-// testLogCluster represents a cluster of similar log messages (stub for testing)
-type testLogCluster struct {
-	Pattern string
-	Count   int
-}
-
-// clusterLogsForTest is a stub that would cluster logs by pattern
-func clusterLogsForTest(events []interface{}) []testLogCluster {
-	clusters := make(map[string]int)
-	for _, e := range events {
-		if event, ok := e.(map[string]interface{}); ok {
-			if msg, ok := event["message"].(string); ok {
-				clusters[msg]++
-			}
-		}
-	}
-
-	result := make([]testLogCluster, 0, len(clusters))
-	for pattern, count := range clusters {
-		result = append(result, testLogCluster{Pattern: pattern, Count: count})
-	}
-	return result
 }

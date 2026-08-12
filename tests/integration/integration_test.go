@@ -16,6 +16,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 )
 
 // TestConfig holds configuration for integration tests
@@ -140,11 +142,24 @@ func (tc *TestContext) DoRequestExpectError(req *client.Request, expectedStatus 
 
 	ctx := context.Background()
 	resp, err := tc.Client.Do(ctx, req)
+
+	// The client surfaces non-2xx responses as classified errors carrying the
+	// originating HTTP status (a *mcperrors.StructuredError). For these
+	// "expect an error status" checks, that error IS the expected outcome:
+	// pull the status off it and verify it matches, returning nil so callers
+	// can assert.NoError to mean "the expected error occurred". A non-HTTP
+	// error (network, auth, etc.) is genuinely unexpected and is returned.
 	if err != nil {
+		var se *mcperrors.StructuredError
+		if errors.As(err, &se) {
+			assert.Equal(tc.T, expectedStatus, se.StatusCode, "Expected status code mismatch")
+			return nil, nil
+		}
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	// Verify expected status code
+	// No error means the server returned a success we did not expect for an
+	// error-path test; surface the status mismatch.
 	assert.Equal(tc.T, expectedStatus, resp.StatusCode, "Expected status code mismatch")
 
 	// Parse error response
@@ -222,14 +237,12 @@ func TestMain(m *testing.M) {
 	// and we want to support setting env vars directly
 	_ = godotenv.Load("../../.env")
 
-	// Check if running integration tests
+	// Skip the whole suite up front if credentials aren't configured — these
+	// tests hit real IBM Cloud APIs and NewTestContext would otherwise fail
+	// loudly (and repetitively) in every test.
 	if os.Getenv("LOGS_API_KEY") == "" {
-		fmt.Println("Skipping integration tests: LOGS_API_KEY not set")
-		fmt.Println("To run integration tests, set the following environment variables:")
-		fmt.Println("  export LOGS_API_KEY=your-api-key") // pragma: allowlist secret
-		fmt.Println("  export LOGS_INSTANCE_ID=your-instance-id")
-		fmt.Println("  export LOGS_REGION=your-region")
-		fmt.Println("  Or create a .env file in the project root")
+		fmt.Println("Skipping integration tests: set LOGS_API_KEY, LOGS_INSTANCE_ID, and LOGS_REGION " +
+			"(directly or via a .env file in the project root) to run them.") // pragma: allowlist secret
 		os.Exit(0)
 	}
 

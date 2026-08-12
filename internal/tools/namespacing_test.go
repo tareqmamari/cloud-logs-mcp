@@ -73,6 +73,32 @@ func TestGetAllNamespaces(t *testing.T) {
 	})
 }
 
+// TestToolNamespaceMappingBuiltOnce locks in Fix D's memoization goal: the
+// tool-name -> namespace map is derived once, by the package var initializer
+// (toolNamespaceMapping = buildToolNamespaceMapping() in namespacing.go),
+// not reconstructed from Descriptors() on every read. GetAllNamespaces,
+// GetToolsByNamespace, and GetToolNamespace all read that pre-built map
+// directly, so repeated calls must return stable, equal data, and the map's
+// size must match the descriptor table exactly (one namespace per tool).
+func TestToolNamespaceMappingBuiltOnce(t *testing.T) {
+	first := GetAllNamespaces()
+	for i := 0; i < 5; i++ {
+		got := GetAllNamespaces()
+		if len(got) != len(first) {
+			t.Fatalf("iteration %d: GetAllNamespaces() returned %d namespaces, want %d (data should be stable across repeated calls)", i, len(got), len(first))
+		}
+		for ns, count := range first {
+			if got[ns] != count {
+				t.Errorf("iteration %d: namespace %q count = %d, want %d", i, ns, got[ns], count)
+			}
+		}
+	}
+
+	if got, want := len(toolNamespaceMapping), len(Descriptors()); got != want {
+		t.Errorf("toolNamespaceMapping has %d entries, want %d (one per descriptor - proves it wasn't partially rebuilt)", got, want)
+	}
+}
+
 func TestGetNamespaceInfo(t *testing.T) {
 	t.Run("returns info without tools", func(t *testing.T) {
 		info := GetNamespaceInfo(NamespaceQuery, false)

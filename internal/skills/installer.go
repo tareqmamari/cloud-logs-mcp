@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -53,21 +54,34 @@ func (inst *Installer) List() ([]SkillInfo, error) {
 
 		info := SkillInfo{
 			Name: entry.Name(),
-			Path: filepath.Join(skillsRoot, entry.Name()),
+			// skillsRoot/entry.Name() index into the embedded FS, whose paths
+			// are always slash-separated (io/fs), never OS paths — use path.Join
+			// so this resolves on Windows too.
+			Path: path.Join(skillsRoot, entry.Name()),
 		}
 
 		// Extract description from SKILL.md frontmatter
-		skillMD, err := fs.ReadFile(inst.fs, filepath.Join(info.Path, "SKILL.md"))
+		skillMD, err := fs.ReadFile(inst.fs, path.Join(info.Path, "SKILL.md"))
 		if err == nil {
 			info.Description = extractDescription(string(skillMD))
 		}
 
-		// Count files in the skill
+		// Count files (and subdirectories) in the skill, excluding the skill's
+		// own root directory itself.
 		count := 0
-		_ = fs.WalkDir(inst.fs, info.Path, func(_ string, _ fs.DirEntry, _ error) error {
+		walkErr := fs.WalkDir(inst.fs, info.Path, func(path string, _ fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if path == info.Path {
+				return nil // don't count the root dir
+			}
 			count++
 			return nil
 		})
+		if walkErr != nil {
+			return nil, fmt.Errorf("failed to walk skill %s: %w", entry.Name(), walkErr)
+		}
 		info.FileCount = count
 
 		skills = append(skills, info)
@@ -169,7 +183,10 @@ func copyEmbeddedDir(srcFS fs.FS, srcPath, destPath string) error {
 		targetPath := filepath.Join(destPath, relPath)
 
 		if d.IsDir() {
-			return os.MkdirAll(targetPath, 0750)
+			// Skills are installed under the user's home directory and may
+			// contain personalized content, so keep them private to the
+			// owner: no group/other access at all.
+			return os.MkdirAll(targetPath, 0700)
 		}
 
 		// Read from embedded FS
@@ -178,10 +195,11 @@ func copyEmbeddedDir(srcFS fs.FS, srcPath, destPath string) error {
 			return fmt.Errorf("failed to read embedded file %s: %w", path, err)
 		}
 
-		// Determine file permissions
-		perm := os.FileMode(0644)
+		// Determine file permissions: owner-only read/write, and owner-only
+		// execute for scripts. No group/other access.
+		perm := os.FileMode(0600)
 		if strings.HasSuffix(path, ".sh") || strings.HasSuffix(path, ".py") {
-			perm = 0755
+			perm = 0700
 		}
 
 		// Write to disk

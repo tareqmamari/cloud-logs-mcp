@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
+	mcperrors "github.com/tareqmamari/cloud-logs-mcp/internal/errors"
 )
 
 // mockTokenValidator implements TokenValidator for testing.
@@ -264,7 +266,92 @@ func TestHealthHandler_RejectsNonGET(t *testing.T) {
 	}
 }
 
+// --- Bind-then-serve lifecycle ---
+
+// TestServer_ListenThenServe verifies the new bind-then-serve split: Listen
+// binds synchronously and returns a usable listener, and Serve then accepts
+// connections on it.
+func TestServer_ListenThenServe(t *testing.T) {
+	logger := zap.NewNop()
+	srv := NewServer(nil, logger, 0, "127.0.0.1", false)
+
+	ln, err := srv.Listen()
+	if err != nil {
+		t.Fatalf("Listen() failed: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	addr := ln.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.Serve(ln)
+	}()
+
+	waitForServer(t, "http://"+addr+"/live", 2*time.Second)
+
+	resp, err := http.Get("http://" + addr + "/live") //nolint:gosec
+	if err != nil {
+		t.Fatalf("GET /live failed: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /live status = %d, want 200", resp.StatusCode)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("Serve returned unexpected error after shutdown: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after Shutdown")
+	}
+}
+
+// TestServer_ListenFailsSynchronouslyOnBadAddress verifies that a bind
+// failure (e.g. the port is already in use) is reported synchronously from
+// Listen, before any goroutine is started and before the caller can mark the
+// server ready.
+func TestServer_ListenFailsSynchronouslyOnBadAddress(t *testing.T) {
+	logger := zap.NewNop()
+
+	// Occupy a port first.
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to occupy a port: %v", err)
+	}
+	defer func() { _ = occupied.Close() }()
+	port := occupied.Addr().(*net.TCPAddr).Port
+
+	srv := NewServer(nil, logger, port, "127.0.0.1", false)
+
+	if _, err := srv.Listen(); err == nil {
+		t.Fatal("Listen() should fail synchronously when the port is already in use")
+	}
+}
+
 // Helpers
+
+func waitForServer(t *testing.T, url string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url) //nolint:gosec,bodyclose
+		if err == nil {
+			_ = resp.Body.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("server at %s did not become ready within %v", url, timeout)
+}
 
 func newTestServer() *Server {
 	logger := zap.NewNop()
@@ -360,6 +447,39 @@ func TestCheckAll_APIUnreachable(t *testing.T) {
 	}
 }
 
+// TestCheckAll_APIReturnsClassifiedHTTPError verifies that when the client
+// returns a non-nil response alongside a classified HTTP error (e.g. a 401
+// from the real client's status-code classification), the health check uses
+// the response to report the actual status code instead of a generic
+// "API unreachable" message that would misleadingly suggest the API itself
+// is down when in fact it responded (just with an error status).
+func TestCheckAll_APIReturnsClassifiedHTTPError(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.DoFunc = func(_ context.Context, _ *client.Request) (*client.Response, error) {
+		resp := &client.Response{StatusCode: 401, Body: []byte(`{"error":"invalid api key"}`)}
+		return resp, mcperrors.FromHTTPStatus(401, "invalid api key")
+	}
+	validator := &mockTokenValidator{err: nil}
+	checker := New(mock, validator, zap.NewNop())
+
+	status, checks := checker.CheckAll(context.Background())
+
+	if status != StatusUnhealthy {
+		t.Errorf("overall status = %q, want %q", status, StatusUnhealthy)
+	}
+
+	apiCheck := checks[1]
+	if apiCheck.Status != StatusUnhealthy {
+		t.Errorf("api check status = %q, want %q", apiCheck.Status, StatusUnhealthy)
+	}
+	if !strings.Contains(apiCheck.Message, "401") {
+		t.Errorf("api check message = %q, want to contain the HTTP status code 401", apiCheck.Message)
+	}
+	if strings.Contains(apiCheck.Message, "API unreachable") {
+		t.Errorf("api check message = %q, should not say 'API unreachable' when the API actually responded with a status code", apiCheck.Message)
+	}
+}
+
 func TestCheckAll_AuthOK_APIFailed_OverallUnhealthy(t *testing.T) {
 	mock := client.NewMockClient()
 	mock.DefaultError = errors.New("timeout")
@@ -444,6 +564,53 @@ func TestCheckAll_CancelledContext(t *testing.T) {
 	}
 	if status != StatusUnhealthy && status != StatusDegraded {
 		t.Errorf("overall should be unhealthy or degraded, got %q", status)
+	}
+}
+
+// TestCheckAll_ErrorMessagesDoNotLeakDetails verifies that health check
+// Messages (which are served unauthenticated via /health) never embed raw
+// upstream error text — which can include API response bodies or other
+// sensitive detail. Detailed errors should only reach the server-side log.
+func TestCheckAll_ErrorMessagesDoNotLeakDetails(t *testing.T) {
+	const secretMarker = "sk-supersecret-should-not-appear-1234567890" // pragma: allowlist secret
+
+	mock := client.NewMockClient()
+	mock.DoFunc = func(_ context.Context, _ *client.Request) (*client.Response, error) {
+		body := `{"error":"invalid key ` + secretMarker + `"}`
+		return &client.Response{StatusCode: 401, Body: []byte(body)}, mcperrors.FromHTTPStatus(401, body)
+	}
+	validator := &mockTokenValidator{err: errors.New("token rejected, raw token: " + secretMarker)}
+	checker := New(mock, validator, zap.NewNop())
+
+	_, checks := checker.CheckAll(context.Background())
+
+	for _, c := range checks {
+		if strings.Contains(c.Message, secretMarker) {
+			t.Errorf("check %q message leaked sensitive upstream detail: %q", c.Name, c.Message)
+		}
+	}
+
+	authCheck := checks[0]
+	if authCheck.Message != "Authentication failed" {
+		t.Errorf("auth check message = %q, want generic %q", authCheck.Message, "Authentication failed")
+	}
+}
+
+// TestCheckAll_APIUnreachable_GenericMessage verifies the default
+// (non-HTTP-status) API-connectivity failure message is a fixed generic
+// string, not formatted with the underlying error.
+func TestCheckAll_APIUnreachable_GenericMessage(t *testing.T) {
+	mock := client.NewMockClient()
+	mock.DefaultError = errors.New("dial tcp 10.0.0.1:443: sensitive-network-detail")
+	mock.DefaultResponse = nil
+	validator := &mockTokenValidator{err: nil}
+	checker := New(mock, validator, zap.NewNop())
+
+	_, checks := checker.CheckAll(context.Background())
+
+	apiCheck := checks[1]
+	if apiCheck.Message != "API unreachable" {
+		t.Errorf("api check message = %q, want exactly %q", apiCheck.Message, "API unreachable")
 	}
 }
 

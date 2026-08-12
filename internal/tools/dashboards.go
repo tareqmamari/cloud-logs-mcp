@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
@@ -419,7 +420,7 @@ func (t *GetDashboardTool) Execute(ctx context.Context, arguments map[string]int
 
 	req := &client.Request{
 		Method: "GET",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)
@@ -461,7 +462,26 @@ func (t *CreateDashboardTool) Description() string {
 **Dashboard Structure:**
 - sections: Array of dashboard sections (logical groupings)
 - rows: Horizontal containers within sections (each has height)
-- widgets: Visualizations (line_chart, bar_chart, pie_chart, data_table, gauge, markdown)`
+- widgets: Visualizations (line_chart, bar_chart, pie_chart, data_table, gauge, markdown)
+
+**Tier selection:** each widget's data_mode_type (the query tier) is chosen
+automatically from the TCO policy that routes the widget's target
+application/subsystem — "archive" for logs kept only in the archive tier,
+"high_unspecified" (Priority Insights / frequent_search) otherwise — so panels
+query the tier where the data actually lives. Set data_mode_type explicitly on
+a widget to override. The chosen tiers are reported under _tier_selection.
+
+**Visualization:** each widget's chart type is checked against its query shape
+(a single value suits a gauge, one breakdown a bar_chart, raw or
+multi-dimensional data a data_table). Clear mismatches are reported under
+_viz_recommendations rather than rewritten, so your explicit choice is always
+kept.
+
+**Metrics (E2M):** for aggregation widgets, the response may include
+_e2m_recommendations — either an existing events-to-metrics metric that matches
+the widget (a metrics-backed widget would query faster) or, for archive-tier
+logs, a suggested create_e2m body. These are advisory only; no metric is created
+and no widget is switched.`
 }
 
 // InputSchema returns the JSON schema for the tool's input parameters.
@@ -577,7 +597,45 @@ func (t *CreateDashboardTool) Metadata() *ToolMetadata {
 }
 
 // ensureRequiredDashboardFields adds missing required fields to dashboard structure
-func ensureRequiredDashboardFields(layout interface{}) {
+// ensureQueryDefinitionUUID replaces a missing or non-UUID query-definition
+// id with a generated UUID. Unlike section/row/widget ids, these are plain
+// strings, but the API applies the same UUID requirement.
+func ensureQueryDefinitionUUID(qd map[string]interface{}) {
+	if val, ok := qd["id"].(string); ok && val != "" {
+		if _, err := uuid.Parse(val); err == nil {
+			return
+		}
+	}
+	qd["id"] = uuid.NewString()
+}
+
+// ensureUUIDID makes sure m carries an API-acceptable id of the shape
+// {"id": {"value": "<uuid>"}}. The live API rejects non-UUID id values
+// (e.g. "section-1"), so missing or invalid ids are replaced with a
+// generated UUID.
+func ensureUUIDID(m map[string]interface{}) {
+	if idMap, ok := m["id"].(map[string]interface{}); ok {
+		if val, ok := idMap["value"].(string); ok {
+			if _, err := uuid.Parse(val); err == nil {
+				return
+			}
+		}
+	}
+	m["id"] = map[string]interface{}{"value": uuid.NewString()}
+}
+
+// logsQueryOf returns the "logs" query map nested under a node's "query"
+// field (node["query"]["logs"]), or nil when the node has no logs query.
+func logsQueryOf(node map[string]interface{}) map[string]interface{} {
+	query, ok := node["query"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	logs, _ := query["logs"].(map[string]interface{})
+	return logs
+}
+
+func ensureRequiredDashboardFields(layout interface{}, resolver *widgetTierResolver, advisor *vizAdvisor) {
 	layoutMap, ok := layout.(map[string]interface{})
 	if !ok {
 		return
@@ -593,6 +651,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 		if !ok {
 			continue
 		}
+		ensureUUIDID(sectionMap)
 
 		rows, ok := sectionMap["rows"].([]interface{})
 		if !ok {
@@ -604,6 +663,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 			if !ok {
 				continue
 			}
+			ensureUUIDID(rowMap)
 
 			widgets, ok := rowMap["widgets"].([]interface{})
 			if !ok {
@@ -615,6 +675,7 @@ func ensureRequiredDashboardFields(layout interface{}) {
 				if !ok {
 					continue
 				}
+				ensureUUIDID(widgetMap)
 
 				// Ensure widget has appearance.width
 				if _, hasAppearance := widgetMap["appearance"]; !hasAppearance {
@@ -630,29 +691,156 @@ func ensureRequiredDashboardFields(layout interface{}) {
 					continue
 				}
 
+				// Advise/adopt the visualization type from the query shape
+				// before the per-type field defaults run. adviseWidgetType is
+				// a no-op when advisor is nil or the widget has no logs query.
+				adviseWidgetType(definition, advisor)
+
 				// Handle different widget types
 				if lineChart, ok := definition["line_chart"].(map[string]interface{}); ok {
-					ensureLineChartFields(lineChart)
+					ensureLineChartFields(lineChart, resolver)
 				}
 				if dataTable, ok := definition["data_table"].(map[string]interface{}); ok {
-					ensureDataTableFields(dataTable)
+					ensureDataTableFields(dataTable, resolver)
 				}
 				if pieChart, ok := definition["pie_chart"].(map[string]interface{}); ok {
-					ensureChartFields(pieChart)
+					ensureChartFields(pieChart, resolver)
 				}
 				if barChart, ok := definition["bar_chart"].(map[string]interface{}); ok {
-					ensureChartFields(barChart)
+					ensureChartFields(barChart, resolver)
 				}
 				if gauge, ok := definition["gauge"].(map[string]interface{}); ok {
-					ensureGaugeFields(gauge)
+					ensureGaugeFields(gauge, resolver)
 				}
 			}
 		}
 	}
 }
 
+// widgetDefinitionKeys are the definition keys that hold a chart widget.
+var widgetDefinitionKeys = []string{"line_chart", "data_table", "pie_chart", "bar_chart", "gauge"}
+
+// adviseWidgetType records a visualization recommendation for a widget when
+// its chosen chart type clearly mismatches its query shape. It is strictly
+// non-destructive: it never rewrites the caller's widget type. A widget with
+// no chart-type wrapper is skipped — a widget's logs query always lives inside
+// a widget-type definition, so there is no canonical query to classify and no
+// type is synthesized.
+func adviseWidgetType(definition map[string]interface{}, advisor *vizAdvisor) {
+	if advisor == nil {
+		return
+	}
+	current, node := currentWidgetType(definition)
+	if current == "" || node == nil {
+		return
+	}
+	// line_chart is intentionally exempt from viz advice. Its query lives under
+	// query_definitions[] rather than node["query"], and more importantly its
+	// implicit time axis makes any aggregation shape a valid trend over time, so
+	// gauge/bar/table recommendations would be false positives. (A line chart
+	// with no aggregation is already rejected by validateDashboardStructure.)
+	if current == "line_chart" {
+		return
+	}
+	logs := logsQueryOf(node)
+	if logs == nil {
+		return
+	}
+	advisor.advise(current, logs)
+}
+
+// currentWidgetType returns the first present chart widget key and its
+// definition node, or ("", nil) if none is set.
+func currentWidgetType(definition map[string]interface{}) (string, map[string]interface{}) {
+	for _, key := range widgetDefinitionKeys {
+		if node, ok := definition[key].(map[string]interface{}); ok {
+			return key, node
+		}
+	}
+	return "", nil
+}
+
+// aggregationsNeedingField are logs-aggregation types the API requires an
+// observation_field for (a value aggregation is meaningless without one).
+var aggregationsNeedingField = map[string]bool{
+	"average": true, "sum": true, "min": true, "max": true,
+	"percentile": true, "count_distinct": true,
+}
+
+// validateDashboardStructure checks constraints the live API enforces on
+// dashboard layouts that JSON shape alone does not capture: line-chart logs
+// queries must carry at least one aggregation, and value aggregations must
+// name an observation_field.
+func validateDashboardStructure(layout interface{}) []string {
+	var errs []string
+	layoutMap, ok := layout.(map[string]interface{})
+	if !ok {
+		return errs
+	}
+	sections, _ := layoutMap["sections"].([]interface{})
+	for si, section := range sections {
+		sectionMap, ok := section.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rows, _ := sectionMap["rows"].([]interface{})
+		for ri, row := range rows {
+			rowMap, ok := row.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			widgets, _ := rowMap["widgets"].([]interface{})
+			for wi, widget := range widgets {
+				widgetMap, ok := widget.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				definition, _ := widgetMap["definition"].(map[string]interface{})
+				lineChart, ok := definition["line_chart"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				queryDefs, _ := lineChart["query_definitions"].([]interface{})
+				for qi, qd := range queryDefs {
+					qdMap, ok := qd.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					query, _ := qdMap["query"].(map[string]interface{})
+					logs, ok := query["logs"].(map[string]interface{})
+					if !ok {
+						continue
+					}
+					at := fmt.Sprintf("sections[%d].rows[%d].widgets[%d].query_definitions[%d]", si, ri, wi, qi)
+					aggs, _ := logs["aggregations"].([]interface{})
+					if len(aggs) == 0 {
+						errs = append(errs, at+": line-chart logs query needs at least one aggregation (e.g. {\"count\": {}})")
+						continue
+					}
+					for ai, agg := range aggs {
+						aggMap, ok := agg.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						for kind, body := range aggMap {
+							if !aggregationsNeedingField[kind] {
+								continue
+							}
+							bodyMap, _ := body.(map[string]interface{})
+							if _, has := bodyMap["observation_field"]; !has {
+								errs = append(errs, fmt.Sprintf("%s.aggregations[%d]: %q aggregation requires an observation_field", at, ai, kind))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return errs
+}
+
 // ensureLineChartFields ensures line chart has all required fields
-func ensureLineChartFields(lineChart map[string]interface{}) {
+func ensureLineChartFields(lineChart map[string]interface{}, resolver *widgetTierResolver) {
 	// Ensure legend
 	if _, hasLegend := lineChart["legend"]; !hasLegend {
 		lineChart["legend"] = map[string]interface{}{
@@ -678,18 +866,26 @@ func ensureLineChartFields(lineChart map[string]interface{}) {
 	if queryDefs, ok := lineChart["query_definitions"].([]interface{}); ok {
 		for _, qd := range queryDefs {
 			if qdMap, ok := qd.(map[string]interface{}); ok {
-				ensureQueryDefinitionFields(qdMap)
+				ensureQueryDefinitionFields(qdMap, resolver)
+				ensureQueryDefinitionUUID(qdMap)
 			}
 		}
 	}
 }
 
-// ensureDataTableFields ensures data table has required fields
-func ensureDataTableFields(dataTable map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := dataTable["data_mode_type"]; !hasDataMode {
-		dataTable["data_mode_type"] = "high_unspecified"
+// ensureDataModeType fills in a node's data_mode_type from the TCO-derived
+// tier for its logs query, but only when the caller did not set it — an
+// explicit value always wins.
+func ensureDataModeType(node map[string]interface{}, resolver *widgetTierResolver) {
+	if _, hasDataMode := node["data_mode_type"]; hasDataMode {
+		return
 	}
+	node["data_mode_type"] = resolver.dataModeTypeFor(logsQueryOf(node))
+}
+
+// ensureDataTableFields ensures data table has required fields
+func ensureDataTableFields(dataTable map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(dataTable, resolver)
 
 	// Ensure query has filters array
 	if query, ok := dataTable["query"].(map[string]interface{}); ok {
@@ -698,11 +894,8 @@ func ensureDataTableFields(dataTable map[string]interface{}) {
 }
 
 // ensureChartFields ensures pie/bar charts have required fields
-func ensureChartFields(chart map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := chart["data_mode_type"]; !hasDataMode {
-		chart["data_mode_type"] = "high_unspecified"
-	}
+func ensureChartFields(chart map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(chart, resolver)
 
 	// Ensure query has filters array
 	if query, ok := chart["query"].(map[string]interface{}); ok {
@@ -711,11 +904,8 @@ func ensureChartFields(chart map[string]interface{}) {
 }
 
 // ensureGaugeFields ensures gauge has required fields
-func ensureGaugeFields(gauge map[string]interface{}) {
-	// Ensure data_mode_type
-	if _, hasDataMode := gauge["data_mode_type"]; !hasDataMode {
-		gauge["data_mode_type"] = "high_unspecified"
-	}
+func ensureGaugeFields(gauge map[string]interface{}, resolver *widgetTierResolver) {
+	ensureDataModeType(gauge, resolver)
 
 	// Ensure query has filters array
 	if query, ok := gauge["query"].(map[string]interface{}); ok {
@@ -724,16 +914,14 @@ func ensureGaugeFields(gauge map[string]interface{}) {
 }
 
 // ensureQueryDefinitionFields ensures query definition has all required fields
-func ensureQueryDefinitionFields(queryDef map[string]interface{}) {
+func ensureQueryDefinitionFields(queryDef map[string]interface{}, resolver *widgetTierResolver) {
 	// Ensure is_visible
 	if _, hasVisible := queryDef["is_visible"]; !hasVisible {
 		queryDef["is_visible"] = true
 	}
 
-	// Ensure data_mode_type
-	if _, hasDataMode := queryDef["data_mode_type"]; !hasDataMode {
-		queryDef["data_mode_type"] = "high_unspecified"
-	}
+	// Ensure data_mode_type (tier) from TCO policy for the query's app/subsystem
+	ensureDataModeType(queryDef, resolver)
 
 	// Ensure scale_type
 	if _, hasScale := queryDef["scale_type"]; !hasScale {
@@ -802,12 +990,27 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 	// Check for dry-run mode
 	dryRun, _ := GetBoolParam(arguments, "dry_run", false)
 
-	// Ensure all required fields are present in the layout
-	ensureRequiredDashboardFields(layout)
+	// Ensure all required fields are present in the layout. The resolver
+	// selects each widget's tier (data_mode_type) from the TCO policy that
+	// routes the widget's target application/subsystem, so panels query the
+	// tier where those logs actually live.
+	// Resolve the client like the main request path does (context first);
+	// tier resolution is best-effort, so a resolution failure means defaults.
+	tierClient, _ := t.GetClient(ctx)
+	resolver := resolverFromContext(ctx, tierClient, t.logger)
+	advisor := newVizAdvisor()
+	ensureRequiredDashboardFields(layout, resolver, advisor)
+
+	// Check structural constraints the API enforces beyond JSON shape
+	structureErrors := validateDashboardStructure(layout)
+	if len(structureErrors) > 0 && !dryRun {
+		return NewToolResultError(fmt.Sprintf("Dashboard layout has %d structural error(s). Please fix them before creating the dashboard:\n- %s",
+			len(structureErrors), joinErrors(structureErrors))), nil
+	}
 
 	// Extract queries with syntax information for better validation
 	queryInfos := extractQueriesWithInfo(layout, "layout")
-	var invalidQueries []string
+	invalidQueries := structureErrors
 	var validatedQueries []string
 
 	if len(queryInfos) > 0 {
@@ -869,6 +1072,13 @@ func (t *CreateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError(err.Error()), nil
 	}
 
+	attachTierSelection(result, resolver)
+	attachVizRecommendations(result, advisor)
+	// Best-effort advisory fetch: resolve the client like the main request
+	// path does (context first); a resolution failure just skips the notes.
+	e2mClient, _ := t.GetClient(ctx)
+	e2ms := fetchE2MList(ctx, e2mClient, t.logger)
+	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "create_dashboard")
 }
 
@@ -1049,6 +1259,16 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError("layout is required"), nil
 	}
 
+	// Normalize the layout and select each widget's tier (data_mode_type)
+	// from the TCO policy for its target application/subsystem, mirroring
+	// create so an updated dashboard queries the tier where its logs live.
+	// Resolve the client like the main request path does (context first);
+	// tier resolution is best-effort, so a resolution failure means defaults.
+	tierClient, _ := t.GetClient(ctx)
+	resolver := resolverFromContext(ctx, tierClient, t.logger)
+	advisor := newVizAdvisor()
+	ensureRequiredDashboardFields(layout, resolver, advisor)
+
 	// Extract and validate all queries from the layout before updating the dashboard
 	queries := extractQueriesFromLayout(layout)
 	if len(queries) > 0 {
@@ -1077,7 +1297,7 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	req := &client.Request{
 		Method: "PUT",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 		Body:   body,
 	}
 
@@ -1086,6 +1306,13 @@ func (t *UpdateDashboardTool) Execute(ctx context.Context, arguments map[string]
 		return NewToolResultError(err.Error()), nil
 	}
 
+	attachTierSelection(result, resolver)
+	attachVizRecommendations(result, advisor)
+	// Best-effort advisory fetch: resolve the client like the main request
+	// path does (context first); a resolution failure just skips the notes.
+	e2mClient, _ := t.GetClient(ctx)
+	e2ms := fetchE2MList(ctx, e2mClient, t.logger)
+	attachE2MRecommendations(result, e2mRecommendations(layout, e2ms, sessionAsIs(ctx)))
 	return t.FormatResponseWithSuggestions(result, "update_dashboard")
 }
 
@@ -1157,7 +1384,7 @@ func (t *DeleteDashboardTool) Execute(ctx context.Context, arguments map[string]
 
 	req := &client.Request{
 		Method: "DELETE",
-		Path:   fmt.Sprintf("/v1/dashboards/%s", dashboardID),
+		Path:   apiPath("/v1/dashboards", dashboardID),
 	}
 
 	result, err := t.ExecuteRequest(ctx, req)

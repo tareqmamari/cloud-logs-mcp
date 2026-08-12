@@ -85,10 +85,10 @@ func (t *DiscoverLogFieldsTool) Execute(ctx context.Context, args map[string]int
 	// Build query
 	var filters []string
 	if appName != "" {
-		filters = append(filters, fmt.Sprintf("$l.applicationname == '%s'", appName))
+		filters = append(filters, fmt.Sprintf("$l.applicationname == '%s'", escapeDataPrimeString(appName)))
 	}
 	if subsysName != "" {
-		filters = append(filters, fmt.Sprintf("$l.subsystemname == '%s'", subsysName))
+		filters = append(filters, fmt.Sprintf("$l.subsystemname == '%s'", escapeDataPrimeString(subsysName)))
 	}
 
 	query := "source logs"

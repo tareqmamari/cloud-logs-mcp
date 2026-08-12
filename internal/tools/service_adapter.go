@@ -171,15 +171,15 @@ func (t *ServiceAwareTool) executeViaClient(
 	var req *client.Request
 	switch operation {
 	case "get":
-		req = &client.Request{Method: "GET", Path: basePath + "/" + id}
+		req = &client.Request{Method: "GET", Path: apiPath(basePath, id)}
 	case "list":
 		req = &client.Request{Method: "GET", Path: basePath}
 	case "create":
 		req = &client.Request{Method: "POST", Path: basePath, Body: data}
 	case "update":
-		req = &client.Request{Method: "PUT", Path: basePath + "/" + id, Body: data}
+		req = &client.Request{Method: "PUT", Path: apiPath(basePath, id), Body: data}
 	case "delete":
-		req = &client.Request{Method: "DELETE", Path: basePath + "/" + id}
+		req = &client.Request{Method: "DELETE", Path: apiPath(basePath, id)}
 	default:
 		return nil, fmt.Errorf("unknown operation: %s", operation)
 	}

@@ -1001,8 +1001,16 @@ func (d *DynamicBaselineCalculator) CalculateThreshold(historicalValues []float6
 	return lower, upper, nil
 }
 
-// GenerateDynamicBaselineQuery creates a DataPrime query for baseline calculation
+// GenerateDynamicBaselineQuery creates a DataPrime query for baseline calculation.
+// metricField is interpolated unquoted into the query ($d.<field>, avg($d.<field>)),
+// so it must be a safe DataPrime field-name token; an unsafe value (e.g.
+// "x) || true || avg($d.y") would inject arbitrary expression syntax, so it
+// yields an empty query instead.
 func GenerateDynamicBaselineQuery(metricField string, seasonalityType string, _ int) string {
+	if !isSafeDataPrimeFieldName(metricField) {
+		return ""
+	}
+
 	var groupBy string
 	switch seasonalityType {
 	case "hourly":

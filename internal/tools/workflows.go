@@ -198,12 +198,12 @@ func (t *InvestigateIncidentTool) Execute(ctx context.Context, args map[string]i
 
 	// Add application filter if specified
 	if application != "" {
-		queryParts = append(queryParts, fmt.Sprintf("filter $l.applicationname == '%s'", application))
+		queryParts = append(queryParts, fmt.Sprintf("filter $l.applicationname == '%s'", escapeDataPrimeString(application)))
 	}
 
 	// Add keyword filter if specified
 	if keyword != "" {
-		queryParts = append(queryParts, fmt.Sprintf("filter $d.text.contains('%s') || $d.message.contains('%s')", keyword, keyword))
+		queryParts = append(queryParts, fmt.Sprintf("filter $d.text.contains('%s') || $d.message.contains('%s')", escapeDataPrimeString(keyword), escapeDataPrimeString(keyword)))
 	}
 
 	// Build final query

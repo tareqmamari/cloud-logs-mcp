@@ -36,7 +36,7 @@ func (t *GetOutgoingWebhookTool) Execute(ctx context.Context, args map[string]in
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/outgoing_webhooks/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/outgoing_webhooks", id)})
 	if err != nil {
 		return HandleGetError(err, "Outgoing webhook", id, "list_outgoing_webhooks"), nil
 	}
@@ -92,11 +92,8 @@ func (t *CreateOutgoingWebhookTool) Description() string {
 
 **Related tools:** list_outgoing_webhooks, get_outgoing_webhook, create_alert (connect alerts to webhooks)
 
-**Webhook Types:**
-- generic: Custom HTTP webhook to any endpoint
-- slack: Slack incoming webhook integration
-- pagerduty: PagerDuty integration for incident management
-- ibm_event_notifications: IBM Cloud Event Notifications service`
+**Webhook Type:**
+- ibm_event_notifications: IBM Cloud Event Notifications service (the only type the IBM Cloud Logs API accepts; Slack, PagerDuty, email etc. are configured as destinations inside the Event Notifications instance)`
 }
 
 // InputSchema returns the input schema
@@ -114,8 +111,8 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 					},
 					"type": map[string]interface{}{
 						"type":        "string",
-						"description": "Webhook type: generic, slack, pagerduty, ibm_event_notifications",
-						"enum":        []string{"generic", "slack", "pagerduty", "ibm_event_notifications"},
+						"description": "Webhook type. The API accepts only ibm_event_notifications; route Slack/PagerDuty through Event Notifications destinations",
+						"enum":        []string{"ibm_event_notifications"},
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
@@ -133,16 +130,12 @@ func (t *CreateOutgoingWebhookTool) InputSchema() interface{} {
 		"examples": []interface{}{
 			map[string]interface{}{
 				"webhook": map[string]interface{}{
-					"name": "Slack Alerts",
-					"type": "slack",
-					"url":  "https://hooks.slack.com/services/XXX/YYY/ZZZ",
-				},
-			},
-			map[string]interface{}{
-				"webhook": map[string]interface{}{
-					"name": "PagerDuty Critical",
-					"type": "pagerduty",
-					"url":  "https://events.pagerduty.com/v2/enqueue",
+					"name": "oncall-notifications",
+					"type": "ibm_event_notifications",
+					"ibm_event_notifications": map[string]interface{}{
+						"event_notifications_instance_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+						"region_id":                       "au-syd",
+					},
 				},
 			},
 		},
@@ -176,8 +169,9 @@ func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (
 		Summary: make(map[string]interface{}),
 	}
 
-	// Validate required fields
-	requiredFields := []string{"name", "type", "url"}
+	// Validate required fields (url is optional — the ibm_event_notifications
+	// type connects via instance id + region, not a URL)
+	requiredFields := []string{"name", "type"}
 	for _, field := range requiredFields {
 		if _, ok := wh[field]; !ok {
 			result.Errors = append(result.Errors, "Missing required field: "+field)
@@ -190,19 +184,26 @@ func (t *CreateOutgoingWebhookTool) validateWebhook(wh map[string]interface{}) (
 		result.Summary["name"] = name
 	}
 
-	// Validate type
-	validTypes := map[string]bool{
-		"generic":                 true,
-		"slack":                   true,
-		"pagerduty":               true,
-		"ibm_event_notifications": true,
-	}
+	// Validate type: the live IBM Cloud Logs API accepts only
+	// ibm_event_notifications (slack/pagerduty/generic are rejected with
+	// "unknown variant" — external targets are Event Notifications destinations)
 	if whType, ok := wh["type"].(string); ok {
-		if !validTypes[whType] {
-			result.Errors = append(result.Errors, "Invalid webhook type: "+whType+". Valid types: generic, slack, pagerduty, ibm_event_notifications")
+		if whType != "ibm_event_notifications" {
+			result.Errors = append(result.Errors, "Invalid webhook type: "+whType+". The API accepts only ibm_event_notifications; configure Slack/PagerDuty as destinations in the Event Notifications instance")
 			result.Valid = false
 		}
 		result.Summary["type"] = whType
+		if cfg, ok := wh["ibm_event_notifications"].(map[string]interface{}); ok {
+			for _, f := range []string{"event_notifications_instance_id", "region_id"} {
+				if _, has := cfg[f]; !has {
+					result.Errors = append(result.Errors, "ibm_event_notifications requires field: "+f)
+					result.Valid = false
+				}
+			}
+		} else if whType == "ibm_event_notifications" {
+			result.Errors = append(result.Errors, "Missing ibm_event_notifications config object (event_notifications_instance_id, region_id)")
+			result.Valid = false
+		}
 	}
 
 	// Validate URL format
@@ -255,7 +256,7 @@ func (t *UpdateOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/outgoing_webhooks/" + id, Body: wh})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/outgoing_webhooks", id), Body: wh})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -292,7 +293,7 @@ func (t *DeleteOutgoingWebhookTool) Execute(ctx context.Context, args map[string
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/outgoing_webhooks/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/outgoing_webhooks", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -324,7 +325,7 @@ func (t *GetPolicyTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/policies/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/policies", id)})
 	if err != nil {
 		return HandleGetError(err, "Policy", id, "list_policies"), nil
 	}
@@ -569,7 +570,7 @@ func (t *UpdatePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/policies/" + id, Body: pol})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/policies", id), Body: pol})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -606,7 +607,7 @@ func (t *DeletePolicyTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/policies/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/policies", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -638,7 +639,7 @@ func (t *GetE2MTool) Execute(ctx context.Context, args map[string]interface{}) (
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/events2metrics/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/events2metrics", id)})
 	if err != nil {
 		return HandleGetError(err, "Events-to-metrics configuration", id, "list_e2m"), nil
 	}
@@ -756,11 +757,40 @@ func (t *CreateE2MTool) InputSchema() interface{} {
 					},
 					"metric_fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Fields to extract as metric values",
+						"description": "What to measure. Each field declares one or more aggregations that each become a named metric.",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"source_field":            map[string]interface{}{"type": "string", "description": "Numeric log field to measure (required even for count; value is ignored for count)."},
+								"target_base_metric_name": map[string]interface{}{"type": "string", "description": "Base name for this measured field (pattern ^[\\w/-]+$)."},
+								"aggregations": map[string]interface{}{
+									"type":        "array",
+									"description": "One entry per aggregation; each produces a metric named by target_metric_name.",
+									"items": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"enabled":            map[string]interface{}{"type": "boolean"},
+											"agg_type":           map[string]interface{}{"type": "string", "enum": []string{"min", "max", "count", "avg", "sum", "histogram", "samples"}},
+											"target_metric_name": map[string]interface{}{"type": "string", "description": "The PromQL metric name produced for this aggregation."},
+										},
+										"required": []string{"agg_type", "target_metric_name"},
+									},
+								},
+							},
+							"required": []string{"source_field", "target_base_metric_name", "aggregations"},
+						},
 					},
 					"metric_labels": map[string]interface{}{
 						"type":        "array",
-						"description": "Fields to use as metric labels",
+						"description": "Group-by dimensions carried onto the resulting metric as Prometheus labels.",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"target_label": map[string]interface{}{"type": "string", "description": "Resulting Prometheus label name (pattern ^[\\w/-]+$)."},
+								"source_field": map[string]interface{}{"type": "string", "description": "Log field the label value is read from, e.g. applicationName."},
+							},
+							"required": []string{"target_label", "source_field"},
+						},
 					},
 				},
 			},
@@ -906,7 +936,7 @@ func (t *ReplaceE2MTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/events2metrics/" + id, Body: e2m})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/events2metrics", id), Body: e2m})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -943,7 +973,7 @@ func (t *DeleteE2MTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/events2metrics/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/events2metrics", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1007,7 +1037,7 @@ func (t *GetDataAccessRuleTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/data_access_rules/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/data_access_rules", id)})
 	if err != nil {
 		return HandleGetError(err, "Data access rule", id, "list_data_access_rules"), nil
 	}
@@ -1184,7 +1214,7 @@ func (t *UpdateDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/data_access_rules/" + id, Body: rule})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/data_access_rules", id), Body: rule})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1221,7 +1251,7 @@ func (t *DeleteDataAccessRuleTool) Execute(ctx context.Context, args map[string]
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/data_access_rules/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/data_access_rules", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1392,7 +1422,7 @@ func (t *UpdateEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/enrichments/" + id, Body: enr})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/enrichments", id), Body: enr})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1429,7 +1459,7 @@ func (t *DeleteEnrichmentTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/enrichments/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/enrichments", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1628,7 +1658,7 @@ func (t *GetViewTool) Execute(ctx context.Context, args map[string]interface{}) 
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/views/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/views", id)})
 	if err != nil {
 		return HandleGetError(err, "View", id, "list_views"), nil
 	}
@@ -1664,7 +1694,7 @@ func (t *ReplaceViewTool) Execute(ctx context.Context, args map[string]interface
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/views/" + id, Body: view})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/views", id), Body: view})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1701,7 +1731,7 @@ func (t *DeleteViewTool) Execute(ctx context.Context, args map[string]interface{
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/views/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/views", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1793,7 +1823,7 @@ func (t *GetViewFolderTool) Execute(ctx context.Context, args map[string]interfa
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: "/v1/view_folders/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "GET", Path: apiPath("/v1/view_folders", id)})
 	if err != nil {
 		return HandleGetError(err, "View folder", id, "list_view_folders"), nil
 	}
@@ -1829,7 +1859,7 @@ func (t *ReplaceViewFolderTool) Execute(ctx context.Context, args map[string]int
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: "/v1/view_folders/" + id, Body: folder})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "PUT", Path: apiPath("/v1/view_folders", id), Body: folder})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
@@ -1866,7 +1896,7 @@ func (t *DeleteViewFolderTool) Execute(ctx context.Context, args map[string]inte
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}
-	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: "/v1/view_folders/" + id})
+	res, err := t.ExecuteRequest(ctx, &client.Request{Method: "DELETE", Path: apiPath("/v1/view_folders", id)})
 	if err != nil {
 		return NewToolResultError(err.Error()), nil
 	}

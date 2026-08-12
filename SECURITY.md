@@ -114,7 +114,7 @@ This document outlines security best practices for deploying and operating the I
 ```bash
 # ✅ GOOD - Use environment variables
 export LOGS_API_KEY="<your-api-key>"  # pragma: allowlist secret
-export LOGS_SERVICE_URL="https://[your-instance-id].api.us-south.logs.cloud.ibm.com"
+export LOGS_SERVICE_URL="https://your-instance-id.api.us-south.logs.cloud.ibm.com"
 
 # ❌ BAD - Never hardcode in scripts
 LOGS_API_KEY="<example-key>" ./logs-mcp-server  # pragma: allowlist secret
@@ -126,7 +126,7 @@ LOGS_API_KEY="<example-key>" ./logs-mcp-server  # pragma: allowlist secret
 
 ```json
 {
-  "service_url": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+  "service_url": "https://your-instance-id.api.us-south.logs.cloud.ibm.com",
   "region": "us-south",
   "tls_verify": true,
   "rate_limit": 100,
@@ -256,14 +256,58 @@ LOGS_ENABLE_RATE_LIMIT=true   # Always enabled
    - Configuration errors
    - Startup/shutdown events
 
-3. **What NEVER Gets Logged**
-   - API keys or credentials
-   - Full request/response bodies (may contain sensitive data)
-   - Personally identifiable information (PII)
+3. **What NEVER Gets Logged (enforced)**
+
+   Every tool call — all 96 registered MCP tools — is invoked through a single
+   chokepoint in `internal/server/server.go` (`registerTool`'s handler, via
+   `finishToolExecution`). Before an error reaches the MCP client response or
+   any log line, it is passed through `internal/security.SanitizeError` /
+   `security.MaskSensitiveData`, which redacts:
+   - API keys (`api_key=`, `apikey:`, etc.)
+   - `Authorization: Bearer <token>` headers and bare bearer tokens
+   - JSON Web Tokens (`eyJ...`) wherever they appear
+   - PEM-encoded private key blocks
+   - Passwords and generic `secret=`/`token=` values
+
+   This matters because the API client folds a bounded snippet of the
+   IBM Cloud Logs response body into classified errors on non-2xx responses
+   (`internal/client/client.go`'s `classifyResponseError`); that snippet is
+   attacker/API-controlled and could otherwise carry credentials straight
+   into a tool's error text. Masking happens once, centrally, for both of
+   the shapes a tool failure can take: a raw Go error, and the more common
+   case of an `IsError` result whose text content already embeds
+   `err.Error()`.
+
+   Sensitive HTTP headers (`Authorization`, `X-Api-Key`, `Cookie`,
+   `Proxy-Authorization`, `WWW-Authenticate`, `X-Amz-Security-Token`, etc.)
+   are masked via `security.MaskSensitiveHeaders` wherever headers are
+   logged. Config values are never logged unmasked: `Config.MarshalJSON`
+   fully redacts `APIKey`, and `Config.Redact()` / `config.MaskAPIKey`
+   (which now delegates to `security.MaskAPIKey`) show only the first/last
+   4 characters, or `***` for short/empty keys.
+
+   Full, unredacted request/response bodies are still not logged as a matter
+   of course — only the bounded, masked error snippet described above.
 
 ### Audit Trail
 
-Monitor these security-relevant events:
+Every tool call is recorded by `internal/audit.Logger`
+(`audit.NewLogger`, wired into the server's construction and enabled by
+default via `LOGS_ENABLE_AUDIT_LOG=true`). Each entry captures:
+
+- Tool name, operation, duration, and success/failure
+- A masked error message (via `security.SanitizeError` — same guarantee as
+  the MCP response above)
+- `InputHash`: a SHA-256 hex digest of the tool's marshaled arguments, so
+  entries can be correlated to a specific input without the audit log itself
+  ever recording raw (potentially sensitive) argument values
+- Trace/span IDs, when available, for correlating an entry with distributed
+  tracing
+
+Audit entries are both kept in an in-memory ring buffer (last 1000 calls,
+queryable by tool or trace ID) and emitted as structured `zap` log lines
+under the `audit` logger name — set `LOG_LEVEL=debug` to see them. Monitor
+these entries for:
 
 - Failed authentication attempts
 - Permission denied errors (403)

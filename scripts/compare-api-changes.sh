@@ -4,8 +4,8 @@
 
 set -e
 
-OLD_API="${1:-logs-service-api.json.backup}"
-NEW_API="${2:-logs-service-api.json}"
+OLD_API="${1:-api/logs-service-api.json.backup}"
+NEW_API="${2:-api/logs-service-api.json}"
 
 if [ ! -f "$OLD_API" ]; then
     echo "Error: Old API file not found: $OLD_API"

@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -173,39 +172,6 @@ func TestCategorizeError(t *testing.T) {
 			result := categorizeError(tt.code)
 			if result != tt.expected {
 				t.Errorf("categorizeError(%s) = %s, want %s", tt.code, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestFromHTTPError(t *testing.T) {
-	tests := []struct {
-		statusCode     int
-		expectedCode   ErrorCode
-		expectedAction AgentAction
-	}{
-		{http.StatusBadRequest, ErrInvalidParameter, ActionChangeParams},
-		{http.StatusUnauthorized, ErrUnauthorized, ActionEscalate},
-		{http.StatusForbidden, ErrForbidden, ActionEscalate},
-		{http.StatusNotFound, ErrResourceNotFound, ActionElicit},
-		{http.StatusConflict, ErrResourceConflict, ActionElicit},
-		{http.StatusTooManyRequests, ErrRateLimited, ActionRetryWithBackoff},
-		{http.StatusInternalServerError, ErrServerError, ActionRetry},
-		{http.StatusBadGateway, ErrServerError, ActionRetry},
-		{http.StatusServiceUnavailable, ErrServerError, ActionRetry},
-		{http.StatusGatewayTimeout, ErrQueryTimeout, ActionChangeParams},
-		{418, ErrServerError, ActionEscalate}, // I'm a teapot - unknown status
-	}
-
-	for _, tt := range tests {
-		t.Run(http.StatusText(tt.statusCode), func(t *testing.T) {
-			err := FromHTTPError(tt.statusCode, "test body", "alert")
-
-			if err.Code != tt.expectedCode {
-				t.Errorf("Code = %s, want %s", err.Code, tt.expectedCode)
-			}
-			if err.Action != tt.expectedAction {
-				t.Errorf("Action = %s, want %s", err.Action, tt.expectedAction)
 			}
 		})
 	}

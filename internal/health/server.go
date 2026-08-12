@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -73,17 +74,51 @@ func (s *Server) SetReady(ready bool) {
 	s.ready.Store(ready)
 }
 
-// Start starts the HTTP health server.
-func (s *Server) Start() error {
+// IsReady reports whether the server has been marked ready. Exposed
+// primarily for tests that verify readiness is only set after a successful
+// bind.
+func (s *Server) IsReady() bool {
+	return s.ready.Load()
+}
+
+// Listen binds the health server's configured address synchronously,
+// returning an error immediately if the bind fails (e.g. the port is
+// already in use or the bind address is invalid). Callers should only mark
+// the server ready (SetReady(true)) after Listen succeeds, then hand the
+// returned listener to Serve to actually accept connections.
+func (s *Server) Listen() (net.Listener, error) {
+	ln, err := net.Listen("tcp", s.httpServer.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind health server to %s: %w", s.httpServer.Addr, err)
+	}
+	return ln, nil
+}
+
+// Serve accepts and handles connections on the given listener (as returned
+// by Listen) until the server is shut down. It blocks, so callers typically
+// run it in a goroutine.
+func (s *Server) Serve(ln net.Listener) error {
 	s.logger.Info("Starting health HTTP server",
 		zap.Int("port", s.port),
 		zap.Bool("metrics_enabled", s.metricsEnabled),
 	)
 
-	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := s.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("health server error: %w", err)
 	}
 	return nil
+}
+
+// Start binds and serves the HTTP health server in one call. It is
+// equivalent to Listen followed by Serve; callers that need to distinguish
+// bind failures from serve-time errors (e.g. to gate readiness on a
+// successful bind) should call Listen and Serve directly instead.
+func (s *Server) Start() error {
+	ln, err := s.Listen()
+	if err != nil {
+		return err
+	}
+	return s.Serve(ln)
 }
 
 // Shutdown gracefully shuts down the HTTP server.

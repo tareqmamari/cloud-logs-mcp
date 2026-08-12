@@ -63,6 +63,19 @@ func TestAlertsCRUD(t *testing.T) {
 		AssertValidUUID(t, alertID, "Alert ID should be a valid UUID")
 	})
 
+	// Register cleanup immediately after creation (rather than relying solely
+	// on the DeleteAlert subtest below) so the alert is removed even if a
+	// later subtest in this suite fails or panics before DeleteAlert runs.
+	// DeleteAlert still exercises the delete API directly; this is a
+	// best-effort safety net and ignores "already deleted" errors.
+	if alertID != "" {
+		id := alertID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/alerts/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
+
 	// Test: Get Alert
 	t.Run("GetAlert", func(t *testing.T) {
 		require.NotEmpty(t, alertID, "Alert ID should be set from create test")
@@ -218,10 +231,19 @@ func TestAlertsPagination(t *testing.T) {
 
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create alert")
-		createdAlerts = append(createdAlerts, result["id"].(string))
+		id := result["id"].(string)
+		createdAlerts = append(createdAlerts, id)
 
-		// Small delay to avoid rate limiting
-		time.Sleep(100 * time.Millisecond)
+		// Wait for the alert to become individually retrievable before creating
+		// the next one. This both paces requests (avoiding rate limiting) and
+		// avoids racing the eventual-consistency of the alerts list used below,
+		// which a flat sleep can't guarantee.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/alerts/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "alert %s did not become visible in time", id)
 	}
 
 	t.Run("PaginateWithLimit", func(t *testing.T) {
@@ -310,8 +332,8 @@ func TestAlertsErrorHandling(t *testing.T) {
 			Body:   invalidConfig,
 		}
 
-		_, err := tc.DoRequestExpectError(req, 422)
-		assert.NoError(t, err, "Should handle 422 error for invalid data")
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Should handle 400 error for invalid data")
 	})
 
 	t.Run("UpdateNonExistentAlert", func(t *testing.T) {
@@ -340,11 +362,10 @@ func TestAlertsErrorHandling(t *testing.T) {
 			Body:   updateConfig,
 		}
 
-		// API returns 4xx for malformed/non-existent UUIDs (can be 400 or 422)
-		ctx := context.Background()
-		resp, err := tc.Client.Do(ctx, req)
-		require.NoError(t, err)
-		assert.True(t, resp.StatusCode == 400 || resp.StatusCode == 422, "Should return 4xx error for non-existent alert")
+		// The API rejects an update to a non-existent alert with HTTP 400
+		// (the "not found" detail is wrapped inside a bad-request response).
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Updating a non-existent alert should return 400")
 	})
 
 	t.Run("DeleteNonExistentAlert", func(t *testing.T) {

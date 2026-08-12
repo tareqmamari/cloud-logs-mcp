@@ -61,6 +61,9 @@ type StructuredError struct {
 	Message    string        `json:"message"`
 	Details    interface{}   `json:"details,omitempty"`
 	Suggestion string        `json:"suggestion,omitempty"`
+	// StatusCode is the originating HTTP status code, when this error was
+	// produced from an HTTP response (see FromHTTPStatus). Zero if not applicable.
+	StatusCode int `json:"status_code,omitempty"`
 }
 
 // Error implements the error interface
@@ -176,26 +179,34 @@ func NewNetworkError(message string) *StructuredError {
 		WithSuggestion("Check your network connection and try again")
 }
 
-// FromHTTPStatus creates an appropriate error from HTTP status code
+// FromHTTPStatus creates an appropriate error from HTTP status code and response body.
+// The returned error always has StatusCode set to statusCode, and the response body
+// (or a bounded snippet of it, if the caller truncated it) is folded into Message
+// so that the original API error detail is not lost.
 func FromHTTPStatus(statusCode int, responseBody string) *StructuredError {
+	var se *StructuredError
 	switch {
 	case statusCode == 400:
-		return NewInvalidInput(responseBody)
+		se = NewInvalidInput(fmt.Sprintf("Invalid request: %s", responseBody))
 	case statusCode == 401:
-		return NewUnauthorized()
+		se = New(CodeUnauthorized, ClientError, fmt.Sprintf("Authentication required or credentials invalid: %s", responseBody)).
+			WithSuggestion("Check your API key and try again")
 	case statusCode == 403:
-		return New(CodeForbidden, ClientError, "Access forbidden").
+		se = New(CodeForbidden, ClientError, fmt.Sprintf("Access forbidden: %s", responseBody)).
 			WithSuggestion("Check your permissions for this resource")
 	case statusCode == 404:
-		return New(CodeResourceNotFound, ClientError, "Resource not found")
+		se = New(CodeResourceNotFound, ClientError, fmt.Sprintf("Resource not found: %s", responseBody))
 	case statusCode == 409:
-		return New(CodeConflict, ClientError, "Resource conflict").
+		se = New(CodeConflict, ClientError, fmt.Sprintf("Resource conflict: %s", responseBody)).
 			WithSuggestion("Resource may already exist or be in use")
 	case statusCode == 429:
-		return NewRateLimitExceeded()
+		se = New(CodeRateLimitExceeded, ClientError, fmt.Sprintf("Rate limit exceeded: %s", responseBody)).
+			WithSuggestion("Wait a moment and try again")
 	case statusCode >= 500 && statusCode < 600:
-		return NewAPIError("IBM Cloud Logs", statusCode, responseBody)
+		se = NewAPIError("IBM Cloud Logs", statusCode, responseBody)
 	default:
-		return New(CodeInternalError, ServerError, fmt.Sprintf("Unexpected HTTP status %d: %s", statusCode, responseBody))
+		se = New(CodeInternalError, ServerError, fmt.Sprintf("Unexpected HTTP status %d: %s", statusCode, responseBody))
 	}
+	se.StatusCode = statusCode
+	return se
 }

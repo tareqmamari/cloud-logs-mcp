@@ -3,13 +3,18 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 
+	"github.com/tareqmamari/cloud-logs-mcp/internal/audit"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/auth"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/client"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/config"
@@ -17,6 +22,7 @@ import (
 	"github.com/tareqmamari/cloud-logs-mcp/internal/metrics"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/prompts"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/resources"
+	"github.com/tareqmamari/cloud-logs-mcp/internal/security"
 	"github.com/tareqmamari/cloud-logs-mcp/internal/tools"
 )
 
@@ -25,6 +31,63 @@ import (
 type Authenticator interface {
 	health.TokenValidator
 	GetUserIdentity() (string, error)
+}
+
+// defaultStartupTimeout bounds startup I/O (user-identity lookup, TCO
+// policy fetch) when cfg.Timeout is not positive. Config.Validate requires
+// Timeout > 0 in production; this fallback only matters for callers that
+// construct a Config without validating it (e.g. tests).
+const defaultStartupTimeout = 30 * time.Second
+
+// defaultShutdownTimeout mirrors config.Load()'s ShutdownTimeout default,
+// used as a fallback when cfg.ShutdownTimeout is not positive.
+const defaultShutdownTimeout = 30 * time.Second
+
+// startupTimeout returns the bound to apply to startup I/O calls.
+func startupTimeout(cfg *config.Config) time.Duration {
+	if cfg.Timeout > 0 {
+		return cfg.Timeout
+	}
+	return defaultStartupTimeout
+}
+
+// shutdownTimeout returns the bound to apply when shutting down the health
+// server.
+func shutdownTimeout(cfg *config.Config) time.Duration {
+	if cfg.ShutdownTimeout > 0 {
+		return cfg.ShutdownTimeout
+	}
+	return defaultShutdownTimeout
+}
+
+// boundedGetUserIdentity calls authenticator.GetUserIdentity() but does not
+// wait past ctx's deadline. GetUserIdentity has no context parameter of its
+// own (it's a small, stable interface implemented by *auth.Authenticator),
+// so boundedness is enforced here by racing the call against ctx.Done() in
+// a separate goroutine. If ctx expires first, this returns ctx.Err() and the
+// goroutine is left to finish in the background. That leaked goroutine is
+// now itself bounded rather than potentially-forever: auth.New gives the
+// underlying IAM authenticator's HTTP client an explicit timeout
+// (defaultIAMClientTimeout), so the token round trip - and therefore this
+// goroutine - always returns within that timeout even if IAM hangs.
+func boundedGetUserIdentity(ctx context.Context, authenticator Authenticator) (string, error) {
+	type result struct {
+		userID string
+		err    error
+	}
+
+	resultCh := make(chan result, 1)
+	go func() {
+		userID, err := authenticator.GetUserIdentity()
+		resultCh <- result{userID: userID, err: err}
+	}()
+
+	select {
+	case r := <-resultCh:
+		return r.userID, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 }
 
 // Server represents the MCP server
@@ -37,28 +100,34 @@ type Server struct {
 	version       string
 	healthServer  *health.Server
 	authenticator Authenticator
+	auditLogger   *audit.Logger
 }
 
 // New creates a new MCP server instance using real IBM Cloud credentials.
-func New(cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
-	// Create IBM Cloud Logs API client
-	apiClient, err := client.New(cfg, logger, version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API client: %w", err)
-	}
-
-	// Create authenticator for health checks
+// ctx bounds startup I/O (user-identity lookup, TCO policy fetch) — it is
+// not retained beyond NewWithDeps returning.
+func New(ctx context.Context, cfg *config.Config, logger *zap.Logger, version string) (*Server, error) {
+	// Create a single authenticator shared by the API client and health
+	// checks, so there is only one IAM token cache per process.
 	authenticator, err := auth.New(cfg.APIKey, cfg.IAMURL, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticator: %w", err)
 	}
 
-	return NewWithDeps(cfg, apiClient, authenticator, logger, version)
+	// Create IBM Cloud Logs API client, injecting the shared authenticator.
+	apiClient, err := client.NewWithAuthenticator(cfg, logger, version, authenticator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API client: %w", err)
+	}
+
+	return NewWithDeps(ctx, cfg, apiClient, authenticator, logger, version)
 }
 
 // NewWithDeps creates a new MCP server instance with injectable dependencies.
 // This constructor enables testing with mock clients and authenticators.
-func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authenticator, logger *zap.Logger, version string) (*Server, error) {
+// ctx bounds startup I/O (user-identity lookup, TCO policy fetch) by
+// cfg.Timeout; it is not retained beyond this call returning.
+func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer, authenticator Authenticator, logger *zap.Logger, version string) (*Server, error) {
 	// Create MCP server with tools, prompts, and resources capabilities
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "IBM Cloud Logs MCP Server",
@@ -71,13 +140,16 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 
 	metricsTracker := metrics.New(logger)
 
-	// Initialize user-specific session using JWT subject from IAM token
-	// The subject uniquely identifies the user/service across sessions
-	userID, err := authenticator.GetUserIdentity()
+	// Initialize user-specific session using JWT subject from IAM token.
+	// The subject uniquely identifies the user/service across sessions.
+	// Bounded by cfg.Timeout so a hanging IAM call can't stall startup.
+	identityCtx, cancelIdentity := context.WithTimeout(ctx, startupTimeout(cfg))
+	userID, err := boundedGetUserIdentity(identityCtx, authenticator)
+	cancelIdentity()
 	if err != nil {
 		// Fall back to API key hash if token retrieval fails
 		logger.Warn("Could not get user identity from token, using API key hash",
-			zap.Error(err),
+			zap.String("error", security.SanitizeError(err)),
 		)
 		tools.SetCurrentUser(cfg.APIKey, cfg.InstanceID)
 	} else {
@@ -96,6 +168,7 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 		metrics:       metricsTracker,
 		version:       version,
 		authenticator: authenticator,
+		auditLogger:   audit.NewLogger(logger, cfg.EnableAuditLog),
 	}
 
 	// Create health server if port is configured (port > 0)
@@ -104,10 +177,15 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 		s.healthServer = health.NewServer(healthChecker, logger, cfg.HealthPort, cfg.HealthBindAddr, cfg.MetricsEndpoint)
 	}
 
-	// Fetch and cache TCO policies for tier selection
-	// This helps tools determine which tier (archive vs frequent_search) to query
-	if err := tools.FetchAndCacheTCOConfig(context.Background(), apiClient, logger); err != nil {
-		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.Error(err))
+	// Fetch and cache TCO policies for tier selection. This helps tools
+	// determine which tier (archive vs frequent_search) to query. Bounded
+	// by cfg.Timeout so a hanging API call can't stall startup; failure
+	// here remains non-fatal (tools fall back to defaults).
+	tcoCtx, cancelTCO := context.WithTimeout(ctx, startupTimeout(cfg))
+	err = tools.FetchAndCacheTCOConfig(tcoCtx, apiClient, logger)
+	cancelTCO()
+	if err != nil {
+		logger.Warn("Failed to fetch TCO policies, will use defaults", zap.String("error", security.SanitizeError(err)))
 	}
 
 	// Register all tools
@@ -124,150 +202,16 @@ func NewWithDeps(cfg *config.Config, apiClient client.Doer, authenticator Authen
 	return s, nil
 }
 
-// registerTools registers all available MCP tools
+// registerTools registers all available MCP tools by iterating the single
+// descriptor table in the tools package (the source of truth for which tools
+// the server exposes). Adding or removing a tool is done there, not here.
 func (s *Server) registerTools() error {
-	// Alert tools
-	s.registerTool(tools.NewGetAlertTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListAlertsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateAlertTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateAlertTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteAlertTool(s.apiClient, s.logger))
+	descriptors := tools.Descriptors()
+	for _, d := range descriptors {
+		s.registerTool(d.New(s.apiClient, s.logger))
+	}
 
-	// Alert Definition tools
-	s.registerTool(tools.NewGetAlertDefinitionTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListAlertDefinitionsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateAlertDefinitionTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateAlertDefinitionTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteAlertDefinitionTool(s.apiClient, s.logger))
-
-	// Rule Group tools
-	s.registerTool(tools.NewGetRuleGroupTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListRuleGroupsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateRuleGroupTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateRuleGroupTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteRuleGroupTool(s.apiClient, s.logger))
-
-	// Outgoing Webhook tools
-	s.registerTool(tools.NewGetOutgoingWebhookTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListOutgoingWebhooksTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateOutgoingWebhookTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateOutgoingWebhookTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteOutgoingWebhookTool(s.apiClient, s.logger))
-
-	// Policy tools
-	s.registerTool(tools.NewGetPolicyTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListPoliciesTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreatePolicyTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdatePolicyTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeletePolicyTool(s.apiClient, s.logger))
-
-	// Events to Metrics (E2M) tools
-	s.registerTool(tools.NewGetE2MTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListE2MTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateE2MTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewReplaceE2MTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteE2MTool(s.apiClient, s.logger))
-
-	// Query tools
-	s.registerTool(tools.NewQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewBuildQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDataPrimeReferenceTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewSubmitBackgroundQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetBackgroundQueryStatusTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetBackgroundQueryDataTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCancelBackgroundQueryTool(s.apiClient, s.logger))
-
-	// Log Ingestion tools
-	s.registerTool(tools.NewIngestLogsTool(s.apiClient, s.logger))
-
-	// Data Access Rule tools
-	s.registerTool(tools.NewListDataAccessRulesTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetDataAccessRuleTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateDataAccessRuleTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateDataAccessRuleTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteDataAccessRuleTool(s.apiClient, s.logger))
-
-	// Enrichment tools
-	s.registerTool(tools.NewListEnrichmentsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetEnrichmentsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateEnrichmentTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateEnrichmentTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteEnrichmentTool(s.apiClient, s.logger))
-
-	// View tools
-	s.registerTool(tools.NewListViewsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateViewTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetViewTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewReplaceViewTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteViewTool(s.apiClient, s.logger))
-
-	// View Folder tools
-	s.registerTool(tools.NewListViewFoldersTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateViewFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetViewFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewReplaceViewFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteViewFolderTool(s.apiClient, s.logger))
-
-	// Data Usage tools
-	s.registerTool(tools.NewExportDataUsageTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateDataUsageMetricsExportStatusTool(s.apiClient, s.logger))
-
-	// Event Stream Target tools
-	s.registerTool(tools.NewGetEventStreamTargetsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateEventStreamTargetTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateEventStreamTargetTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteEventStreamTargetTool(s.apiClient, s.logger))
-
-	// Dashboard tools
-	s.registerTool(tools.NewListDashboardsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetDashboardTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateDashboardTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateDashboardTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteDashboardTool(s.apiClient, s.logger))
-
-	// Dashboard Folder and Management tools
-	s.registerTool(tools.NewListDashboardFoldersTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetDashboardFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateDashboardFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateDashboardFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteDashboardFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewMoveDashboardToFolderTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewPinDashboardTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUnpinDashboardTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewSetDefaultDashboardTool(s.apiClient, s.logger))
-
-	// Stream tools
-	s.registerTool(tools.NewListStreamsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewGetStreamTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewCreateStreamTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewUpdateStreamTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDeleteStreamTool(s.apiClient, s.logger))
-
-	// AI Helper tools
-	s.registerTool(tools.NewExplainQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewAdvancedSuggestAlertTool(s.apiClient, s.logger)) // SRE-grade alert recommendations
-	s.registerTool(tools.NewGetAuditLogTool(s.apiClient, s.logger))
-
-	// Query Intelligence tools
-	s.registerTool(tools.NewQueryTemplatesTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewValidateQueryTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewQueryCostEstimateTool(s.apiClient, s.logger))
-
-	// Workflow Automation tools
-	s.registerTool(tools.NewInvestigateIncidentTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewHealthCheckTool(s.apiClient, s.logger))
-
-	// Meta tools (discovery and session management)
-	s.registerTool(tools.NewDiscoverToolsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewSessionContextTool(s.apiClient, s.logger))
-
-	// Dynamic toolset meta-tools (token-efficient discovery pattern)
-	// These enable: search_tools → describe_tools → execute workflow
-	s.registerTool(tools.NewSearchToolsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewDescribeToolsTool(s.apiClient, s.logger))
-	s.registerTool(tools.NewListToolCategoriesBrief(s.apiClient, s.logger))
-
-	s.logger.Info("Registered all MCP tools")
+	s.logger.Info("Registered all MCP tools", zap.Int("count", len(descriptors)))
 	return nil
 }
 
@@ -287,7 +231,13 @@ func (s *Server) registerTool(t tools.Tool) {
 		Annotations: t.Annotations(),
 	}
 
-	// Create handler that calls the tool's Execute method with metrics tracking
+	// Create handler that calls the tool's Execute method with metrics
+	// tracking. Every exit path funnels through s.finishToolExecution — the
+	// single chokepoint (shared by all 96 registered tools, since this
+	// function body is written once and reused per registration) that
+	// sanitizes credentials out of errors/results and records the audit
+	// entry. Do not bypass it with a direct return of a tool's raw error or
+	// result.
 	handler := func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
 
@@ -300,11 +250,14 @@ func (s *Server) registerTool(t tools.Tool) {
 		ctx = tools.WithSession(ctx, tools.GetSession())
 		ctx = tools.WithSessionProvider(ctx, tools.GetSessionManager())
 
+		// Add the audit logger to context so GetAuditLogTool can read
+		// recent entries without a constructor-level dependency change.
+		ctx = tools.WithAuditLogger(ctx, s.auditLogger)
+
 		var args map[string]interface{}
 		if len(request.Params.Arguments) > 0 {
 			if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
-				s.metrics.RecordToolExecution(toolName, false, time.Since(start))
-				return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
+				return s.finishToolExecution(ctx, toolName, args, start, nil, fmt.Errorf("failed to unmarshal arguments: %w", err))
 			}
 		}
 
@@ -312,8 +265,7 @@ func (s *Server) registerTool(t tools.Tool) {
 		inputTokens := tools.EstimateJSONTokens(args)
 
 		result, err := t.Execute(ctx, args)
-		success := err == nil && (result == nil || !result.IsError)
-		s.metrics.RecordToolExecution(toolName, success, time.Since(start))
+		result, err = s.finishToolExecution(ctx, toolName, args, start, result, err)
 
 		// Estimate output tokens from result and record budget usage
 		outputTokens := 0
@@ -332,6 +284,109 @@ func (s *Server) registerTool(t tools.Tool) {
 	// Register tool with MCP server
 	s.mcpServer.AddTool(mcpTool, handler)
 	s.logger.Debug("Registered tool", zap.String("tool", mcpTool.Name))
+}
+
+// finishToolExecution is the single chokepoint every tool call passes
+// through on its way out, regardless of which registered tool ran or how it
+// failed. It is responsible for everything that must happen exactly once,
+// for every tool, on every call:
+//
+//  1. Sanitizing credentials/secrets out of both possible error shapes a
+//     tool can produce: a Go error returned directly (rare — most tools
+//     convert failures into a result with IsError=true before returning,
+//     but a few, plus the arguments-unmarshal failure below, return a raw
+//     error), and an IsError result's text content (the common case — see
+//     tools.NewToolResultError / HandleGetError / HandleQueryError, which
+//     embed err.Error() as the result text). Both paths can carry a
+//     response-body snippet folded in by the API client's classified
+//     errors (client.go's classifyResponseError / internal/errors'
+//     FromHTTPStatus), which is attacker/API-controlled and must never
+//     reach the MCP client or a log line unmasked.
+//  2. Recording an audit.Entry for the call (tool, duration, success, the
+//     masked error message, and a SHA-256 hash of the arguments) via the
+//     server's audit.Logger, which itself both keeps an in-memory ring
+//     buffer and emits a structured zap log line — the "errors logged via
+//     zap" sink required alongside the MCP response.
+//  3. Recording tool-execution metrics.
+//
+// Do not sanitize or audit-log per-tool; add new failure modes here instead.
+func (s *Server) finishToolExecution(ctx context.Context, toolName string, args map[string]interface{}, start time.Time, result *mcp.CallToolResult, err error) (*mcp.CallToolResult, error) {
+	duration := time.Since(start)
+	success := err == nil && (result == nil || !result.IsError)
+
+	// Sanitize the Go error, if any: this is what a raw (non-IsError-result)
+	// tool failure returns, and the MCP SDK serializes it directly into the
+	// error surfaced to the client (see mcp.Server.callTool) — never masking
+	// it here would leak whatever the error message embeds.
+	if err != nil {
+		err = errors.New(security.SanitizeError(err))
+	}
+
+	// Sanitize an IsError result's text content in place: this is the
+	// common path (tools convert failures into text before returning), and
+	// that text is returned to the MCP client verbatim.
+	maskErrorResultContent(result)
+
+	s.metrics.RecordToolExecution(toolName, success, duration)
+
+	if s.auditLogger != nil {
+		auditErr := err
+		if auditErr == nil && result != nil && result.IsError {
+			// The failure lives in the (already-masked) result content, not
+			// in err. Synthesize an error carrying that text so the audit
+			// entry still records what went wrong. LogToolExecution masks
+			// again via security.SanitizeError, which is idempotent on
+			// already-masked text.
+			auditErr = errors.New(resultErrorText(result))
+		}
+		s.auditLogger.LogToolExecution(ctx, toolName, "execute", "", "", success, duration, auditErr, hashArgs(args))
+	}
+
+	return result, err
+}
+
+// maskErrorResultContent masks the text content of an IsError tool result
+// in place. No-op for a nil result or a successful (non-error) one, so
+// ordinary tool output is never mangled by pattern matching.
+func maskErrorResultContent(result *mcp.CallToolResult) {
+	if result == nil || !result.IsError {
+		return
+	}
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			tc.Text = security.MaskSensitiveData(tc.Text)
+		}
+	}
+}
+
+// resultErrorText concatenates the text content of a tool result, used to
+// recover an error-shaped string from a result whose failure was reported
+// as IsError content rather than a Go error.
+func resultErrorText(result *mcp.CallToolResult) string {
+	var parts []string
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+			parts = append(parts, tc.Text)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// hashArgs returns a SHA-256 hex digest of the JSON-marshaled tool
+// arguments, for audit.Entry.InputHash. This lets audit entries be
+// correlated to a specific input without the audit log ever recording the
+// raw (potentially sensitive) argument values. Returns "" if args is empty
+// or unmarshalable (never fails the call over this).
+func hashArgs(args map[string]interface{}) string {
+	if len(args) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // registerPrompts registers all available MCP prompts
@@ -374,14 +429,20 @@ func (s *Server) registerResources() {
 func (s *Server) Start(ctx context.Context) error {
 	s.logger.Info("Starting MCP server")
 
-	// Start health HTTP server in background if configured
+	// Start health HTTP server if configured. Bind synchronously first, so a
+	// bad port/bind address fails startup with a clear error instead of
+	// being swallowed in a background goroutine; only mark the server ready
+	// once the bind has actually succeeded.
 	if s.healthServer != nil {
+		ln, err := s.healthServer.Listen()
+		if err != nil {
+			return fmt.Errorf("failed to start health server: %w", err)
+		}
 		go func() {
-			if err := s.healthServer.Start(); err != nil {
+			if err := s.healthServer.Serve(ln); err != nil {
 				s.logger.Error("Health server error", zap.Error(err))
 			}
 		}()
-		// Mark as ready once server is starting
 		s.healthServer.SetReady(true)
 	}
 
@@ -399,7 +460,7 @@ func (s *Server) Start(ctx context.Context) error {
 		// Shutdown health server
 		if s.healthServer != nil {
 			s.healthServer.SetReady(false)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout(s.config))
 			defer cancel()
 			if err := s.healthServer.Shutdown(shutdownCtx); err != nil {
 				s.logger.Error("Failed to shutdown health server", zap.Error(err))
@@ -423,4 +484,11 @@ func (s *Server) GetMetrics() *metrics.Metrics {
 // MCPServer returns the underlying MCP server for testing.
 func (s *Server) MCPServer() *mcp.Server {
 	return s.mcpServer
+}
+
+// AuditLogger returns the server's audit logger, primarily for testing and
+// for tools (e.g. a future get_audit_log implementation) that need to read
+// back recent audit entries.
+func (s *Server) AuditLogger() *audit.Logger {
+	return s.auditLogger
 }

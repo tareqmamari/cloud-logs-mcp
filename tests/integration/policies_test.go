@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -59,6 +61,16 @@ func TestPoliciesCRUD(t *testing.T) {
 		policyID = result["id"].(string)
 		AssertValidUUID(t, policyID, "Policy ID should be a valid UUID")
 	})
+
+	// Register cleanup immediately after creation as a safety net, in case a
+	// later subtest fails or panics before the explicit DeletePolicy subtest runs.
+	if policyID != "" {
+		id := policyID
+		t.Cleanup(func() {
+			req := &client.Request{Method: "DELETE", Path: "/v1/policies/" + id}
+			_, _ = tc.DoRequest(req)
+		})
+	}
 
 	// Test: Get Policy
 	t.Run("GetPolicy", func(t *testing.T) {
@@ -238,7 +250,7 @@ func TestPoliciesPriority(t *testing.T) {
 	priorities := []string{"type_low", "type_medium", "type_high"}
 
 	// Create policies with different priorities
-	for i, priority := range priorities {
+	for _, priority := range priorities {
 		policyConfig := map[string]interface{}{
 			"name":        GenerateUniqueName("policy-priority"),
 			"description": "Priority test policy",
@@ -264,36 +276,52 @@ func TestPoliciesPriority(t *testing.T) {
 
 		result, err := tc.DoRequest(req)
 		require.NoError(t, err, "Failed to create policy with priority %s", priority)
-		createdPolicies = append(createdPolicies, result["id"].(string))
+		id := result["id"].(string)
+		createdPolicies = append(createdPolicies, id)
 
-		// Small delay to avoid rate limiting
-		if i < len(priorities)-1 {
-			time.Sleep(100 * time.Millisecond)
-		}
+		// Wait for the policy to become individually retrievable before
+		// creating the next one, instead of a flat sleep. This paces requests
+		// (avoiding rate limiting) and avoids racing the list check below on
+		// write-then-read consistency.
+		waitErr := WaitForCondition(context.Background(), 100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			getReq := &client.Request{Method: "GET", Path: "/v1/policies/" + id}
+			_, getErr := tc.DoRequest(getReq)
+			return getErr == nil, nil
+		})
+		require.NoError(t, waitErr, "policy %s did not become visible in time", id)
 	}
 
 	// List policies and verify they exist
 	t.Run("VerifyPoliciesCreated", func(t *testing.T) {
-		req := &client.Request{
-			Method: "GET",
-			Path:   "/v1/policies",
-		}
+		var foundCount int
+		waitErr := WaitForCondition(context.Background(), 500*time.Millisecond, 10*time.Second, func() (bool, error) {
+			req := &client.Request{
+				Method: "GET",
+				Path:   "/v1/policies",
+			}
 
-		result, err := tc.DoRequest(req)
-		require.NoError(t, err, "Failed to list policies")
+			result, err := tc.DoRequest(req)
+			if err != nil {
+				return false, err
+			}
 
-		policies, ok := result["policies"].([]interface{})
-		require.True(t, ok, "Policies should be an array")
+			policies, ok := result["policies"].([]interface{})
+			if !ok {
+				return false, fmt.Errorf("policies should be an array")
+			}
 
-		foundCount := 0
-		for _, policy := range policies {
-			policyMap := policy.(map[string]interface{})
-			for _, createdID := range createdPolicies {
-				if policyMap["id"] == createdID {
-					foundCount++
+			foundCount = 0
+			for _, policy := range policies {
+				policyMap := policy.(map[string]interface{})
+				for _, createdID := range createdPolicies {
+					if policyMap["id"] == createdID {
+						foundCount++
+					}
 				}
 			}
-		}
+			return foundCount == len(createdPolicies), nil
+		})
+		require.NoError(t, waitErr, "Failed to find all created policies in list after retries")
 		assert.Equal(t, len(createdPolicies), foundCount, "All created policies should be in the list")
 	})
 }
@@ -403,8 +431,8 @@ func TestPoliciesErrorHandling(t *testing.T) {
 			Body:   invalidConfig,
 		}
 
-		_, err := tc.DoRequestExpectError(req, 422)
-		assert.NoError(t, err, "Should handle 422 error for invalid priority")
+		_, err := tc.DoRequestExpectError(req, 400)
+		assert.NoError(t, err, "Should handle 400 error for invalid priority")
 	})
 
 	t.Run("UpdateNonExistentPolicy", func(t *testing.T) {

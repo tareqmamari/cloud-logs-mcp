@@ -135,16 +135,20 @@ func (t *QueryTemplatesTool) Execute(_ context.Context, args map[string]interfac
 	return formatTemplateList(templates)
 }
 
-// substituteTemplateParams replaces placeholders in a template
+// substituteTemplateParams replaces placeholders in a template. Placeholders
+// sit inside single-quoted DataPrime string literals, so caller-supplied
+// values are escaped to keep them from breaking out of the literal.
 func substituteTemplateParams(tmpl QueryTemplate, application, timeRange string) QueryTemplate {
 	result := tmpl
 	if application != "" {
-		result.Query = strings.ReplaceAll(result.Query, "{APPLICATION}", application)
-		result.Query = strings.ReplaceAll(result.Query, "{application}", application)
+		escaped := escapeDataPrimeString(application)
+		result.Query = strings.ReplaceAll(result.Query, "{APPLICATION}", escaped)
+		result.Query = strings.ReplaceAll(result.Query, "{application}", escaped)
 	}
 	if timeRange != "" {
-		result.Query = strings.ReplaceAll(result.Query, "{TIME_RANGE}", timeRange)
-		result.Query = strings.ReplaceAll(result.Query, "{time_range}", timeRange)
+		escaped := escapeDataPrimeString(timeRange)
+		result.Query = strings.ReplaceAll(result.Query, "{TIME_RANGE}", escaped)
+		result.Query = strings.ReplaceAll(result.Query, "{time_range}", escaped)
 	}
 	return result
 }

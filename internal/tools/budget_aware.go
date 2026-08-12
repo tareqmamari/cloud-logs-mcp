@@ -24,6 +24,16 @@ type BudgetContext struct {
 	MaxCostMillicents  int `json:"max_cost_millicents"`
 	UsedCostMillicents int `json:"used_cost_millicents"`
 
+	// Raw cumulative token counts, tracked separately from UsedTokens because
+	// input/output tokens are billed at different per-1K rates. Cost is
+	// derived from these running totals (see recalculateCost) rather than
+	// accumulated from already-rounded per-call amounts: (tokens*rate)/1000
+	// rounds down to 0 for any single call under ~334 tokens, so summing
+	// per-call costs silently under-counts (or zeroes out) cost across many
+	// small calls even though the token totals themselves are exact.
+	usedInputTokens  int
+	usedOutputTokens int
+
 	// Execution tracking
 	ToolCallCount    int       `json:"tool_call_count"`
 	SessionStartTime time.Time `json:"session_start_time"`
@@ -73,13 +83,18 @@ const (
 	DefaultMaxCostMillicents = 10000 // $0.10 default budget
 )
 
-// Global budget context (per-session)
+// globalBudget is process-global, not per-session: this server currently
+// tracks one budget for the whole process (matching the single-user/stdio
+// assumption documented on currentUserID in session.go), not one budget per
+// user/session. All access to globalBudget must go through GetBudgetContext/
+// ResetBudgetContext below, both of which hold budgetMu for the read-check-
+// write.
 var (
 	globalBudget *BudgetContext
 	budgetMu     sync.RWMutex
 )
 
-// GetBudgetContext returns the current session's budget context
+// GetBudgetContext returns the process-wide budget context
 func GetBudgetContext() *BudgetContext {
 	budgetMu.RLock()
 	if globalBudget != nil {
@@ -130,10 +145,9 @@ func (b *BudgetContext) RecordToolExecution(inputTokens, outputTokens int) {
 	b.RemainingTokens = b.MaxTokens - b.UsedTokens
 	b.ToolCallCount++
 
-	// Calculate cost
-	inputCost := (inputTokens * InputTokenCostPer1K) / 1000
-	outputCost := (outputTokens * OutputTokenCostPer1K) / 1000
-	b.UsedCostMillicents += inputCost + outputCost
+	b.usedInputTokens += inputTokens
+	b.usedOutputTokens += outputTokens
+	b.recalculateCost()
 
 	// Adjust compression level based on remaining budget
 	b.updateCompressionLevel()
@@ -154,13 +168,20 @@ func (b *BudgetContext) RecordClientReportedTokens(inputTokens, outputTokens int
 	b.IsExactCount = true
 	b.TokenCountingMethod = "client-reported"
 
-	// Calculate cost
-	inputCost := (inputTokens * InputTokenCostPer1K) / 1000
-	outputCost := (outputTokens * OutputTokenCostPer1K) / 1000
-	b.UsedCostMillicents += inputCost + outputCost
+	b.usedInputTokens += inputTokens
+	b.usedOutputTokens += outputTokens
+	b.recalculateCost()
 
 	// Adjust compression level based on remaining budget
 	b.updateCompressionLevel()
+}
+
+// recalculateCost derives UsedCostMillicents from the cumulative
+// usedInputTokens/usedOutputTokens totals, rather than accumulating
+// per-call (tokens*rate)/1000 amounts that individually round down to 0
+// for small calls. Callers must hold b.mu.
+func (b *BudgetContext) recalculateCost() {
+	b.UsedCostMillicents = (b.usedInputTokens*InputTokenCostPer1K + b.usedOutputTokens*OutputTokenCostPer1K) / 1000
 }
 
 // updateCompressionLevel adjusts compression based on budget consumption

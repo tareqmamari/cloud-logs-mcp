@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -34,9 +36,9 @@ func TestGenerateUserID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			userID := GenerateUserID(tt.apiKey, tt.instanceID)
 
-			// Should be 16 characters (hex encoded first 8 bytes of SHA256)
-			if len(userID) != 16 {
-				t.Errorf("Expected userID length 16, got %d", len(userID))
+			// Should be 32 characters (hex encoded first 16 bytes of SHA256)
+			if len(userID) != 32 {
+				t.Errorf("Expected userID length 32, got %d", len(userID))
 			}
 
 			// Should be deterministic
@@ -54,9 +56,9 @@ func TestGenerateUserIDFromSubject(t *testing.T) {
 
 	userID := GenerateUserIDFromSubject(subject, instanceID)
 
-	// Should be 16 characters
-	if len(userID) != 16 {
-		t.Errorf("Expected userID length 16, got %d", len(userID))
+	// Should be 32 characters
+	if len(userID) != 32 {
+		t.Errorf("Expected userID length 32, got %d", len(userID))
 	}
 
 	// Should be deterministic
@@ -488,5 +490,138 @@ func TestListSessions(t *testing.T) {
 
 	if len(sessions) != 3 {
 		t.Errorf("Expected 3 sessions, got %d", len(sessions))
+	}
+}
+
+// TestBuildBudgetStatus_WellFormedSummary verifies the happy path: a summary
+// shaped like BudgetContext.GetSummary()'s real output is converted without
+// error.
+func TestBuildBudgetStatus_WellFormedSummary(t *testing.T) {
+	summary := map[string]interface{}{
+		"tokens": map[string]interface{}{
+			"used": 100, "remaining": 900, "max": 1000,
+			"usage_pct": 10.0, "counting_method": "approximate (chars/4)", "accuracy": "approximate",
+		},
+		"cost": map[string]interface{}{
+			"used_millicents": 5, "remaining_millicents": 995, "max_millicents": 1000,
+			"remaining_pct": 99.5,
+		},
+		"execution": map[string]interface{}{
+			"tool_calls": 1, "session_duration": "1s", "compression_level": "none",
+		},
+	}
+
+	status, err := buildBudgetStatus(summary)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cost, ok := status["cost"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cost map in status, got %T", status["cost"])
+	}
+	if cost["used_usd"] != float64(5)/100000 {
+		t.Errorf("used_usd = %v, want %v", cost["used_usd"], float64(5)/100000)
+	}
+}
+
+// TestBuildBudgetStatus_UnexpectedShape is a regression test: showBudget used
+// to build this same status via unchecked type assertions
+// (summary["tokens"].(map[string]interface{}), cost["used_millicents"].(int))
+// which panic on an unexpected shape instead of failing cleanly. Since
+// GetSummary() is entirely internal, this can't currently be triggered
+// through the public API, but buildBudgetStatus must degrade to an error
+// rather than crash the process if that ever changes.
+func TestBuildBudgetStatus_UnexpectedShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		summary map[string]interface{}
+	}{
+		{
+			name:    "missing tokens key",
+			summary: map[string]interface{}{"cost": map[string]interface{}{}, "execution": map[string]interface{}{}},
+		},
+		{
+			name: "cost is not a map",
+			summary: map[string]interface{}{
+				"tokens": map[string]interface{}{}, "cost": "not-a-map", "execution": map[string]interface{}{},
+			},
+		},
+		{
+			name: "used_millicents is not an int",
+			summary: map[string]interface{}{
+				"tokens":    map[string]interface{}{},
+				"cost":      map[string]interface{}{"used_millicents": 5.0, "max_millicents": 1000},
+				"execution": map[string]interface{}{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := buildBudgetStatus(tt.summary)
+			if err == nil {
+				t.Error("expected an error for malformed summary, got nil")
+			}
+		})
+	}
+}
+
+// TestCurrentUserID_ConcurrentAccess exercises SetCurrentUser/SetCurrentUserFromJWT
+// and readers of the current user (GetSession, SaveCurrentSession) concurrently.
+// Before making currentUserID race-safe via accessor functions, this test fails
+// under `go test -race` because the package-global currentUserID variable was
+// written and read from multiple goroutines without synchronization.
+func TestCurrentUserID_ConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use an isolated session manager so this test doesn't depend on / pollute
+	// the process-wide singleton used by other tests.
+	manager := NewSessionManager(tmpDir)
+	prevManager := globalSessionManager
+	globalSessionManager = manager
+	t.Cleanup(func() { globalSessionManager = prevManager })
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		i := i
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			SetCurrentUser(fmt.Sprintf("api-key-%d", i), "instance")
+		}()
+		go func() {
+			defer wg.Done()
+			SetCurrentUserFromJWT(fmt.Sprintf("subject-%d", i), "instance")
+		}()
+		go func() {
+			defer wg.Done()
+			_ = GetSession()
+			_ = SaveCurrentSession()
+		}()
+	}
+	wg.Wait()
+}
+
+// TestCacheResult_EvictsOldestOnOverflow verifies CacheResult's "keeps last 5"
+// contract: when a 6th result is cached, the first-inserted (and never
+// subsequently touched) entry is evicted, and the remaining 5 survive.
+func TestCacheResult_EvictsOldestOnOverflow(t *testing.T) {
+	session := NewSessionContext("test-user", "test-instance")
+
+	for i := 0; i < 6; i++ {
+		session.CacheResult(fmt.Sprintf("tool-%d", i), map[string]interface{}{"i": i})
+	}
+
+	if session.GetCachedResult("tool-0") != nil {
+		t.Error("expected first-inserted, untouched entry tool-0 to be evicted")
+	}
+	for i := 1; i < 6; i++ {
+		name := fmt.Sprintf("tool-%d", i)
+		if session.GetCachedResult(name) == nil {
+			t.Errorf("expected %s to remain cached", name)
+		}
+	}
+
+	if len(session.LastResults) != 5 {
+		t.Errorf("expected cache size 5, got %d", len(session.LastResults))
 	}
 }

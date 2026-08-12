@@ -26,7 +26,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -104,14 +103,16 @@ func main() {
 	}
 	logger.Info("Starting IBM Cloud Logs MCP Server", logFields...)
 
+	// Setup graceful shutdown with timeout. ctx is also passed to server.New
+	// below to bound startup I/O (user-identity lookup, TCO policy fetch).
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Create and start MCP server
-	mcpServer, err := server.New(cfg, logger, version)
+	mcpServer, err := server.New(ctx, cfg, logger, version)
 	if err != nil {
+		cancel()
 		logger.Fatal("Failed to create MCP server", zap.Error(err))
 	}
-
-	// Setup graceful shutdown with timeout
-	ctx, cancel := context.WithCancel(context.Background())
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -150,9 +151,6 @@ func main() {
 		logger.Warn("Shutdown timeout exceeded, forcing exit",
 			zap.Duration("timeout", cfg.ShutdownTimeout))
 	}
-
-	// Allow a brief moment for final cleanup
-	time.Sleep(100 * time.Millisecond)
 }
 
 // runSkillsCommand handles the "skills" subcommand.

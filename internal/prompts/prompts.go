@@ -827,7 +827,7 @@ discover_tools with intent "what you want to do"
 | Set up monitoring | ` + "`list_alerts`" + ` then ` + "`create_alert`" + ` |
 | Create visualizations | ` + "`list_dashboards`" + ` then ` + "`create_dashboard`" + ` |
 | Optimize costs | ` + "`list_policies`" + ` |
-| Learn queries | ` + "`build_query`" + ` or ` + "`query_templates`" + ` |
+| Learn queries | ` + "`build_query`" + ` or ` + "`get_query_templates`" + ` |
 
 ---
 
@@ -1180,7 +1180,7 @@ func (r *Registry) smartSuggestPrompt() *PromptDefinition {
 				}
 
 			case containsAny(goalLower, "learn", "dataprime", "query", "syntax", "how to"):
-				primaryTools = []string{"query_templates", "build_query", "explain_query"}
+				primaryTools = []string{"get_query_templates", "build_query", "explain_query"}
 				workflow = "query_learning"
 				tips = []string{
 					"Use `build_query` to convert natural language to DataPrime",

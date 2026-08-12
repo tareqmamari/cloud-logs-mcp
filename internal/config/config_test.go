@@ -1,7 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,7 +18,7 @@ func TestLoadConfiguration(t *testing.T) {
 		{
 			name: "valid configuration",
 			envVars: map[string]string{
-				"LOGS_SERVICE_URL": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+				"LOGS_SERVICE_URL": "https://abc123.api.us-south.logs.cloud.ibm.com",
 				"LOGS_API_KEY":     "test-api-key", // pragma: allowlist secret
 				"LOGS_REGION":      "us-south",
 			},
@@ -31,7 +34,7 @@ func TestLoadConfiguration(t *testing.T) {
 		{
 			name: "missing API key",
 			envVars: map[string]string{
-				"LOGS_SERVICE_URL": "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+				"LOGS_SERVICE_URL": "https://abc123.api.us-south.logs.cloud.ibm.com",
 			},
 			wantErr: true,
 		},
@@ -62,7 +65,7 @@ func TestLoadConfiguration(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	os.Clearenv()
-	_ = os.Setenv("LOGS_SERVICE_URL", "https://[your-instance-id].api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
 	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret)
 
 	cfg, err := Load()
@@ -85,11 +88,20 @@ func TestConfigDefaults(t *testing.T) {
 	if !cfg.EnableRateLimit {
 		t.Error("Expected EnableRateLimit to be true by default")
 	}
+
+	// The health/metrics HTTP server is opt-in: it is only created when
+	// HealthPort > 0. Defaulting to 0 keeps the server from binding a TCP
+	// port unless explicitly requested, so multiple instances (e.g. one per
+	// environment, launched by Claude Desktop over stdio) can run side by
+	// side without colliding on a shared health port.
+	if cfg.HealthPort != 0 {
+		t.Errorf("Expected default health_port 0 (disabled), got %d", cfg.HealthPort)
+	}
 }
 
 func TestConfigRedact(t *testing.T) {
 	cfg := &Config{
-		ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+		ServiceURL: "https://abc123.api.us-south.logs.cloud.ibm.com",
 		APIKey:     "secret-key-12345", // pragma: allowlist secret
 	}
 
@@ -112,7 +124,7 @@ func TestConfigRedact(t *testing.T) {
 
 func TestConfigRedactShortKey(t *testing.T) {
 	cfg := &Config{
-		ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+		ServiceURL: "https://abc123.api.us-south.logs.cloud.ibm.com",
 		APIKey:     "short", // pragma: allowlist secret
 	}
 
@@ -129,7 +141,7 @@ func TestMaskAPIKey(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"", ""},
+		{"", "***"}, // stricter edge case: consolidated onto security.MaskAPIKey, which always masks
 		{"short", "***"},
 		{"exactly8", "***"},
 		{"secret-key-12345", "secr...2345"}, // pragma: allowlist secret
@@ -438,22 +450,24 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				ServiceURL:      "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
 				APIKey:          "test-key", // pragma: allowlist secret
 				Timeout:         30 * time.Second,
 				MaxRetries:      3,
 				RateLimit:       100,
 				EnableRateLimit: true,
 				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid timeout",
 			config: Config{
-				ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
-				APIKey:     "test-key", // pragma: allowlist secret
-				Timeout:    0,
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         0,
+				ShutdownTimeout: 30 * time.Second,
 			},
 			wantErr: true,
 			errMsg:  "timeout must be positive",
@@ -461,13 +475,145 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid log level",
 			config: Config{
-				ServiceURL: "https://[your-instance-id].api.us-south.logs.cloud.ibm.com",
-				APIKey:     "test-key", // pragma: allowlist secret
-				Timeout:    30 * time.Second,
-				LogLevel:   "invalid",
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "invalid",
+				ShutdownTimeout: 30 * time.Second,
 			},
 			wantErr: true,
 			errMsg:  "invalid log level",
+		},
+		{
+			name: "http scheme rejected for non-local host",
+			config: Config{
+				ServiceURL:      "http://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: true,
+			errMsg:  "must use https",
+		},
+		{
+			name: "http scheme allowed for localhost",
+			config: Config{
+				ServiceURL:      "http://localhost:9000",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "http scheme allowed for 127.0.0.1",
+			config: Config{
+				ServiceURL:      "http://127.0.0.1:9000",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "http scheme allowed for ::1",
+			config: Config{
+				ServiceURL:      "http://[::1]:9000",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "unparseable service URL rejected",
+			config: Config{
+				ServiceURL:      "://not-a-url",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: true,
+			errMsg:  "not a valid URL",
+		},
+		{
+			name: "non-http(s) scheme rejected",
+			config: Config{
+				ServiceURL:      "ftp://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			},
+			wantErr: true,
+			errMsg:  "must use https",
+		},
+		{
+			name: "health port negative rejected",
+			config: Config{
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+				HealthPort:      -1,
+			},
+			wantErr: true,
+			errMsg:  "health_port",
+		},
+		{
+			name: "health port too large rejected",
+			config: Config{
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+				HealthPort:      70000,
+			},
+			wantErr: true,
+			errMsg:  "health_port",
+		},
+		{
+			name: "health port zero (disabled) accepted",
+			config: Config{
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+				HealthPort:      0,
+			},
+			wantErr: false,
+		},
+		{
+			name: "shutdown timeout zero rejected",
+			config: Config{
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 0,
+			},
+			wantErr: true,
+			errMsg:  "shutdown_timeout must be positive",
+		},
+		{
+			name: "shutdown timeout negative rejected",
+			config: Config{
+				ServiceURL:      "https://abc123.api.us-south.logs.cloud.ibm.com",
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: -1 * time.Second,
+			},
+			wantErr: true,
+			errMsg:  "shutdown_timeout must be positive",
 		},
 	}
 
@@ -477,6 +623,581 @@ func TestConfigValidation(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if err != nil && tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("Validate() error = %q, want to contain %q", err.Error(), tt.errMsg)
+			}
 		})
+	}
+}
+
+// --- Strict env parsing ---
+
+func TestLoadFromEnv_InvalidIntRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+	}{
+		{"max retries", "LOGS_MAX_RETRIES"},
+		{"rate limit", "LOGS_RATE_LIMIT"},
+		{"rate limit burst", "LOGS_RATE_LIMIT_BURST"},
+		{"health port", "LOGS_HEALTH_PORT"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+			_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+			_ = os.Setenv(tt.env, "8080abc")
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load() with %s=8080abc should fail", tt.env)
+			}
+			if !strings.Contains(err.Error(), tt.env) {
+				t.Errorf("error %q should name the env var %q", err.Error(), tt.env)
+			}
+			if !strings.Contains(err.Error(), "8080abc") {
+				t.Errorf("error %q should include the invalid value %q", err.Error(), "8080abc")
+			}
+		})
+	}
+}
+
+func TestLoadFromEnv_InvalidDurationRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+	}{
+		{"timeout", "LOGS_TIMEOUT"},
+		{"query timeout", "LOGS_QUERY_TIMEOUT"},
+		{"background poll timeout", "LOGS_BACKGROUND_POLL_TIMEOUT"},
+		{"bulk operation timeout", "LOGS_BULK_OPERATION_TIMEOUT"},
+		{"shutdown timeout", "LOGS_SHUTDOWN_TIMEOUT"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+			_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+			_ = os.Setenv(tt.env, "not-a-duration")
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load() with %s=not-a-duration should fail", tt.env)
+			}
+			if !strings.Contains(err.Error(), tt.env) {
+				t.Errorf("error %q should name the env var %q", err.Error(), tt.env)
+			}
+			if !strings.Contains(err.Error(), "not-a-duration") {
+				t.Errorf("error %q should include the invalid value %q", err.Error(), "not-a-duration")
+			}
+		})
+	}
+}
+
+func TestLoadFromEnv_InvalidBoolRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+	}{
+		{"enable rate limit", "LOGS_ENABLE_RATE_LIMIT"},
+		{"enable tracing", "LOGS_ENABLE_TRACING"},
+		{"enable audit log", "LOGS_ENABLE_AUDIT_LOG"},
+		{"metrics endpoint", "LOGS_METRICS_ENDPOINT"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+			_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+			_ = os.Setenv(tt.env, "yes")
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load() with %s=yes should fail", tt.env)
+			}
+			if !strings.Contains(err.Error(), tt.env) {
+				t.Errorf("error %q should name the env var %q", err.Error(), tt.env)
+			}
+			if !strings.Contains(err.Error(), "yes") {
+				t.Errorf("error %q should include the invalid value %q", err.Error(), "yes")
+			}
+		})
+	}
+}
+
+func TestLoadFromEnv_BoolAcceptsCanonicalForms(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+	_ = os.Setenv("LOGS_ENABLE_TRACING", "TRUE")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if !cfg.EnableTracing {
+		t.Error("LOGS_ENABLE_TRACING=TRUE should be parsed as true via strconv.ParseBool")
+	}
+}
+
+func TestLoadFromEnv_ValidValuesStillWork(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+	_ = os.Setenv("LOGS_MAX_RETRIES", "5")
+	_ = os.Setenv("LOGS_TIMEOUT", "45s")
+	_ = os.Setenv("LOGS_ENABLE_TRACING", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if cfg.MaxRetries != 5 {
+		t.Errorf("MaxRetries = %d, want 5", cfg.MaxRetries)
+	}
+	if cfg.Timeout != 45*time.Second {
+		t.Errorf("Timeout = %v, want 45s", cfg.Timeout)
+	}
+	if cfg.EnableTracing {
+		t.Error("EnableTracing should be false")
+	}
+}
+
+// --- api_key from file rejection ---
+
+func TestLoadFromFile_RejectsAPIKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"api_key":"leaked-key"}`), 0o600); err != nil { // pragma: allowlist secret
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when config file sets api_key")
+	}
+	if !strings.Contains(err.Error(), "LOGS_API_KEY") {
+		t.Errorf("error %q should tell the user to use LOGS_API_KEY", err.Error())
+	}
+}
+
+func TestLoadFromFile_AllowsOtherFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"region":"us-south","log_level":"debug"}`), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() should succeed for a config file without api_key: %v", err)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "debug")
+	}
+}
+
+// --- Path guard ---
+
+func TestLoadFromFile_RejectsDirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", dir)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when CONFIG_FILE points at a directory")
+	}
+}
+
+func TestLoadFromFile_RejectsMissingFile(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", "/nonexistent/path/config.json")
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when CONFIG_FILE does not exist")
+	}
+}
+
+func TestLoadFromFile_DotDotInPathIsNotSpecialCased(t *testing.T) {
+	// Operator-set paths containing ".." (e.g. relative to a working directory)
+	// are legitimate and must not be rejected purely for containing "..".
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "nested")
+	if err := os.Mkdir(nested, 0o750); err != nil {
+		t.Fatalf("failed to create nested dir: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"region":"us-south"}`), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	// Reference the file via a path that traverses through ".." after cleaning
+	// still resolves to the same real file.
+	dotdotPath := filepath.Join(nested, "..", "config.json")
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", dotdotPath)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() should succeed for a legitimate path containing '..', got: %v", err)
+	}
+	if cfg.Region != "us-south" {
+		t.Errorf("Region = %q, want %q", cfg.Region, "us-south")
+	}
+}
+
+// --- MarshalJSON redaction ---
+
+func TestConfigMarshalJSON_RedactsAPIKey(t *testing.T) {
+	cfg := &Config{
+		ServiceURL: "https://abc123.api.us-south.logs.cloud.ibm.com",
+		APIKey:     "super-secret-api-key", // pragma: allowlist secret
+	}
+
+	data, err := json.Marshal(cfg) // #nosec G117 -- exercising Config.MarshalJSON's redaction; asserted below
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	if strings.Contains(string(data), "super-secret-api-key") {
+		t.Errorf("marshaled config leaked the API key: %s", data)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal marshaled config: %v", err)
+	}
+	if decoded["api_key"] == "" || decoded["api_key"] == nil { // pragma: allowlist secret
+		t.Errorf("expected api_key field to be present but redacted, got %v", decoded["api_key"])
+	}
+	if decoded["service_url"] != cfg.ServiceURL {
+		t.Errorf("service_url = %v, want %v", decoded["service_url"], cfg.ServiceURL)
+	}
+}
+
+func TestConfigMarshalJSON_EmptyAPIKey(t *testing.T) {
+	cfg := &Config{
+		ServiceURL: "https://abc123.api.us-south.logs.cloud.ibm.com",
+	}
+
+	data, err := json.Marshal(cfg) // #nosec G117 -- exercising Config.MarshalJSON's redaction; asserted below
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal marshaled config: %v", err)
+	}
+	if v, ok := decoded["api_key"]; ok && v != "" {
+		t.Errorf("expected empty api_key to stay empty, got %v", v)
+	}
+}
+
+// --- ServiceURL scheme validation (standalone Validate() cases) ---
+
+func TestValidateServiceURLScheme(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"https any host", "https://abc123.api.us-south.logs.cloud.ibm.com", false},
+		{"http localhost", "http://localhost:8080", false},
+		{"http 127.0.0.1", "http://127.0.0.1:8080", false},
+		{"http ::1", "http://[::1]:8080", false},
+		{"http remote host rejected", "http://abc123.api.us-south.logs.cloud.ibm.com", true},
+		{"unparseable URL rejected", "://bad", true},
+		{"empty scheme rejected", "abc123.api.us-south.logs.cloud.ibm.com", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				ServiceURL:      tt.url,
+				APIKey:          "test-key", // pragma: allowlist secret
+				Timeout:         30 * time.Second,
+				LogLevel:        "info",
+				ShutdownTimeout: 30 * time.Second,
+			}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() for url %q error = %v, wantErr %v", tt.url, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestExampleConfigServiceURLIsCopyPasteable guards against config.example.json's
+// service_url placeholder using a bracketed form like "[your-instance-id]",
+// which url.Parse interprets as an IPv6 host literal and rejects outright.
+// A user who copies the example verbatim (only swapping in their own values)
+// would otherwise hit a confusing "not a valid URL" error before ever
+// reaching the strict-https validation this test also exercises.
+//
+// This reads the raw service_url field directly (rather than going through
+// Load()) to keep this test scoped to the URL placeholder concern alone;
+// TestLoadFromFile_DurationFieldsParseFromExampleFile below separately
+// exercises config.example.json's duration fields (e.g. "30s") through the
+// real Load() path, now that Config.UnmarshalJSON accepts them.
+func TestExampleConfigServiceURLIsCopyPasteable(t *testing.T) {
+	data, err := os.ReadFile("../../config.example.json")
+	if err != nil {
+		t.Fatalf("failed to read config.example.json: %v", err)
+	}
+
+	var raw struct {
+		ServiceURL string `json:"service_url"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to parse config.example.json: %v", err)
+	}
+	if raw.ServiceURL == "" {
+		t.Fatal("config.example.json has no service_url set")
+	}
+
+	if err := validateServiceURL(raw.ServiceURL); err != nil {
+		t.Errorf("config.example.json's service_url %q fails strict https validation: %v", raw.ServiceURL, err)
+	}
+
+	if strings.ContainsAny(raw.ServiceURL, "[]") {
+		t.Errorf("config.example.json's service_url %q still contains bracketed placeholder characters", raw.ServiceURL)
+	}
+}
+
+// --- UnmarshalJSON duration parsing ---
+
+// TestLoadFromFile_DurationFieldsParseFromExampleFile guards against
+// encoding/json's default time.Duration unmarshaling, which cannot parse
+// duration strings like "30s" (it only accepts durations as int64
+// nanoseconds). config.example.json documents durations as strings, so
+// without a custom UnmarshalJSON, CONFIG_FILE pointed at the documented
+// example either errors or silently fails to apply the durations. This loads
+// config.example.json through the real Load() path (CONFIG_FILE) and asserts
+// the duration fields land on their documented values.
+func TestLoadFromFile_DurationFieldsParseFromExampleFile(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", "../../config.example.json")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with CONFIG_FILE=config.example.json should succeed, got: %v", err)
+	}
+
+	wantDurations := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"timeout":           {cfg.Timeout, 30 * time.Second},
+		"retry_wait_min":    {cfg.RetryWaitMin, 1 * time.Second},
+		"retry_wait_max":    {cfg.RetryWaitMax, 30 * time.Second},
+		"idle_conn_timeout": {cfg.IdleConnTimeout, 90 * time.Second},
+	}
+	for field, d := range wantDurations {
+		if d.got != d.want {
+			t.Errorf("%s = %v, want %v", field, d.got, d.want)
+		}
+	}
+}
+
+// TestLoadFromFile_InvalidDurationFieldNamesField asserts that a malformed
+// duration string in a config file fails Load() with an error naming both
+// the offending field and the bad value, rather than a generic json error or
+// a silently-ignored default.
+func TestLoadFromFile_InvalidDurationFieldNamesField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"timeout":"not-a-duration"}`), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+	_ = os.Setenv("LOGS_API_KEY", "test-key") // pragma: allowlist secret
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail for an invalid timeout duration string")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Errorf("error %q should name the offending field %q", err.Error(), "timeout")
+	}
+	if !strings.Contains(err.Error(), "not-a-duration") {
+		t.Errorf("error %q should include the offending value %q", err.Error(), "not-a-duration")
+	}
+}
+
+// TestConfigUnmarshalJSON_AllDurationFields exercises every duration field
+// directly (not just the subset config.example.json happens to set).
+func TestConfigUnmarshalJSON_AllDurationFields(t *testing.T) {
+	data := []byte(`{
+		"timeout": "30s",
+		"retry_wait_min": "1s",
+		"retry_wait_max": "45s",
+		"idle_conn_timeout": "90s",
+		"query_timeout": "60s",
+		"background_poll_timeout": "10s",
+		"bulk_operation_timeout": "2m",
+		"shutdown_timeout": "15s"
+	}`)
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	cases := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"timeout":                 {cfg.Timeout, 30 * time.Second},
+		"retry_wait_min":          {cfg.RetryWaitMin, 1 * time.Second},
+		"retry_wait_max":          {cfg.RetryWaitMax, 45 * time.Second},
+		"idle_conn_timeout":       {cfg.IdleConnTimeout, 90 * time.Second},
+		"query_timeout":           {cfg.QueryTimeout, 60 * time.Second},
+		"background_poll_timeout": {cfg.BackgroundPollTimeout, 10 * time.Second},
+		"bulk_operation_timeout":  {cfg.BulkOperationTimeout, 2 * time.Minute},
+		"shutdown_timeout":        {cfg.ShutdownTimeout, 15 * time.Second},
+	}
+	for field, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", field, c.got, c.want)
+		}
+	}
+}
+
+// TestConfigUnmarshalJSON_EmptyDurationLeavesFieldUntouched asserts that an
+// absent/empty duration field in JSON does not clobber whatever value the
+// Config already had (e.g. a caller-supplied default), matching the
+// behavior of the env-var duration loaders.
+func TestConfigUnmarshalJSON_EmptyDurationLeavesFieldUntouched(t *testing.T) {
+	cfg := Config{Timeout: 42 * time.Second}
+	if err := json.Unmarshal([]byte(`{"region":"us-south"}`), &cfg); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if cfg.Timeout != 42*time.Second {
+		t.Errorf("Timeout = %v, want unchanged 42s", cfg.Timeout)
+	}
+	if cfg.Region != "us-south" {
+		t.Errorf("Region = %q, want %q", cfg.Region, "us-south")
+	}
+}
+
+// TestConfigMarshalUnmarshalRoundTrip guards against Fix 1's UnmarshalJSON
+// breaking round-tripping through the existing redacting MarshalJSON: since
+// MarshalJSON deliberately replaces APIKey with a redacted placeholder,
+// round-tripping a config with a real key must NOT reproduce the original
+// key (that's the redaction working as intended) - but every other field,
+// including all duration fields, must survive unchanged.
+func TestConfigMarshalUnmarshalRoundTrip(t *testing.T) {
+	original := &Config{
+		ServiceURL:            "https://abc123.api.us-south.logs.cloud.ibm.com",
+		APIKey:                "super-secret-api-key", // pragma: allowlist secret
+		Region:                "us-south",
+		Timeout:               30 * time.Second,
+		MaxRetries:            3,
+		RetryWaitMin:          1 * time.Second,
+		RetryWaitMax:          30 * time.Second,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		QueryTimeout:          60 * time.Second,
+		BackgroundPollTimeout: 10 * time.Second,
+		BulkOperationTimeout:  120 * time.Second,
+		ShutdownTimeout:       30 * time.Second,
+		LogLevel:              "info",
+		LogFormat:             "json",
+	}
+
+	data, err := json.Marshal(original) // #nosec G117 -- exercising Config.MarshalJSON's redaction; asserted below
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded Config
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.APIKey == original.APIKey { // pragma: allowlist secret
+		t.Error("round-tripped config should not reproduce the raw API key (MarshalJSON must redact it)")
+	}
+
+	durationFields := map[string]struct {
+		got  time.Duration
+		want time.Duration
+	}{
+		"Timeout":               {decoded.Timeout, original.Timeout},
+		"RetryWaitMin":          {decoded.RetryWaitMin, original.RetryWaitMin},
+		"RetryWaitMax":          {decoded.RetryWaitMax, original.RetryWaitMax},
+		"IdleConnTimeout":       {decoded.IdleConnTimeout, original.IdleConnTimeout},
+		"QueryTimeout":          {decoded.QueryTimeout, original.QueryTimeout},
+		"BackgroundPollTimeout": {decoded.BackgroundPollTimeout, original.BackgroundPollTimeout},
+		"BulkOperationTimeout":  {decoded.BulkOperationTimeout, original.BulkOperationTimeout},
+		"ShutdownTimeout":       {decoded.ShutdownTimeout, original.ShutdownTimeout},
+	}
+	for field, d := range durationFields {
+		if d.got != d.want {
+			t.Errorf("%s = %v, want %v", field, d.got, d.want)
+		}
+	}
+
+	if decoded.ServiceURL != original.ServiceURL {
+		t.Errorf("ServiceURL = %q, want %q", decoded.ServiceURL, original.ServiceURL)
+	}
+	if decoded.Region != original.Region {
+		t.Errorf("Region = %q, want %q", decoded.Region, original.Region)
+	}
+	if decoded.MaxRetries != original.MaxRetries {
+		t.Errorf("MaxRetries = %d, want %d", decoded.MaxRetries, original.MaxRetries)
+	}
+}
+
+// TestLoadFromFile_RejectsAPIKey_WithUnmarshalJSON re-guards the api_key
+// file-rejection with a config file that ALSO sets duration fields, so the
+// composition of Fix 1's UnmarshalJSON with loadFromFile's post-unmarshal
+// api_key check is exercised directly (not just each in isolation).
+func TestLoadFromFile_RejectsAPIKey_WithUnmarshalJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	body := `{"api_key":"leaked-key","timeout":"30s"}` // pragma: allowlist secret
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	os.Clearenv()
+	_ = os.Setenv("CONFIG_FILE", path)
+	_ = os.Setenv("LOGS_SERVICE_URL", "https://abc123.api.us-south.logs.cloud.ibm.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when config file sets api_key, even alongside valid duration fields")
+	}
+	if !strings.Contains(err.Error(), "LOGS_API_KEY") {
+		t.Errorf("error %q should tell the user to use LOGS_API_KEY", err.Error())
 	}
 }

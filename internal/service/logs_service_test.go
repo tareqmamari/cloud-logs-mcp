@@ -682,6 +682,3 @@ func TestAllResourceTypes_CorrectPaths(t *testing.T) {
 		})
 	}
 }
-
-// import errors for the test
-var _ = errors.New

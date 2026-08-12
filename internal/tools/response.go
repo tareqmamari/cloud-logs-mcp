@@ -5,10 +5,44 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 )
+
+// truncateBytesUTF8Safe truncates b to at most maxLen bytes, backing off to
+// the nearest preceding rune boundary so a multi-byte UTF-8 character is
+// never split in half. A raw b[:maxLen] slice can land mid-rune, producing
+// invalid UTF-8 (and, when b holds JSON text, a corrupted document).
+func truncateBytesUTF8Safe(b []byte, maxLen int) []byte {
+	if maxLen <= 0 {
+		return nil
+	}
+	if len(b) <= maxLen {
+		return b
+	}
+	end := maxLen
+	for end > 0 && !utf8.RuneStart(b[end]) {
+		end--
+	}
+	return b[:end]
+}
+
+// truncateUTF8Safe is the string counterpart of truncateBytesUTF8Safe.
+func truncateUTF8Safe(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	end := maxLen
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return s[:end]
+}
 
 // Response size limits
 const (
@@ -270,7 +304,7 @@ func (t *BaseTool) FormatResponse(result map[string]interface{}) (*mcp.CallToolR
 			responseText = string(truncatedBytes)
 		} else {
 			// Fallback: hard truncate the JSON string
-			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
+			responseText = string(truncateBytesUTF8Safe(jsonBytes, MaxResultSize-TruncationBufferSize))
 		}
 
 		totalItems := countItems(result)
@@ -512,9 +546,17 @@ type LogCluster struct {
 }
 
 // ClusterLogs groups log events by their message content.
-// Events with the same message are placed in the same cluster.
+// Events with the same message are placed in the same cluster. A cluster's
+// reported Severity is the highest severity seen among its member events
+// (see extractSeverityLevel/severityLevelName) rather than an arbitrary
+// member's severity - events sharing a message can legitimately carry
+// different severities (e.g. the same log line logged as both INFO and
+// WARNING depending on context), and picking "whichever event happened to
+// be first" would make the reported severity depend on input order instead
+// of being a property of the cluster itself.
 func ClusterLogs(events []interface{}) []LogCluster {
 	clusterMap := make(map[string]*LogCluster)
+	maxSeverityLevel := make(map[string]int)
 	var order []string
 
 	for _, event := range events {
@@ -528,15 +570,22 @@ func ClusterLogs(events []interface{}) []LogCluster {
 			message = "(empty)"
 		}
 
+		level := extractSeverityLevel(eventMap)
+
 		if cluster, exists := clusterMap[message]; exists {
 			cluster.Count++
 			cluster.Events = append(cluster.Events, event)
+			if level > maxSeverityLevel[message] {
+				maxSeverityLevel[message] = level
+				cluster.Severity = severityLevelName(level)
+			}
 		} else {
 			order = append(order, message)
+			maxSeverityLevel[message] = level
 			clusterMap[message] = &LogCluster{
 				Pattern:  message,
 				Count:    1,
-				Severity: extractSeverityName(eventMap),
+				Severity: severityLevelName(level),
 				Events:   []interface{}{event},
 			}
 		}
@@ -547,9 +596,19 @@ func ClusterLogs(events []interface{}) []LogCluster {
 		clusters = append(clusters, *clusterMap[msg])
 	}
 
-	// Sort by count descending
+	// Sort by count descending, breaking ties by Pattern. Without a tiebreaker,
+	// sort.Slice is not stable and clusters with equal counts fall back to
+	// their position in `order` (i.e. first-encounter order in the input
+	// slice) - so the same set of events in a different order could produce a
+	// different result slice even though the clusters themselves are
+	// identical. Breaking ties on Pattern (a property of the cluster, not of
+	// input order) makes the output fully deterministic for a given set of
+	// events regardless of the order they arrived in.
 	sort.Slice(clusters, func(i, j int) bool {
-		return clusters[i].Count > clusters[j].Count
+		if clusters[i].Count != clusters[j].Count {
+			return clusters[i].Count > clusters[j].Count
+		}
+		return clusters[i].Pattern < clusters[j].Pattern
 	})
 
 	return clusters
@@ -594,27 +653,33 @@ func extractMessage(eventMap map[string]interface{}) string {
 	return ""
 }
 
-// extractSeverityName returns a human-readable severity from an event map.
-func extractSeverityName(eventMap map[string]interface{}) string {
+// extractSeverityLevel returns the raw numeric severity from an event map
+// (checking both a top-level "severity" field and a nested "metadata.severity"
+// field), or 0 if none is present/recognized.
+func extractSeverityLevel(eventMap map[string]interface{}) int {
+	if s, ok := eventMap["severity"].(float64); ok {
+		return int(s)
+	}
+	if meta, ok := eventMap["metadata"].(map[string]interface{}); ok {
+		if s, ok := meta["severity"].(float64); ok {
+			return int(s)
+		}
+	}
+	return 0
+}
+
+// severityLevelName maps a numeric severity level to its human-readable name.
+func severityLevelName(level int) string {
 	severityNames := map[int]string{
 		1: "Debug", 2: "Verbose", 3: "Info",
 		4: "Warning", 5: "Error", 6: "Critical",
 	}
 
-	var sev float64
-	if s, ok := eventMap["severity"].(float64); ok {
-		sev = s
-	} else if meta, ok := eventMap["metadata"].(map[string]interface{}); ok {
-		if s, ok := meta["severity"].(float64); ok {
-			sev = s
-		}
-	}
-
-	if name, ok := severityNames[int(sev)]; ok {
+	if name, ok := severityNames[level]; ok {
 		return name
 	}
-	if sev > 0 {
-		return fmt.Sprintf("Level %d", int(sev))
+	if level > 0 {
+		return fmt.Sprintf("Level %d", level)
 	}
 	return "Unknown"
 }
@@ -896,7 +961,7 @@ func (t *BaseTool) FormatResponseWithSuggestions(result map[string]interface{}, 
 		if truncatedBytes != nil {
 			responseText = string(truncatedBytes)
 		} else {
-			responseText = string(jsonBytes[:MaxResultSize-TruncationBufferSize])
+			responseText = string(truncateBytesUTF8Safe(jsonBytes, MaxResultSize-TruncationBufferSize))
 		}
 
 		totalItems := countItems(result)
@@ -1264,7 +1329,7 @@ func ensureResponseLimit(text string, logger *zap.Logger) string {
 	}
 
 	// Hard truncate and add warning
-	truncated := text[:FinalResponseLimit-TruncationBufferSize]
+	truncated := truncateUTF8Safe(text, FinalResponseLimit-TruncationBufferSize)
 	truncated += "\n\n---\n⚠️ **Response truncated** due to size limits. Use filters or pagination to get complete results."
 	return truncated
 }

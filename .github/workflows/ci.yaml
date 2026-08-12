@@ -29,8 +29,25 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9
         with:
-          version: latest
+          version: v2.12.2
           args: --timeout=5m
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      # shellcheck ships preinstalled on ubuntu-latest runners, so no
+      # third-party action is needed. install.sh is held to the default
+      # severity (it downloads and verifies release binaries); the helper
+      # scripts only gate on errors to keep style noise out of CI.
+      - name: shellcheck install.sh
+        run: shellcheck install.sh
+
+      - name: shellcheck helper scripts (errors only)
+        run: shellcheck --severity=error scripts/*.sh
 
   test:
     name: Test

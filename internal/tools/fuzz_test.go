@@ -30,10 +30,17 @@ func FuzzValidateDataPrimeQuery(f *testing.F) {
 	f.Add("")
 	f.Add("source logs | filter $l.severity >= 4 | orderby $l.timestamp desc")
 	f.Add("UNION SELECT * FROM information_schema.tables")
+	f.Add(`source logs | filter $d.message == 'trailing backslash\'`) // trailing backslash before closing quote
 
-	f.Fuzz(func(_ *testing.T, query string) {
+	f.Fuzz(func(t *testing.T, query string) {
 		// Must not panic on any input
-		_ = ValidateDataPrimeQuery(query)
+		err := ValidateDataPrimeQuery(query)
+		// Semantic check: a validator that "rejects" a query but gives no
+		// actionable message is as much a bug as failing to reject an unsafe
+		// query at all - the caller (and the LLM using it) has no idea why.
+		if err != nil && err.Message == "" {
+			t.Errorf("ValidateDataPrimeQuery(%q) returned a non-nil error with an empty Message", query)
+		}
 	})
 }
 
@@ -45,10 +52,64 @@ func FuzzValidateNoInjectionPatterns(f *testing.F) {
 	f.Add("'; DROP TABLE --")
 	f.Add("UNION ALL SELECT password FROM credentials")
 	f.Add("/* comment */ source logs")
+	f.Add(`foo\`) // trailing backslash
 
-	f.Fuzz(func(_ *testing.T, query string) {
+	f.Fuzz(func(t *testing.T, query string) {
 		// Must not panic on any input
-		_ = validateNoInjectionPatterns(query)
+		err := validateNoInjectionPatterns(query)
+		// Semantic check: same rationale as FuzzValidateDataPrimeQuery above.
+		if err != nil && err.Message == "" {
+			t.Errorf("validateNoInjectionPatterns(%q) returned a non-nil error with an empty Message", query)
+		}
+	})
+}
+
+// FuzzEscapeDataPrimeString tests escapeDataPrimeString (the function
+// responsible for making caller-supplied values safe to embed in a
+// DataPrime string literal - see query_builder.go) with arbitrary input, to
+// ensure it never panics and, critically, never lets an unescaped quote
+// through. An unescaped quote in the output would let a value break out of
+// the DataPrime string literal it's embedded in and inject query syntax.
+func FuzzEscapeDataPrimeString(f *testing.F) {
+	f.Add("hello world")
+	f.Add("it's a test")
+	f.Add(`foo\`) // trailing backslash: the exact regression case called out
+	// in escapeDataPrimeString's doc comment - without escaping the trailing
+	// backslash, it could "consume" the closing quote the caller appends.
+	f.Add(`\'`)
+	f.Add("line1\nline2")
+	f.Add("")
+
+	f.Fuzz(func(t *testing.T, input string) {
+		out := escapeDataPrimeString(input)
+
+		// Semantic check: every quote in the escaped output must be
+		// immediately preceded by the backslash escapeDataPrimeString adds
+		// for it. escapeDataPrimeString only ever emits a quote as part of
+		// the two-character `\'` sequence, so this holds by construction -
+		// a failure here means a caller-controlled quote is escaping
+		// unescaped.
+		//
+		// Checking only "is the immediately preceding rune a backslash"
+		// has a blind spot: a run of backslashes immediately before the
+		// quote pairs up two at a time (each `\\` is one escaped literal
+		// backslash), so only an ODD-length run actually escapes the quote
+		// - an even-length run (e.g. `\\\\'`, four backslashes then an
+		// unescaped quote) would wrongly read as "escaped" under a
+		// single-rune check. Count the full run instead.
+		runes := []rune(out)
+		for i, r := range runes {
+			if r != '\'' {
+				continue
+			}
+			backslashRun := 0
+			for j := i - 1; j >= 0 && runes[j] == '\\'; j-- {
+				backslashRun++
+			}
+			if backslashRun%2 == 0 {
+				t.Errorf("escapeDataPrimeString(%q) produced an unescaped quote at index %d (preceded by an even run of %d backslashes) in output %q", input, i, backslashRun, out)
+			}
+		}
 	})
 }
 

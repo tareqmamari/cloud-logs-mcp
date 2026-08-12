@@ -2,8 +2,62 @@ package tools
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
+
+// TestDiscoveryToolReferencesResolve guards against curated discovery
+// metadata (recommendations, chains, intents, related-tools) drifting from
+// the real registered tool names. It exists because discovery.go once
+// referenced "query_templates" everywhere the real tool is registered as
+// "get_query_templates" — a phantom name that would never resolve.
+func TestDiscoveryToolReferencesResolve(t *testing.T) {
+	realTools := map[string]bool{}
+	for _, tool := range GetAllTools(nil, nil) {
+		realTools[tool.Name()] = true
+	}
+	if len(realTools) == 0 {
+		t.Fatal("GetAllTools returned no tools; cannot validate discovery references")
+	}
+
+	registry := NewToolRegistry()
+
+	checkName := func(context, name string) {
+		t.Helper()
+		if name == "" {
+			return
+		}
+		if !realTools[name] {
+			t.Errorf("%s references unknown tool name %q (not returned by GetAllTools)", context, name)
+		}
+	}
+
+	// Baseline tool metadata keys and their RelatedTools.
+	for toolName, meta := range registry.tools {
+		checkName("registry.tools key", toolName)
+		if meta == nil {
+			continue
+		}
+		for _, related := range meta.RelatedTools {
+			checkName("registry.tools[\""+toolName+"\"].RelatedTools", related)
+		}
+	}
+
+	// Tool chains: Trigger and Sequence.
+	for _, chain := range registry.chains {
+		checkName("chain \""+chain.Name+"\".Trigger", chain.Trigger)
+		for _, name := range chain.Sequence {
+			checkName("chain \""+chain.Name+"\".Sequence", name)
+		}
+	}
+
+	// Intent -> tool name mappings.
+	for intent, names := range registry.intents {
+		for _, name := range names {
+			checkName("intents[\""+intent+"\"]", name)
+		}
+	}
+}
 
 func TestToolRegistry(t *testing.T) {
 	registry := NewToolRegistry()
@@ -136,7 +190,7 @@ func TestIntentMappings(t *testing.T) {
 		{
 			name:          "learn dataprime",
 			intent:        "learn dataprime",
-			expectedTools: []string{"query_templates", "build_query", "explain_query"},
+			expectedTools: []string{"get_query_templates", "build_query", "explain_query"},
 			minMatches:    2,
 		},
 		{
@@ -477,8 +531,9 @@ func TestIntentCoverage(t *testing.T) {
 }
 
 func TestGetToolRegistry(t *testing.T) {
-	// Reset global registry
+	// Reset global registry singleton state so the sync.Once fires again.
 	globalRegistry = nil
+	globalRegistryOnce = sync.Once{}
 
 	// First call should create registry
 	registry1 := GetToolRegistry()
@@ -490,6 +545,41 @@ func TestGetToolRegistry(t *testing.T) {
 	registry2 := GetToolRegistry()
 	if registry1 != registry2 {
 		t.Error("GetToolRegistry should return singleton instance")
+	}
+}
+
+// TestGetToolRegistry_ConcurrentAccessIsRaceFree exercises the concurrent
+// first-initialization path: GetToolRegistry() did a plain check-then-set on
+// the package-global globalRegistry with no synchronization, which is a data
+// race under concurrent first calls (e.g. two MCP requests racing to
+// initialize discovery on server startup). It must be race-clean under
+// `go test -race` and every caller must observe the same singleton instance.
+func TestGetToolRegistry_ConcurrentAccessIsRaceFree(t *testing.T) {
+	// Reset global singleton state so this exercises concurrent
+	// first-initialization rather than an already-initialized registry.
+	globalRegistry = nil
+	globalRegistryOnce = sync.Once{}
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	results := make([]*ToolRegistry, goroutines)
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i] = GetToolRegistry()
+		}(i)
+	}
+	wg.Wait()
+
+	first := results[0]
+	if first == nil {
+		t.Fatal("GetToolRegistry returned nil")
+	}
+	for i, r := range results {
+		if r != first {
+			t.Errorf("goroutine %d got registry pointer %p, want %p (all callers must observe the same singleton)", i, r, first)
+		}
 	}
 }
 
@@ -628,12 +718,20 @@ func TestClarificationGeneration(t *testing.T) {
 	registry := NewToolRegistry()
 
 	// Test that clarifications are generated for ambiguous intents
-	// "error" could mean investigate errors or set up error alerting
+	// "error" could mean investigate errors or set up error alerting.
+	//
+	// "error monitoring" is guaranteed to match: it fuzzy-matches the
+	// registered "monitoring" intent (fuzzyMatch("error monitoring",
+	// "monitoring") = 0.85, since the query contains the target), which is
+	// well above DiscoverTools' 0.6 fuzzy-match threshold and maps to
+	// list_alerts/create_alert/create_outgoing_webhook. It additionally
+	// keyword-matches list_alerts/create_alert/investigate_incident/query_logs
+	// directly. So requiring a non-empty match here is a hard assertion, not
+	// an escape hatch.
 	result := registry.DiscoverTools("error monitoring", "", "")
 
-	// Should have some matched tools
 	if len(result.MatchedTools) == 0 {
-		t.Skip("No matched tools for test intent")
+		t.Fatalf(`expected "error monitoring" to match at least one tool, got none (confidence=%+v)`, result.Confidence)
 	}
 
 	// For medium/low confidence, clarifications should be present
@@ -647,30 +745,25 @@ func TestClarificationGeneration(t *testing.T) {
 func TestAlternativeIntents(t *testing.T) {
 	registry := NewToolRegistry()
 
-	// Test with a partial match that should generate alternatives or fuzzy matches
-	result := registry.DiscoverTools("errr", "", "") // Typo of "error"
-
-	// For any confidence level, we should have some result (matches OR alternatives)
-	hasMatches := len(result.MatchedTools) > 0
-	hasAlternatives := len(result.Confidence.Alternatives) > 0
-
-	// At minimum, we should get *something* back for a partial match
-	// Either fuzzy matching finds tools, or alternatives are suggested
-	if !hasMatches && !hasAlternatives && result.Confidence.Level == ConfidenceLow {
-		// This is acceptable - very short/unusual input might not match anything
-		// Just verify confidence reflects this
-		if result.Confidence.Score != 0 {
-			t.Error("Expected zero score when no matches and no alternatives")
-		}
+	// "err" is a guaranteed match, not a "might find nothing" case: it
+	// fuzzy-matches several registered multi-word intents containing "error"
+	// (e.g. "http error", "query error") above DiscoverTools' 0.6 threshold,
+	// so it always returns matched tools. (A longer typo like "errr" doesn't
+	// share a 3-char prefix or exact substring with any registered intent and
+	// genuinely can return nothing - that's not a useful thing to hard-assert
+	// on, so we don't test it here.)
+	result := registry.DiscoverTools("err", "", "")
+	if len(result.MatchedTools) == 0 {
+		t.Fatalf(`expected "err" to match at least one tool via fuzzy intent matching, got none (confidence=%+v)`, result.Confidence)
 	}
 
-	// Test that a real partial match provides alternatives
-	result = registry.DiscoverTools("serach logs", "", "") // Typo of "search logs"
-
-	// Should have either matches from fuzzy matching or alternatives
+	// Test that a real partial match/typo provides matches or alternatives.
+	// "serach logs" is a typo of the registered "search logs" intent; the
+	// "logs" word alone keyword-matches query_logs/ingest_logs directly, so
+	// this is guaranteed to produce at least one match.
+	result = registry.DiscoverTools("serach logs", "", "")
 	if len(result.MatchedTools) == 0 && len(result.Confidence.Alternatives) == 0 {
-		// Log what we got for debugging
-		t.Logf("Score: %.2f, Level: %s", result.Confidence.Score, result.Confidence.Level)
+		t.Fatalf(`expected "serach logs" to produce matches or alternatives, got neither (confidence=%+v)`, result.Confidence)
 	}
 }
 

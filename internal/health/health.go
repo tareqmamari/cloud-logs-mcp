@@ -88,7 +88,11 @@ func (c *Checker) checkAuthentication() Check {
 
 	if err != nil {
 		check.Status = StatusUnhealthy
-		check.Message = fmt.Sprintf("Authentication failed: %v", err)
+		// Keep the public message generic: the underlying error can embed
+		// upstream response bodies (e.g. IAM error detail) that must not be
+		// exposed via the unauthenticated /health endpoint. The detailed
+		// error is logged server-side below instead.
+		check.Message = "Authentication failed"
 		c.logger.Error("Health check failed: authentication",
 			zap.Error(err),
 			zap.Duration("duration", check.Duration),
@@ -123,26 +127,46 @@ func (c *Checker) checkAPIConnectivity(ctx context.Context) Check {
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := c.client.Do(checkCtx, req)
+	resp, err := c.client.Do(checkCtx, req)
 	check.Duration = time.Since(start)
 
-	if err != nil {
-		// Degraded if we can't reach the API, but auth works
-		if check.Duration > 3*time.Second {
-			check.Status = StatusDegraded
-			check.Message = "API responding slowly"
-		} else {
-			check.Status = StatusUnhealthy
-			check.Message = fmt.Sprintf("API unreachable: %v", err)
-		}
+	switch {
+	case err == nil:
+		check.Status = StatusHealthy
+		check.Message = "API reachable"
+		c.logger.Debug("Health check passed: API connectivity",
+			zap.Duration("duration", check.Duration),
+		)
+	case resp != nil:
+		// The client returned a response alongside the error: the API is
+		// reachable, it just responded with an error status (e.g. 401/404).
+		// Report the actual status instead of a misleading "unreachable".
+		// The status code alone is safe to expose; the error's formatted
+		// text can embed the upstream response body, so it is logged
+		// server-side only, not included in the public message.
+		check.Status = StatusUnhealthy
+		check.Message = fmt.Sprintf("API returned HTTP %d", resp.StatusCode)
+		c.logger.Warn("Health check failed: API returned error status",
+			zap.Int("status", resp.StatusCode),
+			zap.Error(err),
+			zap.Duration("duration", check.Duration),
+		)
+	case check.Duration > 3*time.Second:
+		// Degraded if we can't reach the API in time, but auth works
+		check.Status = StatusDegraded
+		check.Message = "API responding slowly"
 		c.logger.Warn("Health check failed: API connectivity",
 			zap.Error(err),
 			zap.Duration("duration", check.Duration),
 		)
-	} else {
-		check.Status = StatusHealthy
-		check.Message = "API reachable"
-		c.logger.Debug("Health check passed: API connectivity",
+	default:
+		// Keep the public message generic; log the detailed error
+		// server-side instead of embedding it in the unauthenticated
+		// /health response.
+		check.Status = StatusUnhealthy
+		check.Message = "API unreachable"
+		c.logger.Warn("Health check failed: API connectivity",
+			zap.Error(err),
 			zap.Duration("duration", check.Duration),
 		)
 	}
