@@ -62,7 +62,7 @@ func TestSanitizeErrorBody(t *testing.T) {
 		},
 		{
 			name:     "database connection string",
-			input:    `DB error: postgresql://user:pass@db.internal:5432/mydb`, // pragma: allowlist secret
+			input:    `DB error: postgresql://user:pass@db.internal:5432/mydb`, // pragma: allowlist secret #nosec G101
 			wantFree: []string{"postgresql://user:pass@db.internal:5432/mydb"}, // pragma: allowlist secret
 			wantHas:  []string{"DB error", "[REDACTED]"},
 		},
