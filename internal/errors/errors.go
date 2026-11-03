@@ -4,6 +4,8 @@ package mcperrors
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // ErrorCategory classifies the type of error
@@ -179,33 +181,108 @@ func NewNetworkError(message string) *StructuredError {
 		WithSuggestion("Check your network connection and try again")
 }
 
+// sensitivePatterns defines regex patterns for detecting and redacting sensitive
+// information in API error responses before they are propagated to AI agents.
+var sensitivePatterns = []*regexp.Regexp{
+	// Email addresses (might contain internal user info) - check first to avoid partial matches
+	regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`),
+
+	// API keys, tokens, secrets in various contexts
+	// Pattern 1: key/token followed by separator and value (api_key: xxx, token=xxx)
+	regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password|credential|auth)["\s:=]+([a-zA-Z0-9_\-\.]{10,})`),
+	// Pattern 2: key/token within error messages ("Invalid API key: xxx")
+	regexp.MustCompile(`(?i)(api[_-]?\s*key|token|secret|password|credential)\s*[:\s]+\s*([a-zA-Z0-9_\-\.]{10,})`),
+	regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9_\-\.]{15,}`),
+	regexp.MustCompile(`(?i)(apikey|access[_-]?token)["\s:=]+[a-zA-Z0-9_\-\.]{10,}`),
+
+	// Standalone tokens after "token" keyword (catches "token abc123..." pattern)
+	regexp.MustCompile(`(?i)\btoken\s+[a-zA-Z0-9_\-\.]{10,}`),
+
+	// File paths (Unix and Windows)
+	regexp.MustCompile(`/(?:[a-zA-Z0-9_\-\.]+/){2,}[a-zA-Z0-9_\-\.]*`),              // Unix paths: /usr/local/bin/app
+	regexp.MustCompile(`[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\){1,}[^\\/:*?"<>|\r\n]*`), // Windows paths: C:\Program Files\App
+
+	// Internal URLs and endpoints
+	regexp.MustCompile(`(?i)https?://(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)[:\d]*/\S+`),
+	// Match internal/private domains (.internal, .local, .corp, .private)
+	regexp.MustCompile(`(?i)https?://[a-zA-Z0-9\-\.]+\.(?:internal|local|corp|private)[:\d/]\S*`),
+	// Match URLs with "internal" or "api" in subdomain (internal.api.company.com, api.internal.company.com)
+	regexp.MustCompile(`(?i)https?://[a-zA-Z0-9\-]*(?:internal|api)[a-zA-Z0-9\-]*\.[a-zA-Z0-9\-\.]+/\S*`),
+
+	// Database connection strings
+	regexp.MustCompile(`(?i)(mongodb|postgresql|mysql|redis)://[^\s]+`),
+
+	// Stack traces (Java, Python, Go, Node.js patterns)
+	regexp.MustCompile(`(?m)^\s*at\s+[\w\.$<>]+\([^)]+\)$`),    // Java/JavaScript
+	regexp.MustCompile(`(?m)^\s*File\s+"[^"]+",\s+line\s+\d+`), // Python
+	regexp.MustCompile(`(?m)^\s*[\w/\.]+:\d+\s+\+0x[0-9a-f]+`), // Go
+
+	// UUIDs (might be session IDs or internal identifiers)
+	regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`),
+
+	// IP addresses (internal network topology)
+	regexp.MustCompile(`\b(?:10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)\b`),
+}
+
+// sanitizeErrorBody removes potentially sensitive information from API error
+// response bodies before they are included in error messages shown to AI agents.
+// This prevents accidental disclosure of credentials, internal paths, stack traces,
+// or other sensitive details that might be present in raw API error responses.
+func sanitizeErrorBody(body string) string {
+	if body == "" {
+		return body
+	}
+
+	sanitized := body
+
+	// Apply all sensitive pattern redactions
+	for _, pattern := range sensitivePatterns {
+		sanitized = pattern.ReplaceAllString(sanitized, "[REDACTED]")
+	}
+
+	// If the entire body was redacted (common for auth errors with tokens),
+	// return a generic message instead of "[REDACTED]"
+	if strings.TrimSpace(sanitized) == "[REDACTED]" {
+		return "Error details redacted for security"
+	}
+
+	// Remove excessive whitespace that might remain after redaction
+	sanitized = regexp.MustCompile(`\s+`).ReplaceAllString(sanitized, " ")
+	sanitized = strings.TrimSpace(sanitized)
+
+	return sanitized
+}
+
 // FromHTTPStatus creates an appropriate error from HTTP status code and response body.
 // The returned error always has StatusCode set to statusCode, and the response body
-// (or a bounded snippet of it, if the caller truncated it) is folded into Message
-// so that the original API error detail is not lost.
+// (or a bounded snippet of it, if the caller truncated it) is sanitized to remove
+// sensitive information before being folded into Message.
 func FromHTTPStatus(statusCode int, responseBody string) *StructuredError {
+	// Sanitize the response body before including it in any error message
+	sanitizedBody := sanitizeErrorBody(responseBody)
+
 	var se *StructuredError
 	switch {
 	case statusCode == 400:
-		se = NewInvalidInput(fmt.Sprintf("Invalid request: %s", responseBody))
+		se = NewInvalidInput(fmt.Sprintf("Invalid request: %s", sanitizedBody))
 	case statusCode == 401:
-		se = New(CodeUnauthorized, ClientError, fmt.Sprintf("Authentication required or credentials invalid: %s", responseBody)).
+		se = New(CodeUnauthorized, ClientError, fmt.Sprintf("Authentication required or credentials invalid: %s", sanitizedBody)).
 			WithSuggestion("Check your API key and try again")
 	case statusCode == 403:
-		se = New(CodeForbidden, ClientError, fmt.Sprintf("Access forbidden: %s", responseBody)).
+		se = New(CodeForbidden, ClientError, fmt.Sprintf("Access forbidden: %s", sanitizedBody)).
 			WithSuggestion("Check your permissions for this resource")
 	case statusCode == 404:
-		se = New(CodeResourceNotFound, ClientError, fmt.Sprintf("Resource not found: %s", responseBody))
+		se = New(CodeResourceNotFound, ClientError, fmt.Sprintf("Resource not found: %s", sanitizedBody))
 	case statusCode == 409:
-		se = New(CodeConflict, ClientError, fmt.Sprintf("Resource conflict: %s", responseBody)).
+		se = New(CodeConflict, ClientError, fmt.Sprintf("Resource conflict: %s", sanitizedBody)).
 			WithSuggestion("Resource may already exist or be in use")
 	case statusCode == 429:
-		se = New(CodeRateLimitExceeded, ClientError, fmt.Sprintf("Rate limit exceeded: %s", responseBody)).
+		se = New(CodeRateLimitExceeded, ClientError, fmt.Sprintf("Rate limit exceeded: %s", sanitizedBody)).
 			WithSuggestion("Wait a moment and try again")
 	case statusCode >= 500 && statusCode < 600:
-		se = NewAPIError("IBM Cloud Logs", statusCode, responseBody)
+		se = NewAPIError("IBM Cloud Logs", statusCode, sanitizedBody)
 	default:
-		se = New(CodeInternalError, ServerError, fmt.Sprintf("Unexpected HTTP status %d: %s", statusCode, responseBody))
+		se = New(CodeInternalError, ServerError, fmt.Sprintf("Unexpected HTTP status %d: %s", statusCode, sanitizedBody))
 	}
 	se.StatusCode = statusCode
 	return se
