@@ -6,6 +6,75 @@
 All notable changes to the IBM Cloud Logs MCP Server are documented in GitHub Releases.
 
 
+## [0.12.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.11.0...v0.12.0) (2026-11-03)
+
+
+### Features
+
+* **audit:** mask error messages and record InputHash ([60c87bb](https://github.com/tareqmamari/cloud-logs-mcp/commit/60c87bb7dc4dd3438382cb2bb486ebf02eea7ae5))
+* **security:** wire error masking and audit logging into tool execution ([bab6947](https://github.com/tareqmamari/cloud-logs-mcp/commit/bab6947e1c06e1f1b498238f1431a8edb906b169))
+* **tools:** add dashboard widget-type classifier from query shape ([9e968c2](https://github.com/tareqmamari/cloud-logs-mcp/commit/9e968c2c9588c06689433350c29b46a01fbf234a))
+* **tools:** add viz advisor with non-destructive recommendation policy ([76ee694](https://github.com/tareqmamari/cloud-logs-mcp/commit/76ee694de7cc94e4fa4edae253303f2456ff819d))
+* **tools:** advise dashboard widget visualization from query shape ([a1645fa](https://github.com/tareqmamari/cloud-logs-mcp/commit/a1645fabe0a6da9cb54ccb0c1285da754b1ec2dc))
+* **tools:** match dashboard widget aggregation to existing E2M metrics ([23d4194](https://github.com/tareqmamari/cloud-logs-mcp/commit/23d4194f3ce0ba0693e4184a7e21d9a5c4a8c45f))
+* **tools:** normalize dashboard widget aggregation for E2M matching ([4e2dec0](https://github.com/tareqmamari/cloud-logs-mcp/commit/4e2dec0d024f1fc064aa3107369bb979bb97010d))
+* **tools:** surface advisory E2M recommendations on dashboard create/update ([6c23b80](https://github.com/tareqmamari/cloud-logs-mcp/commit/6c23b80022d2302ef07ad0c80f5eb2bd3a11ad5b))
+* **tools:** warn when an alert targets non-alertable (low-priority) logs ([23deb92](https://github.com/tareqmamari/cloud-logs-mcp/commit/23deb927adb176d3905fcb73d4cac2a1cebe635c))
+* **tools:** wire get_audit_log to return real audit entries ([f75a7a5](https://github.com/tareqmamari/cloud-logs-mcp/commit/f75a7a511ddb2303f2ec597590fcfe4460599d9d))
+
+
+### Bug Fixes
+
+* add pragma allowlist secret comments to test data ([4ce4783](https://github.com/tareqmamari/cloud-logs-mcp/commit/4ce47833d3be8417ac5f500ab831d87dae82275f))
+* **auth:** bound IAM authenticator HTTP client timeout ([956b1de](https://github.com/tareqmamari/cloud-logs-mcp/commit/956b1de3beccbb536b1e9107cdefcfb3ad402fa2))
+* **cache:** eliminate enabled-flag race, use true LRU, sweep expired entries on Set ([1d660ca](https://github.com/tareqmamari/cloud-logs-mcp/commit/1d660ca7cbe2444d67b6d98fd6eabc61963c556e))
+* **cache:** throttle expired-entry sweep on Set to once per interval ([4f677fe](https://github.com/tareqmamari/cloud-logs-mcp/commit/4f677fe149365def4d47f0f98bbb74fb4ce9bc80))
+* **client:** cap retry jitter at RetryWaitMax ([a7de95f](https://github.com/tareqmamari/cloud-logs-mcp/commit/a7de95ffbf4bac0edb5ff1652be4c71b96e45fce))
+* **client:** surface HTTP errors, fix timeouts, and gate retries on idempotency ([81fbda6](https://github.com/tareqmamari/cloud-logs-mcp/commit/81fbda6a510435463d8f40c5e3956d26197551e3))
+* **config,server,health:** validate config strictly and harden startup/health lifecycle ([1a36624](https://github.com/tareqmamari/cloud-logs-mcp/commit/1a36624b13310d3f068e3d8102c0bcc4284bb0d6))
+* **config:** default health server to disabled so multi-instance is conflict-free ([7b8f678](https://github.com/tareqmamari/cloud-logs-mcp/commit/7b8f678134d21f8590729bafbccbf176d984a508))
+* **config:** delegate MaskAPIKey to the security package ([958b177](https://github.com/tareqmamari/cloud-logs-mcp/commit/958b17759582682041fcfdda068afc5478ac1261))
+* **config:** make service_url example placeholder URL-parseable ([8da86d2](https://github.com/tareqmamari/cloud-logs-mcp/commit/8da86d2ce97a01363d62f1381e7f992f55f62505))
+* **config:** parse duration fields from JSON strings via UnmarshalJSON ([1c53fd3](https://github.com/tareqmamari/cloud-logs-mcp/commit/1c53fd38f5b507b1438cb0b7d2ba3898c13932a2))
+* **install:** download and verify release archive instead of nonexistent raw binary ([220ecf4](https://github.com/tareqmamari/cloud-logs-mcp/commit/220ecf47aec28b83588f91dbb46bfc80535e0a0e))
+* **install:** handle checksums.txt final line without trailing newline ([9841192](https://github.com/tareqmamari/cloud-logs-mcp/commit/9841192bbb41a138a43f100261d4eeec3ed4f659))
+* **main:** make skills subcommands honor --help/-h instead of executing ([776b4c9](https://github.com/tareqmamari/cloud-logs-mcp/commit/776b4c9b89f52da1c2f0d6ad0b95f2d44fe4b75a))
+* **security:** strengthen sensitive-data mask patterns ([4885b56](https://github.com/tareqmamari/cloud-logs-mcp/commit/4885b562dbf349c7d05416b82b3d48c208c776db))
+* **server,tools:** sanitize startup log errors before they hit zap sinks ([65ddb88](https://github.com/tareqmamari/cloud-logs-mcp/commit/65ddb8826fd57bfd58571adbfa08554e2e64c6d9))
+* **session:** order cached-result LRU by a monotonic counter, not wall clock ([1265002](https://github.com/tareqmamari/cloud-logs-mcp/commit/126500292be365204c82b51f2a134ecfbf1dc536))
+* **skills:** use slash paths for embedded FS and skip Unix-perm test on Windows ([dbe8826](https://github.com/tareqmamari/cloud-logs-mcp/commit/dbe8826f4772b421dcf8b2df8dd7832ed92a2b2b))
+* suppress gosec G101 false positive on test data ([e63a9a3](https://github.com/tareqmamari/cloud-logs-mcp/commit/e63a9a340cc9869974a975e7da083f93bf62f647))
+* **tools,install:** harden numeric filters, checksum match, fuzz check ([1ad4df3](https://github.com/tareqmamari/cloud-logs-mcp/commit/1ad4df38370d101935b995ac8a2ab1dc601f8dc3))
+* **tools:** align dry-run validation and examples with live v3 API ([2350921](https://github.com/tareqmamari/cloud-logs-mcp/commit/2350921d4d3d0457c72913af83a72c150bd00feb))
+* **tools:** bound and cache the dashboard E2M advisory fetch ([cd08a34](https://github.com/tareqmamari/cloud-logs-mcp/commit/cd08a34652bf2274fd5c32ce25489e5a63fef1d2))
+* **tools:** cap non-JSON API error body to match client truncation ([8c6fb5e](https://github.com/tareqmamari/cloud-logs-mcp/commit/8c6fb5e9ee631387e5e7ee40260fb1a39b039e9a))
+* **tools:** close remaining validator gaps found in live sessions ([13f8fac](https://github.com/tareqmamari/cloud-logs-mcp/commit/13f8fac9b3614a5cae7806184f677c3ce3c524ed))
+* **tools:** derive budget cost from cumulative tokens, fix TCO tier doc ([58195f8](https://github.com/tareqmamari/cloud-logs-mcp/commit/58195f860803ae9e1ceff1780270a6b3cb7f70af))
+* **tools:** document create_e2m metric_fields/metric_labels item schemas ([cb03bc1](https://github.com/tareqmamari/cloud-logs-mcp/commit/cb03bc19e5a795fedf55654961a5ebb3f7d474e0))
+* **tools:** drop dead auto-build branch and make line_chart viz exemption explicit ([2c876c6](https://github.com/tareqmamari/cloud-logs-mcp/commit/2c876c6a769e114d0a41aebf0bb5f85941ed4e00))
+* **tools:** drop unreachable dashboard viz auto-build, keep recommendations ([f9360a8](https://github.com/tareqmamari/cloud-logs-mcp/commit/f9360a82a3ba92c7368dbbcc46a555381475a134))
+* **tools:** escape backslashes and control chars in DataPrime string literals ([27b6d38](https://github.com/tareqmamari/cloud-logs-mcp/commit/27b6d385796049a928a38d85195800a5d77a19c7))
+* **tools:** escape Lucene range operators in value escaping ([8bc43d3](https://github.com/tareqmamari/cloud-logs-mcp/commit/8bc43d332a8e58cd33ae53e780e4d11d76fda51d))
+* **tools:** escape Lucene reserved characters in filter values ([40973f8](https://github.com/tareqmamari/cloud-logs-mcp/commit/40973f8bcf4aadbb87f22b410953d2d8f946e28e))
+* **tools:** escape template parameter substitution in query templates ([948d220](https://github.com/tareqmamari/cloud-logs-mcp/commit/948d2208337b1ffb86cdfac7ed240450b0393a3d))
+* **tools:** make log clustering deterministic ([bec6006](https://github.com/tareqmamari/cloud-logs-mcp/commit/bec6006bec2031a644c8eb6d50293cbcee87a5d1))
+* **tools:** make response truncation rune-boundary safe ([1944e18](https://github.com/tareqmamari/cloud-logs-mcp/commit/1944e18ab00943818720ea206c8731e8f3d614e5))
+* **tools:** make session/budget package globals race-safe and fix LRU/perm bugs ([00878be](https://github.com/tareqmamari/cloud-logs-mcp/commit/00878befc13b9f9fad6e5d8f1abcc2e3b2ca0004))
+* **tools:** mask Resource/ResourceID/Metadata in audit log view ([25b404f](https://github.com/tareqmamari/cloud-logs-mcp/commit/25b404f0fcf11cd9e03a9eddfe9bb3416d2bcdd2))
+* **tools:** match E2M labels case-insensitively ([6767126](https://github.com/tareqmamari/cloud-logs-mcp/commit/67671260b91f31645dd0a0fe8bc667b18dcc167a))
+* **tools:** normalize alert label-filter operations to the canonical API enum ([35e4991](https://github.com/tareqmamari/cloud-logs-mcp/commit/35e49919c435cbc9a3e00d27542900a9511f0660))
+* **tools:** preserve StructuredError chain through APIError translation ([07a1b72](https://github.com/tareqmamari/cloud-logs-mcp/commit/07a1b7201304a4df207154327508aa165eb678e8))
+* **tools:** reject malformed multi-key aggregation objects in E2M matching ([2de0353](https://github.com/tareqmamari/cloud-logs-mcp/commit/2de035357f602e9ce89e68be95e550e53a5fc6c0))
+* **tools:** replace deprecated reflect.Ptr with reflect.Pointer ([ab9ad4f](https://github.com/tareqmamari/cloud-logs-mcp/commit/ab9ad4fa50a7c8d0e3758880b124103fcbc395ce))
+* **tools:** resolve phantom query_templates tool references in discovery data ([a423f3f](https://github.com/tareqmamari/cloud-logs-mcp/commit/a423f3f435e91971e4851f1b272499812dab0030))
+* **tools:** select dashboard widget tier from TCO policy so panels show data ([6c4b1c5](https://github.com/tareqmamari/cloud-logs-mcp/commit/6c4b1c5ea3358e6d66cfb9bd79cfe24e4f9be605))
+* **tools:** synchronize GetToolRegistry lazy initialization ([b2b4adf](https://github.com/tareqmamari/cloud-logs-mcp/commit/b2b4adf14e186eeb76a3efc54d2864e91e5d3df7))
+* **tools:** translate classified client errors into APIError; align mock with client contract ([f12cc0b](https://github.com/tareqmamari/cloud-logs-mcp/commit/f12cc0b956f33252f2e023d042346e3eb01d3471))
+* **tools:** URL-escape caller-supplied path segments in API requests ([57b8810](https://github.com/tareqmamari/cloud-logs-mcp/commit/57b881097ae738de12c2e1da4f7ad5ed490dde18))
+* **tools:** validate ingestion log entry types and harden budget status parsing ([5a832f1](https://github.com/tareqmamari/cloud-logs-mcp/commit/5a832f16a58a6793c5e99d4c5eaad1f83f92b371))
+* **tools:** validate numeric filter operands to prevent DataPrime expression injection ([1fc9444](https://github.com/tareqmamari/cloud-logs-mcp/commit/1fc944484f16c72d6e38fe16d98e382f223a147e))
+* use nolint directive for gosec G101 suppression ([8f17bd4](https://github.com/tareqmamari/cloud-logs-mcp/commit/8f17bd49bdef1c9dccdc552a45a402fddc1f5938))
+
 ## [0.11.0](https://github.com/tareqmamari/cloud-logs-mcp/compare/v0.10.0...v0.11.0) (2026-03-31)
 
 
