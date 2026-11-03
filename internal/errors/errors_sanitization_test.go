@@ -60,9 +60,9 @@ func TestSanitizeErrorBody(t *testing.T) {
 			wantFree: []string{"192.168.1.100"},
 			wantHas:  []string{"Connection refused", "[REDACTED]"},
 		},
-		{
+		{ // nolint:gosec // G101: Test fixture data, not real credentials
 			name:     "database connection string",
-			input:    `DB error: postgresql://user:pass@db.internal:5432/mydb`, // pragma: allowlist secret #nosec G101
+			input:    `DB error: postgresql://user:pass@db.internal:5432/mydb`, // pragma: allowlist secret
 			wantFree: []string{"postgresql://user:pass@db.internal:5432/mydb"}, // pragma: allowlist secret
 			wantHas:  []string{"DB error", "[REDACTED]"},
 		},
