@@ -133,9 +133,11 @@ func NewWithDeps(ctx context.Context, cfg *config.Config, apiClient client.Doer,
 		Name:    "IBM Cloud Logs MCP Server",
 		Version: version,
 	}, &mcp.ServerOptions{
-		HasTools:     true,
-		HasPrompts:   true,
-		HasResources: true,
+		Capabilities: &mcp.ServerCapabilities{
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+		},
 	})
 
 	metricsTracker := metrics.New(logger)

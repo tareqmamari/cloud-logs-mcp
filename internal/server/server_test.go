@@ -275,7 +275,9 @@ func TestMCPProtocol_ToolRegistration(t *testing.T) {
 		Name:    "test-server",
 		Version: "0.0.1",
 	}, &mcp.ServerOptions{
-		HasTools: true,
+		Capabilities: &mcp.ServerCapabilities{
+			Tools: &mcp.ToolCapabilities{ListChanged: true},
+		},
 	})
 
 	// Register a test tool.
@@ -334,7 +336,9 @@ func TestMCPProtocol_ToolCall(t *testing.T) {
 		Name:    "test-server",
 		Version: "0.0.1",
 	}, &mcp.ServerOptions{
-		HasTools: true,
+		Capabilities: &mcp.ServerCapabilities{
+			Tools: &mcp.ToolCapabilities{ListChanged: true},
+		},
 	})
 
 	mcpServer.AddTool(&mcp.Tool{
